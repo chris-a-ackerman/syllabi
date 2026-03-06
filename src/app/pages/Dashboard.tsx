@@ -20,7 +20,7 @@ import {
 } from '../components/ui/select';
 import { Badge } from '../components/ui/badge';
 import { Card } from '../components/ui/card';
-import { MessageSquare, Plus, LogOut, Calendar, Send, Settings2, BookOpen, Upload, ExternalLink } from 'lucide-react';
+import { MessageSquare, Plus, LogOut, Calendar, Send, Settings2, BookOpen, Upload, ExternalLink, Menu, X, ChevronUp, ChevronDown } from 'lucide-react';
 import { AddSemesterModal } from '../components/AddSemesterModal';
 import { AddCourseModal } from '../components/AddCourseModal';
 import { format, parseISO } from 'date-fns';
@@ -47,6 +47,8 @@ export function Dashboard() {
     color: string;
   } | undefined>(undefined);
   const [showSettings, setShowSettings] = useState(true);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [activeChatCollapsed, setActiveChatCollapsed] = useState(true);
   const [sidebarTab, setSidebarTab] = useState<'knowledge-base' | 'chat'>('knowledge-base');
   const [input, setInput] = useState('');
   const [selectedCourses, setSelectedCourses] = useState<string[]>([]);
@@ -166,7 +168,18 @@ export function Dashboard() {
     <div className="h-screen bg-white flex flex-col">
       <header className="border-b border-gray-200 px-6 py-4">
         <div className="flex items-center justify-between">
-          <h1 className="text-xl font-bold text-indigo-600">Syllabi</h1>
+          <div className="flex items-center gap-2">
+            {/* Hamburger — mobile only */}
+            <Button
+              onClick={() => setMobileMenuOpen(true)}
+              variant="ghost"
+              size="sm"
+              className="rounded-lg md:hidden -ml-2"
+            >
+              <Menu className="h-5 w-5 text-gray-600" />
+            </Button>
+            <h1 className="text-xl font-bold text-indigo-600">Syllabi</h1>
+          </div>
           <div className="flex items-center gap-3">
             {user?.isAdmin && (
               <Button
@@ -180,11 +193,12 @@ export function Dashboard() {
                 </Badge>
               </Button>
             )}
+            {/* Settings toggle — desktop only */}
             <Button
               onClick={() => setShowSettings(!showSettings)}
               variant="ghost"
               size="sm"
-              className="rounded-lg"
+              className="rounded-lg hidden md:inline-flex"
             >
               <Settings2 className="h-5 w-5 text-gray-600" />
             </Button>
@@ -216,10 +230,36 @@ export function Dashboard() {
       </header>
 
       <main className="flex-1 flex overflow-hidden">
+        {/* Mobile overlay backdrop */}
+        {mobileMenuOpen && (
+          <div
+            className="fixed inset-0 z-40 bg-black/30 md:hidden"
+            onClick={() => setMobileMenuOpen(false)}
+          />
+        )}
+
         {/* Sidebar */}
-        {showSettings && (
-          <div className="w-80 border-r border-gray-200 overflow-y-auto bg-gray-50">
+        {(showSettings || mobileMenuOpen) && (
+          <div className={`
+            bg-gray-50 overflow-y-auto
+            ${mobileMenuOpen
+              ? 'fixed inset-y-0 left-0 z-50 w-80 md:hidden'
+              : 'hidden md:block w-80 border-r border-gray-200'
+            }
+          `}>
             <div className="p-6">
+              {/* Mobile menu header */}
+              <div className="flex items-center gap-2 mb-5 md:hidden">
+                <Button
+                  onClick={() => setMobileMenuOpen(false)}
+                  variant="ghost"
+                  size="sm"
+                  className="rounded-lg -ml-2"
+                >
+                  <X className="h-5 w-5 text-gray-600" />
+                </Button>
+                <h2 className="text-lg font-semibold text-gray-900">Menu</h2>
+              </div>
               {/* Pill Navigation */}
               <div className="bg-gray-200 rounded-full p-1 flex mb-6">
                 <button
@@ -382,7 +422,7 @@ export function Dashboard() {
 
               {/* New Chat With Selected Courses */}
               <Button
-                onClick={startNewChat}
+                onClick={() => { startNewChat(); setMobileMenuOpen(false); }}
                 disabled={selectedCourses.length === 0}
                 className="w-full h-9 mt-3 rounded-[10px] bg-[#4f39f6] hover:bg-[#4333d9] text-white text-sm font-medium gap-2 disabled:opacity-40"
               >
@@ -443,7 +483,7 @@ export function Dashboard() {
                     {chats.map(chat => (
                       <button
                         key={chat.id}
-                        onClick={() => selectChat(chat.id)}
+                        onClick={() => { selectChat(chat.id); setMobileMenuOpen(false); }}
                         className={`w-full border rounded-[10px] p-3 text-left transition-colors ${
                           chat.id === currentChatId
                             ? 'bg-indigo-50 border-[#a3b3ff]'
@@ -480,10 +520,24 @@ export function Dashboard() {
         <div className="flex-1 flex flex-col">
           {/* Chat Header */}
           <div className="border-b border-[#e5e7eb] pt-4 pb-3 px-7 flex flex-col gap-2">
-            <p className="text-sm font-medium text-[#364153] leading-5 tracking-[-0.015em]">
-              {currentChat?.title ?? 'Active Chat'}
-            </p>
-            {selectedCourseObjects.length > 0 && (
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-medium text-[#364153] leading-5 tracking-[-0.015em]">
+                {currentChat?.title ?? 'Active Chat'}
+              </p>
+              {selectedCourseObjects.length > 0 && (
+                <button
+                  onClick={() => setActiveChatCollapsed(v => !v)}
+                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                  aria-label={activeChatCollapsed ? 'Expand active chat' : 'Collapse active chat'}
+                >
+                  {activeChatCollapsed
+                    ? <ChevronDown className="h-4 w-4" />
+                    : <ChevronUp className="h-4 w-4" />
+                  }
+                </button>
+              )}
+            </div>
+            {!activeChatCollapsed && selectedCourseObjects.length > 0 && (
               <div className="flex flex-wrap gap-2">
                 {selectedCourseObjects.map(course => (
                   <div key={course.id} className="inline-flex items-center gap-2 border border-[#e5e7eb] rounded-full px-3.5 py-0.5">

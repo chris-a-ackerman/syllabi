@@ -77,20 +77,18 @@ export function CourseDetail() {
             Back to Courses
           </Button>
 
-          <div className="flex items-start justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900 mb-2">{course.name}</h1>
-              <div className="flex items-center gap-4 text-gray-600">
-                <span className="font-medium">{course.code}</span>
-                <span>•</span>
-                <span>{course.professor}</span>
-              </div>
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">{course.name}</h1>
+            <div className="flex items-center gap-4 text-gray-600">
+              <span className="font-medium">{course.code}</span>
+              <span>•</span>
+              <span>{course.professor}</span>
             </div>
           </div>
         </div>
 
         {/* Empty State */}
-        <div className="max-w-7xl mx-auto px-6 py-8">
+        <div className="px-4 py-6 md:px-6 md:py-8 max-w-7xl mx-auto">
           <div className="flex items-center justify-center min-h-[60vh]">
             <Card className="p-12 text-center rounded-2xl max-w-md">
               <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -163,58 +161,57 @@ export function CourseDetail() {
         <Button
           variant="ghost"
           onClick={() => navigate('/courses', { state: { semesterId: course.semesterId } })}
-          className="mb-4 rounded-lg"
+          className="mb-4 rounded-lg -ml-2"
         >
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back to Courses
         </Button>
-        
-        <div className="flex items-start justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">{course.name}</h1>
-            <div className="flex items-center gap-4 text-gray-600">
-              <span className="font-medium">{course.code}</span>
-              <span>•</span>
-              <span>{course.professor}</span>
-            </div>
+
+        <div className="mb-4">
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">{course.name}</h1>
+          <div className="flex items-center gap-4 text-gray-600">
+            <span className="font-medium">{course.code}</span>
+            <span>•</span>
+            <span>{course.professor}</span>
           </div>
-          <div className="flex gap-2">
-            <Button
-              onClick={() => navigate('/dashboard', { state: { selectedCourseId: course.id } })}
-              className="bg-indigo-600 hover:bg-indigo-700 rounded-lg"
-            >
-              <MessageSquare className="mr-2 h-4 w-4" />
-              Chat About This Course
-            </Button>
-            <Button variant="outline" className="rounded-lg">
-              <Download className="mr-2 h-4 w-4" />
-              Download Calendar
-            </Button>
-            <Button variant="outline" className="rounded-lg">
-              <Upload className="mr-2 h-4 w-4" />
-              Re-upload Syllabus
-            </Button>
-            <Button
-              variant="outline"
-              className="rounded-lg text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
-              onClick={() => setShowDeleteCourse(true)}
-            >
-              <Trash2 className="mr-2 h-4 w-4" />
-              Delete
-            </Button>
-          </div>
+        </div>
+
+        <div className="flex flex-col gap-2 md:flex-row md:flex-wrap">
+          <Button
+            onClick={() => navigate('/dashboard', { state: { selectedCourseId: course.id } })}
+            className="bg-indigo-600 hover:bg-indigo-700 rounded-lg justify-start"
+          >
+            <MessageSquare className="mr-2 h-4 w-4" />
+            Chat About This Course
+          </Button>
+          <Button variant="outline" className="rounded-lg justify-start">
+            <Download className="mr-2 h-4 w-4" />
+            Download Calendar
+          </Button>
+          <Button variant="outline" className="rounded-lg justify-start">
+            <Upload className="mr-2 h-4 w-4" />
+            Re-upload Syllabus
+          </Button>
+          <Button
+            variant="outline"
+            className="rounded-lg justify-start text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+            onClick={() => setShowDeleteCourse(true)}
+          >
+            <Trash2 className="mr-2 h-4 w-4" />
+            Delete
+          </Button>
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="max-w-7xl mx-auto px-6 py-8">
+      <div className="px-4 py-6 md:px-6 md:py-8 max-w-7xl mx-auto">
         <Tabs defaultValue="events" className="w-full">
-          <TabsList className="mb-6 rounded-lg">
-            <TabsTrigger value="events" className="rounded-lg">Events</TabsTrigger>
-            <TabsTrigger value="grading" className="rounded-lg">Grading</TabsTrigger>
-            <TabsTrigger value="schedule" className="rounded-lg">Schedule</TabsTrigger>
-            <TabsTrigger value="policies" className="rounded-lg">Policies</TabsTrigger>
-            <TabsTrigger value="notes" className="rounded-lg">Notes</TabsTrigger>
+          <TabsList className="mb-6 rounded-lg w-full overflow-x-auto flex">
+            <TabsTrigger value="events" className="rounded-lg flex-1">Events</TabsTrigger>
+            <TabsTrigger value="grading" className="rounded-lg flex-1">Grading</TabsTrigger>
+            <TabsTrigger value="schedule" className="rounded-lg flex-1">Schedule</TabsTrigger>
+            <TabsTrigger value="policies" className="rounded-lg flex-1">Policies</TabsTrigger>
+            <TabsTrigger value="notes" className="rounded-lg flex-1">Notes</TabsTrigger>
           </TabsList>
 
           {/* Events Tab */}
