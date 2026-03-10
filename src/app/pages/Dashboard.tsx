@@ -152,7 +152,17 @@ export function Dashboard() {
         <header className="border-b border-gray-200 px-6 py-4">
           <div className="flex items-center justify-between">
             <h1 className="text-xl font-bold text-indigo-600">Syllabi</h1>
-            <DropdownMenu>
+            <div className="flex items-center gap-3">
+              <Button
+                onClick={() => window.open('https://docs.google.com/forms/d/e/1FAIpQLSfWB-gASY_vhg7xlHgXpdYavrDpX0qcZUmK7_zlaeFKHS2GSg/viewform', '_blank')}
+                variant="outline"
+                size="sm"
+                className="rounded-lg gap-1.5"
+              >
+                <Flag className="h-4 w-4 text-gray-700" />
+                <span className="text-sm font-medium text-gray-900 tracking-tight">Feedback</span>
+              </Button>
+              <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="rounded-full p-0 h-10 w-10">
                   <Avatar>
@@ -168,7 +178,8 @@ export function Dashboard() {
                   Sign Out
                 </DropdownMenuItem>
               </DropdownMenuContent>
-            </DropdownMenu>
+              </DropdownMenu>
+            </div>
           </div>
         </header>
 
@@ -194,6 +205,57 @@ export function Dashboard() {
         </main>
 
         <AddSemesterModal open={showAddSemester} onClose={() => setShowAddSemester(false)} />
+
+        <AlertDialog open={feedbackOpen} onOpenChange={setFeedbackOpen}>
+          <AlertDialogContent className="rounded-2xl shadow-lg max-w-[510px]">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="text-[18px] font-semibold tracking-tight">
+                Submit Feedback
+              </AlertDialogTitle>
+              <AlertDialogDescription className="text-[14px] text-gray-500 leading-5">
+                Let us know if you encountered a bug or have any feedback about your experience.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <Textarea
+              value={feedbackText}
+              onChange={(e) => setFeedbackText(e.target.value)}
+              placeholder="Describe what happened..."
+              className="h-[120px] resize-none rounded-[10px] bg-[#f3f3f5] border-0 shadow-[0_0_0_1.23px_rgba(161,161,161,0.21)] text-[14px] placeholder:text-gray-400"
+            />
+            <AlertDialogFooter>
+              <AlertDialogCancel
+                className="rounded-[10px] border border-black/10 text-[14px] font-medium"
+                onClick={() => { setFeedbackText(''); }}
+              >
+                Cancel
+              </AlertDialogCancel>
+              <Button
+                onClick={async () => {
+                  if (!feedbackText.trim()) return;
+                  setFeedbackSubmitting(true);
+                  try {
+                    await submitFeedback(feedbackText.trim());
+                    setFeedbackText('');
+                    setFeedbackOpen(false);
+                    toast.success('Feedback submitted successfully!', {
+                      description: 'Thank you for helping us improve Syllabi.',
+                    });
+                  } catch {
+                    toast.error('Failed to submit feedback.', {
+                      description: 'Please try again in a moment.',
+                    });
+                  } finally {
+                    setFeedbackSubmitting(false);
+                  }
+                }}
+                disabled={!feedbackText.trim() || feedbackSubmitting}
+                className="rounded-[10px] bg-indigo-600 hover:bg-indigo-700 text-[14px] font-medium px-4"
+              >
+                Submit Feedback
+              </Button>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     );
   }
@@ -227,6 +289,15 @@ export function Dashboard() {
                 </Badge>
               </Button>
             )}
+            <Button
+              onClick={() => window.open('https://docs.google.com/forms/d/e/1FAIpQLSfWB-gASY_vhg7xlHgXpdYavrDpX0qcZUmK7_zlaeFKHS2GSg/viewform', '_blank')}
+              variant="outline"
+              size="sm"
+              className="rounded-lg gap-1.5"
+            >
+              <Flag className="h-4 w-4 text-gray-700" />
+              <span className="text-sm font-medium text-gray-900 tracking-tight">Feedback</span>
+            </Button>
             {/* Settings toggle — desktop only */}
             <Button
               onClick={() => setShowSettings(!showSettings)}
