@@ -148,6 +148,8 @@ interface AppState {
   addChatMessage: (message: Omit<ChatMessage, 'id' | 'timestamp'>, context?: { semesterId: string; courseIds: string[] }) => void;
   startNewChat: () => void;
   selectChat: (chatId: string) => Promise<void>;
+  deleteChat: (chatId: string) => Promise<void>;
+  renameChat: (chatId: string, title: string) => Promise<void>;
   setAiEnabled: (enabled: boolean) => void;
   setChatOpen: (open: boolean) => void;
   signOut: () => void;
@@ -540,6 +542,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
         if (chatError || !chatData) {
           console.error('[chat] Error creating chat record:', chatError);
+          setChatMessages(prev => [...prev, {
+            id: `error-${Date.now()}`,
+            role: 'assistant' as const,
+            content: "Sorry, I couldn't start a new conversation. Please try again.",
+            timestamp: new Date().toISOString(),
+          }]);
           return;
         }
 
@@ -590,19 +598,39 @@ export function AppProvider({ children }: { children: ReactNode }) {
           },
         });
 
+        const addErrorMessage = (text: string) => {
+          setChatMessages(prev => [...prev, {
+            id: `error-${Date.now()}`,
+            role: 'assistant' as const,
+            content: text,
+            timestamp: new Date().toISOString(),
+            sequence: aiSequence,
+          }]);
+        };
+
         if (fnError) {
           console.error('[chat] Edge function invocation error:', fnError);
+          addErrorMessage("Sorry, I couldn't reach the assistant. Please check your connection and try again.");
           return;
         }
 
         if (fnData?.error) {
           console.error('[chat] Edge function returned error:', fnData.error);
+          const msg = fnData.error === 'AI features are disabled'
+            ? 'AI features are currently disabled by your administrator.'
+            : "Sorry, something went wrong on the server. Please try again in a moment.";
+          addErrorMessage(msg);
           return;
         }
 
         console.log('[chat] Edge function response — query_type:', fnData?.query_type, 'reply length:', fnData?.reply?.length);
 
         const aiContent: string = fnData?.reply ?? '';
+
+        if (!aiContent) {
+          addErrorMessage("I received an empty response. Please try rephrasing your question.");
+          return;
+        }
 
         const { data: aiMsgData, error: aiMsgError } = await supabase
           .from('chat_messages')
@@ -612,6 +640,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
         if (aiMsgError || !aiMsgData) {
           console.error('[chat] Error saving AI message to DB:', aiMsgError);
+          // Still show the reply to the user even if DB persistence fails
+          setChatMessages(prev => [...prev, {
+            id: `local-${Date.now()}`,
+            role: 'assistant' as const,
+            content: aiContent,
+            timestamp: new Date().toISOString(),
+            sequence: aiSequence,
+          }]);
           return;
         }
 
@@ -634,6 +670,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
       .order('sequence', { ascending: true });
     if (error) { console.error('Error fetching chat messages:', error); return; }
     setChatMessages((msgRows ?? []).map(dbChatMessageToApp));
+  };
+
+  const deleteChat = async (chatId: string) => {
+    await supabase.from('chat_messages').delete().eq('chat_id', chatId);
+    await supabase.from('chat_courses').delete().eq('chat_id', chatId);
+    await supabase.from('chats').delete().eq('id', chatId);
+    setChats(prev => prev.filter(c => c.id !== chatId));
+    if (currentChatId === chatId) {
+      setCurrentChatId(null);
+      setChatMessages([]);
+    }
+  };
+
+  const renameChat = async (chatId: string, title: string) => {
+    await supabase.from('chats').update({ title }).eq('id', chatId);
+    setChats(prev => prev.map(c => c.id === chatId ? { ...c, title } : c));
   };
 
   const signOut = async () => {
@@ -671,6 +723,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         addChatMessage,
         startNewChat,
         selectChat,
+        deleteChat,
+        renameChat,
         setAiEnabled,
         setChatOpen,
         signOut,
