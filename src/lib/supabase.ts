@@ -7,7 +7,11 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'placeholder-k
 console.log('[supabase] URL:', supabaseUrl);
 console.log('[supabase] Key prefix:', supabaseAnonKey.slice(0, 20));
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    flowType: 'pkce',
+  },
+});
 
 // Helper to check if Supabase is properly configured
 export const isSupabaseConfigured = () => {
