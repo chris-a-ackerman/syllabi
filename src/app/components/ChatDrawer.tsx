@@ -1,9 +1,9 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '../components/ui/sheet';
-import { X, Send, Loader2 } from 'lucide-react';
+import { X, Send } from 'lucide-react';
 import { Alert, AlertDescription } from '../components/ui/alert';
 import { format } from 'date-fns';
 import ReactMarkdown from 'react-markdown';
@@ -23,7 +23,6 @@ const SUGGESTED_PROMPTS = [
 export function ChatDrawer({ open, onClose }: ChatDrawerProps) {
   const { chatMessages, addChatMessage, aiEnabled, semesters } = useApp();
   const [input, setInput] = useState('');
-  const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const activeSemester = semesters.find(s => s.isActive);
@@ -33,29 +32,6 @@ export function ChatDrawer({ open, onClose }: ChatDrawerProps) {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [chatMessages, open]);
-
-  useEffect(() => {
-    // Check if last message is from user
-    const lastMessage = chatMessages[chatMessages.length - 1];
-    if (lastMessage && lastMessage.role === 'user') {
-      setIsTyping(true);
-      // Stop typing when AI response arrives
-      const checkForResponse = setInterval(() => {
-        const newestMessage = chatMessages[chatMessages.length - 1];
-        if (newestMessage.role === 'assistant') {
-          setIsTyping(false);
-          clearInterval(checkForResponse);
-        }
-      }, 100);
-      
-      setTimeout(() => {
-        setIsTyping(false);
-        clearInterval(checkForResponse);
-      }, 5000);
-      
-      return () => clearInterval(checkForResponse);
-    }
-  }, [chatMessages]);
 
   const handleSend = () => {
     if (!input.trim() || !aiEnabled) return;
@@ -164,18 +140,6 @@ export function ChatDrawer({ open, onClose }: ChatDrawerProps) {
               </div>
             </div>
           ))}
-
-          {isTyping && (
-            <div className="flex justify-start">
-              <div className="bg-white border border-gray-200 rounded-2xl px-4 py-3">
-                <div className="flex gap-1">
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-                </div>
-              </div>
-            </div>
-          )}
 
           <div ref={messagesEndRef} />
         </div>

@@ -55,6 +55,8 @@ export function Dashboard() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const activeSemester = semesters.find(s => s.isActive);
+  const lastMessage = chatMessages[chatMessages.length - 1];
+  const isTyping = lastMessage?.role === 'user';
   const activeCourses = courses.filter(c => c.semesterId === activeSemester?.id);
   const currentChat = chats.find(c => c.id === currentChatId);
   const chatCourseIds = currentChat ? currentChat.courseIds : selectedCourses;
@@ -632,6 +634,20 @@ export function Dashboard() {
                   </div>
                 ))}
               </div>
+
+              {isTyping && (
+                <div className="flex justify-start mt-6">
+                  <div className="bg-gray-100 rounded-2xl px-5 py-3 flex items-center gap-1">
+                    {[0, 200, 400].map((delay) => (
+                      <div
+                        key={delay}
+                        className="w-2 h-2 bg-gray-400 rounded-full"
+                        style={{ animation: `typingDot 1.2s ease-in-out ${delay}ms infinite` }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div ref={messagesEndRef} />
             </div>
