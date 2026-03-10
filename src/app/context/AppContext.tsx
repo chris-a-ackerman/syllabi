@@ -152,6 +152,7 @@ interface AppState {
   renameChat: (chatId: string, title: string) => Promise<void>;
   setAiEnabled: (enabled: boolean) => void;
   setChatOpen: (open: boolean) => void;
+  submitFeedback: (description: string) => Promise<void>;
   signOut: () => void;
 }
 
@@ -688,6 +689,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setChats(prev => prev.map(c => c.id === chatId ? { ...c, title } : c));
   };
 
+  const submitFeedback = async (description: string) => {
+    if (!user || !currentChatId) return;
+
+    const chat = chats.find(c => c.id === currentChatId);
+    const lastMessage = chatMessages[chatMessages.length - 1];
+
+    await supabase.from('chat_feedback').insert({
+      user_id: user.id,
+      chat_id: currentChatId,
+      semester_id: chat?.semesterId ?? null,
+      course_ids: chat?.courseIds ?? [],
+      reported_at_sequence: lastMessage?.sequence ?? null,
+      description,
+      conversation_snapshot: chatMessages.map(m => ({
+        role: m.role,
+        content: m.content,
+        sequence: m.sequence,
+      })),
+    });
+  };
+
   const signOut = async () => {
     if (isSupabaseConfigured()) {
       await supabase.auth.signOut();
@@ -727,6 +749,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         renameChat,
         setAiEnabled,
         setChatOpen,
+        submitFeedback,
         signOut,
       }}
     >

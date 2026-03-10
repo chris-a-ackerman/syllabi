@@ -1,9 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { useNavigate, useLocation } from 'react-router';
 import { useApp } from '../context/AppContext';
 import { Button } from '../components/ui/button';
 import { Avatar, AvatarFallback } from '../components/ui/avatar';
 import { Input } from '../components/ui/input';
+import { Textarea } from '../components/ui/textarea';
 import { Checkbox } from '../components/ui/checkbox';
 import {
   DropdownMenu,
@@ -20,7 +23,7 @@ import {
 } from '../components/ui/select';
 import { Badge } from '../components/ui/badge';
 import { Card } from '../components/ui/card';
-import { MessageSquare, Plus, LogOut, Calendar, Send, Settings2, BookOpen, Upload, ExternalLink, Menu, X, ChevronUp, ChevronDown, Trash2, Pencil } from 'lucide-react';
+import { MessageSquare, Plus, LogOut, Calendar, Send, Settings2, BookOpen, Upload, ExternalLink, Menu, X, ChevronUp, ChevronDown, Trash2, Pencil, Flag } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -34,6 +37,7 @@ import {
 import { AddSemesterModal } from '../components/AddSemesterModal';
 import { AddCourseModal } from '../components/AddCourseModal';
 import { format, parseISO } from 'date-fns';
+import { toast } from 'sonner';
 
 const SUGGESTED_PROMPTS = [
   "What's due this week?",
@@ -45,7 +49,7 @@ const SUGGESTED_PROMPTS = [
 ];
 
 export function Dashboard() {
-  const { user, semesters, courses, events, signOut, aiEnabled, chats, currentChatId, chatMessages, addChatMessage, startNewChat, selectChat, deleteChat, renameChat, setActiveSemester } = useApp();
+  const { user, semesters, courses, events, signOut, aiEnabled, chats, currentChatId, chatMessages, addChatMessage, startNewChat, selectChat, deleteChat, renameChat, setActiveSemester, submitFeedback } = useApp();
   const navigate = useNavigate();
   const location = useLocation();
   const [showAddSemester, setShowAddSemester] = useState(false);
@@ -65,6 +69,9 @@ export function Dashboard() {
   const [chatToDelete, setChatToDelete] = useState<string | null>(null);
   const [editingChatId, setEditingChatId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState('');
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [feedbackText, setFeedbackText] = useState('');
+  const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const activeSemester = semesters.find(s => s.isActive);
@@ -705,7 +712,13 @@ export function Dashboard() {
                           : 'bg-gray-100 text-gray-900'
                       }`}
                     >
-                      <p className="text-sm whitespace-pre-wrap leading-relaxed">{message.content}</p>
+                      {message.role === 'assistant' ? (
+                        <div className="text-sm leading-relaxed prose prose-sm max-w-none prose-table:w-full prose-th:text-left prose-th:font-semibold prose-td:align-top prose-blockquote:border-l-indigo-400 prose-blockquote:text-gray-600">
+                          <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
+                        </div>
+                      ) : (
+                        <p className="text-sm whitespace-pre-wrap leading-relaxed">{message.content}</p>
+                      )}
                       <p
                         className={`text-xs mt-2 ${
                           message.role === 'user' ? 'text-indigo-200' : 'text-gray-500'
@@ -739,7 +752,17 @@ export function Dashboard() {
           {/* Input Area */}
           <div className="border-t border-gray-200 px-6 py-4 bg-white">
             <div className="max-w-3xl mx-auto">
-              <div className="flex gap-3">
+              <div className="flex items-center gap-3">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setFeedbackOpen(true)}
+                  disabled={!currentChatId}
+                  className="shrink-0 rounded-full text-gray-400 hover:text-gray-600 h-12 w-12"
+                  title="Submit feedback"
+                >
+                  <Flag className="h-4 w-4" />
+                </Button>
                 <Input
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
@@ -781,6 +804,57 @@ export function Dashboard() {
         }}
         existingCourse={selectedCourseForUpload}
       />
+
+      <AlertDialog open={feedbackOpen} onOpenChange={setFeedbackOpen}>
+        <AlertDialogContent className="rounded-2xl shadow-lg max-w-[510px]">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-[18px] font-semibold tracking-tight">
+              Submit Feedback
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-[14px] text-gray-500 leading-5">
+              Let us know if you encountered a bug or have any feedback about your experience.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <Textarea
+            value={feedbackText}
+            onChange={(e) => setFeedbackText(e.target.value)}
+            placeholder="Describe what happened..."
+            className="h-[120px] resize-none rounded-[10px] bg-[#f3f3f5] border-0 shadow-[0_0_0_1.23px_rgba(161,161,161,0.21)] text-[14px] placeholder:text-gray-400"
+          />
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              className="rounded-[10px] border border-black/10 text-[14px] font-medium"
+              onClick={() => { setFeedbackText(''); }}
+            >
+              Cancel
+            </AlertDialogCancel>
+            <Button
+              onClick={async () => {
+                if (!feedbackText.trim()) return;
+                setFeedbackSubmitting(true);
+                try {
+                  await submitFeedback(feedbackText.trim());
+                  setFeedbackText('');
+                  setFeedbackOpen(false);
+                  toast.success('Feedback submitted successfully!', {
+                    description: 'Thank you for helping us improve Syllabi.',
+                  });
+                } catch {
+                  toast.error('Failed to submit feedback.', {
+                    description: 'Please try again in a moment.',
+                  });
+                } finally {
+                  setFeedbackSubmitting(false);
+                }
+              }}
+              disabled={!feedbackText.trim() || feedbackSubmitting}
+              className="rounded-[10px] bg-indigo-600 hover:bg-indigo-700 text-[14px] font-medium px-4"
+            >
+              Submit Feedback
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={chatToDelete !== null} onOpenChange={(open) => { if (!open) setChatToDelete(null); }}>
         <AlertDialogContent className="rounded-2xl">
