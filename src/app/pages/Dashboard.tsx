@@ -20,7 +20,17 @@ import {
 } from '../components/ui/select';
 import { Badge } from '../components/ui/badge';
 import { Card } from '../components/ui/card';
-import { MessageSquare, Plus, LogOut, Calendar, Send, Settings2, BookOpen, Upload, ExternalLink, Menu, X, ChevronUp, ChevronDown } from 'lucide-react';
+import { MessageSquare, Plus, LogOut, Calendar, Send, Settings2, BookOpen, Upload, ExternalLink, Menu, X, ChevronUp, ChevronDown, Trash2, Pencil } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '../components/ui/alert-dialog';
 import { AddSemesterModal } from '../components/AddSemesterModal';
 import { AddCourseModal } from '../components/AddCourseModal';
 import { format, parseISO } from 'date-fns';
@@ -35,7 +45,7 @@ const SUGGESTED_PROMPTS = [
 ];
 
 export function Dashboard() {
-  const { user, semesters, courses, events, signOut, aiEnabled, chats, currentChatId, chatMessages, addChatMessage, startNewChat, selectChat, setActiveSemester } = useApp();
+  const { user, semesters, courses, events, signOut, aiEnabled, chats, currentChatId, chatMessages, addChatMessage, startNewChat, selectChat, deleteChat, renameChat, setActiveSemester } = useApp();
   const navigate = useNavigate();
   const location = useLocation();
   const [showAddSemester, setShowAddSemester] = useState(false);
@@ -52,9 +62,14 @@ export function Dashboard() {
   const [sidebarTab, setSidebarTab] = useState<'knowledge-base' | 'chat'>('knowledge-base');
   const [input, setInput] = useState('');
   const [selectedCourses, setSelectedCourses] = useState<string[]>([]);
+  const [chatToDelete, setChatToDelete] = useState<string | null>(null);
+  const [editingChatId, setEditingChatId] = useState<string | null>(null);
+  const [editingTitle, setEditingTitle] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const activeSemester = semesters.find(s => s.isActive);
+  const lastMessage = chatMessages[chatMessages.length - 1];
+  const isTyping = lastMessage?.role === 'user';
   const activeCourses = courses.filter(c => c.semesterId === activeSemester?.id);
   const currentChat = chats.find(c => c.id === currentChatId);
   const chatCourseIds = currentChat ? currentChat.courseIds : selectedCourses;
@@ -110,6 +125,18 @@ export function Dashboard() {
     } else {
       setSelectedCourses(activeCourses.map(c => c.id));
     }
+  };
+
+  const startEditingTitle = (chatId: string, currentTitle: string) => {
+    setEditingChatId(chatId);
+    setEditingTitle(currentTitle);
+  };
+
+  const saveEditingTitle = () => {
+    if (editingChatId && editingTitle.trim()) {
+      renameChat(editingChatId, editingTitle.trim());
+    }
+    setEditingChatId(null);
   };
 
   if (!activeSemester) {
@@ -481,22 +508,53 @@ export function Dashboard() {
                       <p className="text-xs text-[#99a1af] text-center py-4">No chats yet</p>
                     )}
                     {chats.map(chat => (
-                      <button
+                      <div
                         key={chat.id}
-                        onClick={() => { selectChat(chat.id); setMobileMenuOpen(false); }}
-                        className={`w-full border rounded-[10px] p-3 text-left transition-colors ${
+                        className={`group relative w-full border rounded-[10px] p-3 text-left transition-colors cursor-pointer ${
                           chat.id === currentChatId
                             ? 'bg-indigo-50 border-[#a3b3ff]'
                             : 'bg-white border-gray-200 hover:bg-gray-50'
                         }`}
+                        onClick={() => { if (editingChatId !== chat.id) { selectChat(chat.id); setMobileMenuOpen(false); } }}
                       >
-                        <p className="text-sm font-medium text-gray-900 truncate">
-                          {chat.title ?? 'Chat'}
-                        </p>
+                        {editingChatId === chat.id ? (
+                          <input
+                            autoFocus
+                            value={editingTitle}
+                            onChange={e => setEditingTitle(e.target.value)}
+                            onBlur={saveEditingTitle}
+                            onClick={e => e.stopPropagation()}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter') saveEditingTitle();
+                              if (e.key === 'Escape') setEditingChatId(null);
+                            }}
+                            className="text-sm font-medium text-gray-900 bg-transparent border-b border-indigo-400 outline-none w-full pr-7"
+                          />
+                        ) : (
+                          <div className="flex items-center gap-1 pr-7">
+                            <p className="text-sm font-medium text-gray-900 truncate">
+                              {chat.title ?? 'Chat'}
+                            </p>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); startEditingTitle(chat.id, chat.title ?? 'Chat'); }}
+                              className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded hover:bg-gray-200 shrink-0"
+                              aria-label="Rename chat"
+                            >
+                              <Pencil className="h-3 w-3 text-gray-400" />
+                            </button>
+                          </div>
+                        )}
                         <p className="text-xs text-[#99a1af] mt-1">
                           {format(parseISO(chat.createdAt), 'MMM d, h:mm a')}
                         </p>
-                      </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setChatToDelete(chat.id); }}
+                          className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-lg hover:bg-red-50"
+                          aria-label="Delete chat"
+                        >
+                          <Trash2 className="h-4 w-4 text-red-500" />
+                        </button>
+                      </div>
                     ))}
                   </div>
 
@@ -521,9 +579,36 @@ export function Dashboard() {
           {/* Chat Header */}
           <div className="border-b border-[#e5e7eb] pt-4 pb-3 px-7 flex flex-col gap-2">
             <div className="flex items-center justify-between">
-              <p className="text-sm font-medium text-[#364153] leading-5 tracking-[-0.015em]">
-                {currentChat?.title ?? 'Active Chat'}
-              </p>
+              <div className="group flex items-center gap-1.5 min-w-0">
+                {editingChatId !== null && editingChatId === currentChatId ? (
+                  <input
+                    autoFocus
+                    value={editingTitle}
+                    onChange={e => setEditingTitle(e.target.value)}
+                    onBlur={saveEditingTitle}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') saveEditingTitle();
+                      if (e.key === 'Escape') setEditingChatId(null);
+                    }}
+                    className="text-sm font-medium text-[#364153] leading-5 tracking-[-0.015em] bg-transparent border-b border-indigo-400 outline-none min-w-0 w-full max-w-xs"
+                  />
+                ) : (
+                  <>
+                    <p className="text-sm font-medium text-[#364153] leading-5 tracking-[-0.015em] truncate">
+                      {currentChat?.title ?? 'New Chat'}
+                    </p>
+                    {currentChat && (
+                      <button
+                        onClick={() => startEditingTitle(currentChatId!, currentChat.title ?? 'New Chat')}
+                        className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded hover:bg-gray-100 shrink-0"
+                        aria-label="Rename chat"
+                      >
+                        <Pencil className="h-3 w-3 text-gray-400" />
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
               {selectedCourseObjects.length > 0 && (
                 <button
                   onClick={() => setActiveChatCollapsed(v => !v)}
@@ -633,6 +718,20 @@ export function Dashboard() {
                 ))}
               </div>
 
+              {isTyping && (
+                <div className="flex justify-start mt-6">
+                  <div className="bg-gray-100 rounded-2xl px-5 py-3 flex items-center gap-1">
+                    {[0, 200, 400].map((delay) => (
+                      <div
+                        key={delay}
+                        className="w-2 h-2 bg-gray-400 rounded-full"
+                        style={{ animation: `typingDot 1.2s ease-in-out ${delay}ms infinite` }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div ref={messagesEndRef} />
             </div>
           </div>
@@ -674,14 +773,34 @@ export function Dashboard() {
       </main>
 
       <AddSemesterModal open={showAddSemester} onClose={() => setShowAddSemester(false)} />
-      <AddCourseModal 
-        open={showAddCourse} 
+      <AddCourseModal
+        open={showAddCourse}
         onClose={() => {
           setShowAddCourse(false);
           setSelectedCourseForUpload(undefined);
-        }} 
+        }}
         existingCourse={selectedCourseForUpload}
       />
+
+      <AlertDialog open={chatToDelete !== null} onOpenChange={(open) => { if (!open) setChatToDelete(null); }}>
+        <AlertDialogContent className="rounded-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this chat?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This chat will be permanently deleted from your chat history forever.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="rounded-[10px]">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="rounded-[10px] bg-[#e7000b] hover:bg-[#c50009] text-white"
+              onClick={() => { if (chatToDelete) { deleteChat(chatToDelete); setChatToDelete(null); } }}
+            >
+              Delete Forever
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
