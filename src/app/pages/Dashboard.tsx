@@ -537,10 +537,10 @@ export function Dashboard() {
                             </p>
                             <button
                               onClick={(e) => { e.stopPropagation(); startEditingTitle(chat.id, chat.title ?? 'Chat'); }}
-                              className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded hover:bg-gray-200 shrink-0"
+                              className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded hover:bg-gray-200 shrink-0"
                               aria-label="Rename chat"
                             >
-                              <Pencil className="h-3 w-3 text-gray-400" />
+                              <Pencil className="h-4 w-4 text-gray-400" />
                             </button>
                           </div>
                         )}
@@ -600,10 +600,10 @@ export function Dashboard() {
                     {currentChat && (
                       <button
                         onClick={() => startEditingTitle(currentChatId!, currentChat.title ?? 'New Chat')}
-                        className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded hover:bg-gray-100 shrink-0"
+                        className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded hover:bg-gray-100 shrink-0"
                         aria-label="Rename chat"
                       >
-                        <Pencil className="h-3 w-3 text-gray-400" />
+                        <Pencil className="h-4 w-4 text-gray-400" />
                       </button>
                     )}
                   </>
