@@ -1,5 +1,6 @@
 import { createBrowserRouter, Navigate, Outlet } from 'react-router';
 import { AuthScreen } from './pages/AuthScreen';
+import { AuthCallback } from './pages/AuthCallback';
 import { Dashboard } from './pages/Dashboard';
 import { Courses } from './pages/Courses';
 import { CourseDetail } from './pages/CourseDetail';
@@ -55,6 +56,10 @@ export const router = createBrowserRouter([
       {
         path: '/',
         Component: AuthScreen,
+      },
+      {
+        path: '/auth/callback',
+        Component: AuthCallback,
       },
       {
         path: '/dashboard',
