@@ -48,6 +48,7 @@ export function AddCourseModal({ open, onClose, existingCourse }: AddCourseModal
 
   // Upload flow tracking
   const [createdCourseId, setCreatedCourseId] = useState<string | null>(null);
+  const [uploadedFilePath, setUploadedFilePath] = useState<string | null>(null);
   const [processingLog, setProcessingLog] = useState<string[]>([]);
   const [processingError, setProcessingError] = useState<string | null>(null);
 
@@ -71,6 +72,7 @@ export function AddCourseModal({ open, onClose, existingCourse }: AddCourseModal
       setProfessor('');
       setColor(PRESET_COLORS[0]);
       setCreatedCourseId(null);
+      setUploadedFilePath(null);
       setProcessingLog([]);
       setProcessingError(null);
     }
@@ -102,6 +104,10 @@ export function AddCourseModal({ open, onClose, existingCourse }: AddCourseModal
   };
 
   const handleFile = (file: File) => {
+    if (!file.name.toLowerCase().endsWith('.pdf') && file.type !== 'application/pdf') {
+      alert('Only PDF files are supported. Please upload a PDF.');
+      return;
+    }
     setSelectedFile(file);
   };
 
@@ -141,6 +147,7 @@ export function AddCourseModal({ open, onClose, existingCourse }: AddCourseModal
         .upload(filePath, selectedFile, { upsert: true });
 
       if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`);
+      setUploadedFilePath(filePath);
 
       // 3. Update course row with the file path
       const { error: updateError } = await supabase
@@ -207,6 +214,7 @@ export function AddCourseModal({ open, onClose, existingCourse }: AddCourseModal
     setProfessor('');
     setColor(PRESET_COLORS[0]);
     setCreatedCourseId(null);
+    setUploadedFilePath(null);
     setProcessingLog([]);
     setProcessingError(null);
   };
@@ -219,9 +227,21 @@ export function AddCourseModal({ open, onClose, existingCourse }: AddCourseModal
     setProfessor('');
     setColor(PRESET_COLORS[0]);
     setCreatedCourseId(null);
+    setUploadedFilePath(null);
     setProcessingLog([]);
     setProcessingError(null);
     onClose();
+  };
+
+  const handleCancelAfterError = async () => {
+    if (uploadedFilePath) {
+      await supabase.storage.from('syllabi').remove([uploadedFilePath]);
+    }
+    if (createdCourseId) {
+      await supabase.from('courses').delete().eq('id', createdCourseId);
+      await refreshCourses();
+    }
+    resetAndClose();
   };
 
   const handleManualSave = () => {
@@ -343,7 +363,7 @@ export function AddCourseModal({ open, onClose, existingCourse }: AddCourseModal
                       Drop your syllabus to get started
                     </h3>
                     <p className="text-sm text-gray-600 mb-4">
-                      Accepts PDF, DOCX, and images
+                      Accepts PDF files only
                     </p>
                     <label htmlFor="file-upload" className="cursor-pointer">
                       <span className="text-sm text-indigo-600 hover:text-indigo-700 underline">
@@ -352,7 +372,7 @@ export function AddCourseModal({ open, onClose, existingCourse }: AddCourseModal
                       <input
                         id="file-upload"
                         type="file"
-                        accept=".pdf,.docx,.doc,.png,.jpg,.jpeg"
+                        accept=".pdf,application/pdf"
                         onChange={handleFileInput}
                         className="hidden"
                       />
@@ -577,7 +597,7 @@ export function AddCourseModal({ open, onClose, existingCourse }: AddCourseModal
             </div>
 
             <div className="flex gap-3 pt-4">
-              <Button variant="outline" onClick={resetAndClose} className="flex-1 rounded-lg">
+              <Button variant="outline" onClick={handleCancelAfterError} className="flex-1 rounded-lg">
                 Cancel
               </Button>
               <Button
