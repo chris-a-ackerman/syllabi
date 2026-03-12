@@ -8,6 +8,7 @@ export interface User {
   displayName: string;
   avatar?: string;
   isAdmin: boolean;
+  onboardingCompleted: boolean;
 }
 
 export interface Semester {
@@ -136,7 +137,8 @@ interface AppState {
   aiEnabled: boolean;
   chatOpen: boolean;
   setUser: (user: User | null) => void;
-  addSemester: (semester: Omit<Semester, 'id'>) => Promise<void>;
+  addSemester: (semester: Omit<Semester, 'id'>) => Promise<string>;
+  markOnboardingComplete: () => Promise<void>;
   setActiveSemester: (id: string) => Promise<void>;
   addCourse: (course: Omit<Course, 'id'>) => Promise<string | undefined>;
   deleteCourse: (id: string) => Promise<void>;
@@ -261,6 +263,7 @@ function authUserFromSession(supabaseUser: SupabaseUser): User {
     displayName,
     avatar: getInitials(displayName),
     isAdmin: false,
+    onboardingCompleted: false,
   };
 }
 
@@ -272,7 +275,7 @@ function enrichUserWithProfile(
 ) {
   supabase
     .from('profiles')
-    .select('display_name, is_admin')
+    .select('display_name, is_admin, onboarding_completed')
     .eq('id', userId)
     .single()
     .then(({ data: profile }) => {
@@ -280,7 +283,13 @@ function enrichUserWithProfile(
       setUser(prev => {
         if (!prev || prev.id !== userId) return prev;
         const displayName = profile.display_name || prev.displayName;
-        return { ...prev, displayName, avatar: getInitials(displayName), isAdmin: profile.is_admin ?? false };
+        return {
+          ...prev,
+          displayName,
+          avatar: getInitials(displayName),
+          isAdmin: profile.is_admin ?? false,
+          onboardingCompleted: profile.onboarding_completed ?? false,
+        };
       });
     });
 }
@@ -397,8 +406,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     fetchData();
   }, [user?.id]);
 
-  const addSemester = async (semester: Omit<Semester, 'id'>) => {
-    if (!user) return;
+  const addSemester = async (semester: Omit<Semester, 'id'>): Promise<string> => {
+    if (!user) return '';
 
     // Deactivate all existing semesters if the new one is active
     if (semester.isActive) {
@@ -419,11 +428,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
       .single();
 
     if (error) {
+      // Unique constraint violation — semester with this name already exists for the user
+      if (error.code === '23505') {
+        const { data: existing } = await supabase
+          .from('semesters')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('name', semester.name)
+          .single();
+        return existing?.id ?? '';
+      }
       console.error('Error adding semester:', error);
-      return;
+      return '';
     }
 
     setSemesters(prev => [dbSemesterToApp(data), ...prev]);
+    return data.id;
+  };
+
+  const markOnboardingComplete = async () => {
+    if (!user) return;
+    await supabase
+      .from('profiles')
+      .update({ onboarding_completed: true, onboarding_completed_at: new Date().toISOString() })
+      .eq('id', user.id);
+    setUser(prev => prev ? { ...prev, onboardingCompleted: true } : prev);
   };
 
   const setActiveSemester = async (id: string) => {
@@ -751,6 +780,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setChatOpen,
         submitFeedback,
         signOut,
+        markOnboardingComplete,
       }}
     >
       {children}
