@@ -1,38 +1,25 @@
 import { useState, useCallback } from 'react';
 import { useApp } from '../context/AppContext';
 import { supabase } from '../../lib/supabase';
+import { FileItem, COURSE_COLORS } from './useBulkUpload';
 
-export type BulkUploadStep = 'upload' | 'detecting' | 'review' | 'processing';
+export type BulkCourseUploadStep = 'upload' | 'detecting' | 'review' | 'processing';
 
-export const COURSE_COLORS = [
-  '#6366f1', '#8b5cf6', '#ec4899', '#f43f5e',
-  '#f97316', '#eab308', '#22c55e', '#14b8a6',
-  '#0ea5e9', '#64748b',
-];
-
-export interface FileItem {
-  id: string;
-  file: File;
-}
-
-export interface DetectedCourse {
+export interface BulkDetectedCourse {
   id: string;
   fileItem: FileItem;
   tempFilePath: string;
   courseName: string;
   courseCode: string;
-  semesterName: string;
-  semesterStart: string;
-  semesterEnd: string;
   confidence: 'high' | 'medium' | 'low';
   error?: string;
 }
 
-export function useBulkUpload() {
-  const { user, addSemester, addCourse } = useApp();
-  const [step, setStep] = useState<BulkUploadStep>('upload');
+export function useBulkCourseUpload(semesterId: string) {
+  const { user, addCourse } = useApp();
+  const [step, setStep] = useState<BulkCourseUploadStep>('upload');
   const [fileItems, setFileItems] = useState<FileItem[]>([]);
-  const [detectedCourses, setDetectedCourses] = useState<DetectedCourse[]>([]);
+  const [detectedCourses, setDetectedCourses] = useState<BulkDetectedCourse[]>([]);
   const [createdCourseIds, setCreatedCourseIds] = useState<string[]>([]);
   const [globalError, setGlobalError] = useState<string | null>(null);
 
@@ -63,16 +50,11 @@ export function useBulkUpload() {
     setGlobalError(null);
     setStep('detecting');
 
-    // 1. Upload each file to temp storage in parallel.
-    //    Read each file into memory first so the upload never does disk I/O mid-stream
-    //    (prevents hangs when files are stored in iCloud/OneDrive/network drives).
     const timestamp = Date.now();
-    console.log('Starting uploads for', fileItems.length, 'files');
     const uploadResults = await Promise.all(
       fileItems.map(async (fileItem) => {
         const tempFilePath = `${user.id}/temp/${timestamp}_${fileItem.file.name}`;
 
-        // Load into memory with a timeout — catches inaccessible/still-syncing files early
         let buffer: ArrayBuffer;
         try {
           buffer = await Promise.race([
@@ -93,7 +75,6 @@ export function useBulkUpload() {
       })
     );
 
-    // 2. Call detect-syllabi-info with all successfully uploaded paths
     const successPaths = uploadResults
       .filter(r => !r.uploadError)
       .map(r => r.tempFilePath);
@@ -112,8 +93,7 @@ export function useBulkUpload() {
       detectResults = data.results;
     }
 
-    // 3. Map detection results back to file items
-    const mapped: DetectedCourse[] = uploadResults.map((ur) => {
+    const mapped: BulkDetectedCourse[] = uploadResults.map((ur) => {
       if (ur.uploadError) {
         return {
           id: ur.fileItem.id,
@@ -121,9 +101,6 @@ export function useBulkUpload() {
           tempFilePath: ur.tempFilePath,
           courseName: '',
           courseCode: '',
-          semesterName: '',
-          semesterStart: '',
-          semesterEnd: '',
           confidence: 'low' as const,
           error: ur.uploadError,
         };
@@ -136,9 +113,6 @@ export function useBulkUpload() {
         tempFilePath: ur.tempFilePath,
         courseName: result?.course_name ?? '',
         courseCode: result?.course_code ?? '',
-        semesterName: result?.semester_name ?? '',
-        semesterStart: result?.semester_start ?? '',
-        semesterEnd: result?.semester_end ?? '',
         confidence: (result?.confidence ?? 'low') as 'high' | 'medium' | 'low',
         error: result?.error,
       };
@@ -150,51 +124,22 @@ export function useBulkUpload() {
 
   const updateDetectedCourse = useCallback((
     id: string,
-    updates: Partial<Pick<DetectedCourse, 'courseName' | 'courseCode' | 'semesterName' | 'semesterStart' | 'semesterEnd'>>
+    updates: Partial<Pick<BulkDetectedCourse, 'courseName' | 'courseCode'>>
   ) => {
     setDetectedCourses(prev => prev.map(dc => dc.id === id ? { ...dc, ...updates } : dc));
   }, []);
 
   const confirm = useCallback(async () => {
-    if (!user) return;
+    if (!user || !semesterId) return;
     setGlobalError(null);
     setStep('processing');
 
-    // 1. Create each unique semester (handle duplicates via conflict resolution in addSemester)
-    const semesterMap = new Map<string, string>(); // semesterName → semesterId
-    const uniqueSemesterNames = [...new Set(
-      detectedCourses.map(dc => dc.semesterName.trim()).filter(Boolean)
-    )];
-
-    for (const semName of uniqueSemesterNames) {
-      const semCourses = detectedCourses.filter(d => d.semesterName.trim() === semName);
-      const validStarts = semCourses.map(d => d.semesterStart).filter(Boolean);
-      const validEnds = semCourses.map(d => d.semesterEnd).filter(Boolean);
-      const startDate = validStarts.length > 0
-        ? validStarts.reduce((min, d) => d < min ? d : min)
-        : new Date().toISOString().split('T')[0];
-      const endDate = validEnds.length > 0
-        ? validEnds.reduce((max, d) => d > max ? d : max)
-        : new Date(Date.now() + 120 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-      const semId = await addSemester({
-        name: semName,
-        startDate,
-        endDate,
-        isActive: true,
-      });
-      if (semId) semesterMap.set(semName, semId);
-    }
-
-    // 2. Create each course and re-upload syllabus to permanent path
     const createdIds: string[] = [];
 
     for (const dc of detectedCourses) {
-      const semId = semesterMap.get(dc.semesterName.trim());
-      if (!semId) continue;
-
       const color = COURSE_COLORS[createdIds.length % COURSE_COLORS.length];
       const courseId = await addCourse({
-        semesterId: semId,
+        semesterId,
         name: dc.courseName || dc.fileItem.file.name,
         code: dc.courseCode || '',
         professor: '',
@@ -204,7 +149,6 @@ export function useBulkUpload() {
       if (!courseId) continue;
       createdIds.push(courseId);
 
-      // Re-upload from in-memory buffer to permanent path
       const finalPath = `${user.id}/${courseId}/${dc.fileItem.file.name}`;
       let finalBuffer: ArrayBuffer;
       try {
@@ -228,11 +172,7 @@ export function useBulkUpload() {
     }
 
     setCreatedCourseIds(createdIds);
-  }, [user, detectedCourses, addSemester, addCourse]);
-
-  const retryProcessing = useCallback(async (courseId: string) => {
-    await supabase.functions.invoke('process-syllabus', { body: { course_id: courseId } });
-  }, []);
+  }, [user, semesterId, detectedCourses, addCourse]);
 
   return {
     step,
@@ -246,6 +186,5 @@ export function useBulkUpload() {
     analyze,
     updateDetectedCourse,
     confirm,
-    retryProcessing,
   };
 }

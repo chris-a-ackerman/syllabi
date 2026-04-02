@@ -470,7 +470,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
     await supabase.from('semesters').delete().eq('id', id);
     setCourses(prev => prev.filter(c => c.semesterId !== id));
-    setSemesters(prev => prev.filter(s => s.id !== id));
+    setSemesters(prev => {
+      const remaining = prev.filter(s => s.id !== id);
+      const wasActive = prev.find(s => s.id === id)?.isActive;
+      if (wasActive && remaining.length > 0) {
+        const next = remaining[0];
+        supabase.from('semesters').update({ is_active: true }).eq('id', next.id);
+        return remaining.map(s => ({ ...s, isActive: s.id === next.id }));
+      }
+      return remaining;
+    });
   };
 
   const markOnboardingComplete = async () => {
