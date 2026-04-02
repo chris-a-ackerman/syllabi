@@ -10,7 +10,6 @@ import {
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
-import { Checkbox } from '../components/ui/checkbox';
 
 interface AddSemesterModalProps {
   open: boolean;
@@ -22,7 +21,6 @@ export function AddSemesterModal({ open, onClose }: AddSemesterModalProps) {
   const [name, setName] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
-  const [makeActive, setMakeActive] = useState(true);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,12 +28,10 @@ export function AddSemesterModal({ open, onClose }: AddSemesterModalProps) {
       name,
       startDate,
       endDate,
-      isActive: makeActive,
     });
     setName('');
     setStartDate('');
     setEndDate('');
-    setMakeActive(true);
     onClose();
   };
 
@@ -84,17 +80,6 @@ export function AddSemesterModal({ open, onClose }: AddSemesterModalProps) {
                 required
               />
             </div>
-          </div>
-
-          <div className="flex items-center space-x-2">
-            <Checkbox
-              id="makeActive"
-              checked={makeActive}
-              onCheckedChange={(checked) => setMakeActive(checked as boolean)}
-            />
-            <Label htmlFor="makeActive" className="cursor-pointer">
-              Make this my active semester
-            </Label>
           </div>
 
           <div className="flex gap-3 pt-4">

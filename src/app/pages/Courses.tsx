@@ -11,6 +11,7 @@ import {
   AlertCircle,
   MoreHorizontal,
   Trash2,
+  Pencil,
 } from 'lucide-react';
 import {
   AlertDialog,
@@ -40,6 +41,7 @@ import { LogOut } from 'lucide-react';
 import { useState } from 'react';
 import { AddCourseModal } from '../components/AddCourseModal';
 import { BulkUploadModal } from '../components/BulkUploadModal';
+import { EditSemesterModal } from '../components/EditSemesterModal';
 
 export function Courses() {
   const { user, semesters, courses, events, deleteCourse, signOut } = useApp();
@@ -54,6 +56,7 @@ export function Courses() {
     color: string;
   } | undefined>(undefined);
   const [courseToDelete, setCourseToDelete] = useState<string | null>(null);
+  const [showEditSemester, setShowEditSemester] = useState(false);
 
   const activeSemester = semesters.find(s => s.isActive);
   // Restore from navigation state (e.g. back from CourseDetail), otherwise fall back to active semester
@@ -132,18 +135,30 @@ export function Courses() {
             {/* Semester Selector */}
             <div className="w-56">
               <label className="text-sm font-medium text-gray-700 mb-2 block">Semester</label>
-              <Select value={effectiveSemesterId} onValueChange={setSelectedSemesterId}>
-                <SelectTrigger className="rounded-lg bg-white border-gray-300">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="rounded-lg">
-                  {semesters.map(semester => (
-                    <SelectItem key={semester.id} value={semester.id}>
-                      {semester.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="flex items-center gap-1 group">
+                <Select value={effectiveSemesterId} onValueChange={setSelectedSemesterId}>
+                  <SelectTrigger className="rounded-lg bg-white border-gray-300 flex-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-lg">
+                    {semesters.map(semester => (
+                      <SelectItem key={semester.id} value={semester.id}>
+                        {semester.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {effectiveSemesterId && (
+                  <button
+                    type="button"
+                    onClick={() => setShowEditSemester(true)}
+                    className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-md hover:bg-gray-100 text-gray-400 hover:text-gray-600 shrink-0"
+                    title="Edit semester"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -298,6 +313,17 @@ export function Courses() {
         open={showBulkUpload}
         onClose={() => setShowBulkUpload(false)}
       />
+
+      {showEditSemester && effectiveSemesterId && (() => {
+        const sem = semesters.find(s => s.id === effectiveSemesterId);
+        return sem ? (
+          <EditSemesterModal
+            open={showEditSemester}
+            onClose={() => setShowEditSemester(false)}
+            semester={sem}
+          />
+        ) : null;
+      })()}
 
       <AlertDialog open={!!courseToDelete} onOpenChange={() => setCourseToDelete(null)}>
         <AlertDialogContent className="rounded-2xl">

@@ -36,6 +36,7 @@ import {
 } from '../components/ui/alert-dialog';
 import { AddSemesterModal } from '../components/AddSemesterModal';
 import { AddCourseModal } from '../components/AddCourseModal';
+import { EditSemesterModal } from '../components/EditSemesterModal';
 import { format, parseISO } from 'date-fns';
 import { toast } from 'sonner';
 
@@ -67,6 +68,7 @@ export function Dashboard() {
   const [input, setInput] = useState('');
   const [selectedCourses, setSelectedCourses] = useState<string[]>([]);
   const [chatToDelete, setChatToDelete] = useState<string | null>(null);
+  const [showEditSemester, setShowEditSemester] = useState(false);
   const [editingChatId, setEditingChatId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState('');
   const [feedbackOpen, setFeedbackOpen] = useState(false);
@@ -406,24 +408,34 @@ export function Dashboard() {
               {/* Semester Selector */}
               <div className="mb-6">
                 <label className="text-sm font-medium text-gray-700 mb-2 block">Semester</label>
-                <Select
-                  value={activeSemester.id}
-                  onValueChange={(id) => {
-                    setActiveSemester(id);
-                    setSelectedCourses([]);
-                  }}
-                >
-                  <SelectTrigger className="rounded-lg bg-white">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="rounded-lg">
-                    {semesters.map(semester => (
-                      <SelectItem key={semester.id} value={semester.id}>
-                        {semester.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="flex items-center gap-1 group">
+                  <Select
+                    value={activeSemester.id}
+                    onValueChange={(id) => {
+                      setActiveSemester(id);
+                      setSelectedCourses([]);
+                    }}
+                  >
+                    <SelectTrigger className="rounded-lg bg-white flex-1">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-lg">
+                      {semesters.map(semester => (
+                        <SelectItem key={semester.id} value={semester.id}>
+                          {semester.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <button
+                    type="button"
+                    onClick={() => setShowEditSemester(true)}
+                    className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-md hover:bg-gray-100 text-gray-400 hover:text-gray-600 shrink-0"
+                    title="Edit semester"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
+                </div>
               </div>
 
               {/* Course Selection */}
@@ -867,6 +879,13 @@ export function Dashboard() {
       </main>
 
       <AddSemesterModal open={showAddSemester} onClose={() => setShowAddSemester(false)} />
+      {showEditSemester && activeSemester && (
+        <EditSemesterModal
+          open={showEditSemester}
+          onClose={() => setShowEditSemester(false)}
+          semester={activeSemester}
+        />
+      )}
       <AddCourseModal
         open={showAddCourse}
         onClose={() => {

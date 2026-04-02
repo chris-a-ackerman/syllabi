@@ -138,6 +138,8 @@ interface AppState {
   chatOpen: boolean;
   setUser: (user: User | null) => void;
   addSemester: (semester: Omit<Semester, 'id'>) => Promise<string>;
+  updateSemester: (id: string, updates: { name: string; startDate: string; endDate: string; isActive: boolean }) => Promise<void>;
+  deleteSemester: (id: string) => Promise<void>;
   markOnboardingComplete: () => Promise<void>;
   setActiveSemester: (id: string) => Promise<void>;
   addCourse: (course: Omit<Course, 'id'>) => Promise<string | undefined>;
@@ -440,6 +442,35 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return [dbSemesterToApp(data), ...prev];
     });
     return data.id;
+  };
+
+  const updateSemester = async (id: string, updates: { name: string; startDate: string; endDate: string; isActive: boolean }) => {
+    if (!user) return;
+    if (updates.isActive) {
+      await supabase.from('semesters').update({ is_active: false }).eq('user_id', user.id);
+      setSemesters(prev => prev.map(s => ({ ...s, isActive: false })));
+    }
+    await supabase.from('semesters').update({
+      name: updates.name,
+      start_date: updates.startDate,
+      end_date: updates.endDate,
+      is_active: updates.isActive,
+    }).eq('id', id);
+    setSemesters(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s));
+  };
+
+  const deleteSemester = async (id: string) => {
+    if (!user) return;
+    const courseIds = courses.filter(c => c.semesterId === id).map(c => c.id);
+    if (courseIds.length > 0) {
+      await supabase.from('course_events').delete().in('course_id', courseIds);
+      await supabase.from('grading_components').delete().in('course_id', courseIds);
+      await supabase.from('notes').delete().in('course_id', courseIds);
+      await supabase.from('courses').delete().in('id', courseIds);
+    }
+    await supabase.from('semesters').delete().eq('id', id);
+    setCourses(prev => prev.filter(c => c.semesterId !== id));
+    setSemesters(prev => prev.filter(s => s.id !== id));
   };
 
   const markOnboardingComplete = async () => {
@@ -759,6 +790,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         chatOpen,
         setUser,
         addSemester,
+        updateSemester,
+        deleteSemester,
         setActiveSemester,
         addCourse,
         deleteCourse,
