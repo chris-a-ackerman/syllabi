@@ -636,7 +636,7 @@ export function Dashboard() {
                         }`}
                         onClick={() => { if (editingChatId !== chat.id) { selectChat(chat.id); setMobileMenuOpen(false); } }}
                       >
-                        {editingChatId === chat.id ? (
+                        {editingChatId === chat.id && chat.id !== currentChatId ? (
                           <input
                             autoFocus
                             value={editingTitle}
