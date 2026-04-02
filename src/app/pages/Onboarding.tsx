@@ -11,7 +11,7 @@ import { Upload, Check, X, Loader2, AlertCircle, ChevronRight, FileText, Refresh
 
 export function Onboarding() {
   const navigate = useNavigate();
-  const { user, courses: allCourses, markOnboardingComplete, refreshCourses } = useApp();
+  const { user, courses: allCourses, markOnboardingComplete, refreshCourses, refreshEvents } = useApp();
   const {
     step, fileItems, detectedCourses, createdCourseIds, globalError,
     addFiles, removeFile, analyze, updateDetectedCourse, confirm, retryProcessing,
@@ -39,11 +39,11 @@ export function Onboarding() {
     if (!allDone) return;
     if (pollingRef.current) clearInterval(pollingRef.current);
     const t = setTimeout(async () => {
-      await markOnboardingComplete();
+      await Promise.all([markOnboardingComplete(), refreshEvents()]);
       navigate('/dashboard');
     }, 1500);
     return () => clearTimeout(t);
-  }, [step, allCourses, createdCourseIds, navigate, markOnboardingComplete]);
+  }, [step, allCourses, createdCourseIds, navigate, markOnboardingComplete, refreshEvents]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -219,8 +219,10 @@ export function Onboarding() {
         {/* ── Step 3: Review ── */}
         {step === 'review' && (
           <div className="space-y-6">
-            {Object.entries(semesterGroups).map(([semKey, groupCourses]) => (
-              <Card key={semKey} className="p-6 rounded-2xl space-y-4">
+            {Object.entries(semesterGroups).map(([, groupCourses]) => {
+              const stableKey = groupCourses.map(dc => dc.id).sort().join('|');
+              return (
+              <Card key={stableKey} className="p-6 rounded-2xl space-y-4">
                 {/* Semester fields */}
                 <div>
                   <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">
@@ -327,7 +329,8 @@ export function Onboarding() {
                   </div>
                 </div>
               </Card>
-            ))}
+              );
+            })}
 
             <Button
               className="w-full bg-indigo-600 hover:bg-indigo-700 rounded-lg"
@@ -392,7 +395,7 @@ export function Onboarding() {
               className="w-full rounded-lg mt-2"
               onClick={async () => {
                 if (pollingRef.current) clearInterval(pollingRef.current);
-                await markOnboardingComplete();
+                await Promise.all([markOnboardingComplete(), refreshEvents()]);
                 navigate('/dashboard');
               }}
             >
