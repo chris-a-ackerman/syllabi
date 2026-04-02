@@ -23,7 +23,7 @@ import {
 } from '../components/ui/select';
 import { Badge } from '../components/ui/badge';
 import { Card } from '../components/ui/card';
-import { MessageSquare, Plus, LogOut, Calendar, Send, Settings2, BookOpen, Upload, ExternalLink, Menu, X, ChevronUp, ChevronDown, Trash2, Pencil, Flag } from 'lucide-react';
+import { MessageSquare, Plus, LogOut, Calendar, Send, Settings2, BookOpen, Upload, ExternalLink, Menu, X, ChevronUp, ChevronDown, Trash2, Pencil, Flag, Loader2 } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -50,7 +50,7 @@ const SUGGESTED_PROMPTS = [
 ];
 
 export function Dashboard() {
-  const { user, semesters, courses, events, signOut, aiEnabled, chats, currentChatId, chatMessages, addChatMessage, startNewChat, selectChat, deleteChat, renameChat, setActiveSemester, submitFeedback } = useApp();
+  const { user, semesters, courses, events, signOut, aiEnabled, chats, currentChatId, chatMessages, addChatMessage, startNewChat, selectChat, deleteChat, renameChat, setActiveSemester, submitFeedback, refreshCourses, refreshEvents } = useApp();
   const navigate = useNavigate();
   const location = useLocation();
   const [showAddSemester, setShowAddSemester] = useState(false);
@@ -80,6 +80,7 @@ export function Dashboard() {
   const lastMessage = chatMessages[chatMessages.length - 1];
   const isTyping = lastMessage?.role === 'user';
   const activeCourses = courses.filter(c => c.semesterId === activeSemester?.id);
+  const processingCourses = activeCourses.filter(c => c.status === 'processing');
   const currentChat = chats.find(c => c.id === currentChatId);
   const chatCourseIds = currentChat ? currentChat.courseIds : selectedCourses;
   const selectedCourseObjects = activeCourses.filter(c => chatCourseIds.includes(c.id));
@@ -102,6 +103,24 @@ export function Dashboard() {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [chatMessages]);
+
+  // Poll for processing status while any active-semester courses are still processing
+  useEffect(() => {
+    if (processingCourses.length === 0) return;
+    const interval = setInterval(() => refreshCourses(), 3000);
+    return () => clearInterval(interval);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [processingCourses.length > 0, refreshCourses]);
+
+  // Refresh events once when processing completes (same semester guard)
+  const prevProcessingRef = useRef<{ count: number; semesterId: string | undefined }>({ count: 0, semesterId: undefined });
+  useEffect(() => {
+    const prev = prevProcessingRef.current;
+    prevProcessingRef.current = { count: processingCourses.length, semesterId: activeSemester?.id };
+    if (prev.count > 0 && processingCourses.length === 0 && prev.semesterId === activeSemester?.id) {
+      refreshEvents();
+    }
+  }, [processingCourses.length, activeSemester?.id, refreshEvents]);
 
   const handleSend = () => {
     if (!input.trim() || !aiEnabled || !activeSemester) return;
@@ -437,6 +456,16 @@ export function Dashboard() {
                   </button>
                 </div>
               </div>
+
+              {/* Processing indicator */}
+              {processingCourses.length > 0 && (
+                <div className="mb-4 flex items-center gap-2 px-3 py-2 bg-indigo-50 border border-indigo-100 rounded-lg">
+                  <Loader2 className="h-3.5 w-3.5 text-indigo-500 animate-spin shrink-0" />
+                  <span className="text-xs text-indigo-700">
+                    Analyzing {processingCourses.length} syllabus{processingCourses.length > 1 ? 'es' : ''}…
+                  </span>
+                </div>
+              )}
 
               {/* Course Selection */}
               <div>
