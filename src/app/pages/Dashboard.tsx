@@ -167,7 +167,7 @@ export function Dashboard() {
     setEditingChatId(null);
   };
 
-  if (!activeSemester) {
+  if (semesters.length === 0) {
     return (
       <div className="min-h-screen bg-white flex flex-col">
         <header className="border-b border-gray-200 px-6 py-4">
@@ -429,7 +429,7 @@ export function Dashboard() {
                 <label className="text-sm font-medium text-gray-700 mb-2 block">Semester</label>
                 <div className="flex items-center gap-1 group">
                   <Select
-                    value={activeSemester.id}
+                    value={activeSemester?.id}
                     onValueChange={(id) => {
                       setActiveSemester(id);
                       setSelectedCourses([]);
