@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useApp } from '../context/AppContext';
 import { supabase } from '../../lib/supabase';
 import {
@@ -11,9 +11,11 @@ import {
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
-import { Upload, Loader2, CheckCircle, AlertCircle, X, FileText, PenSquare } from 'lucide-react';
+import { Upload, Loader2, CheckCircle, AlertCircle, X, FileText, PenSquare, ChevronRight, Layers } from 'lucide-react';
 import { Badge } from '../components/ui/badge';
 import { Alert, AlertDescription } from '../components/ui/alert';
+import { Card } from '../components/ui/card';
+import { useBulkCourseUpload } from '../hooks/useBulkCourseUpload';
 
 interface AddCourseModalProps {
   open: boolean;
@@ -26,7 +28,7 @@ interface AddCourseModalProps {
   };
 }
 
-type Step = 'choose' | 'upload' | 'processing' | 'review' | 'manual' | 'manualSuccess' | 'error';
+type Step = 'choose' | 'upload' | 'processing' | 'review' | 'manual' | 'manualSuccess' | 'error' | 'bulk';
 
 const PRESET_COLORS = [
   '#6366f1', // indigo
@@ -62,6 +64,41 @@ export function AddCourseModal({ open, onClose, existingCourse }: AddCourseModal
 
   const activeSemester = semesters.find(s => s.isActive);
 
+  const {
+    step: bulkStep,
+    fileItems,
+    detectedCourses,
+    createdCourseIds,
+    globalError: bulkError,
+    addFiles,
+    removeFile,
+    reset: resetBulk,
+    analyze,
+    updateDetectedCourse,
+    confirm,
+  } = useBulkCourseUpload(activeSemester?.id ?? '');
+
+  const bulkFileInputRef = useRef<HTMLInputElement>(null);
+  const [bulkDragActive, setBulkDragActive] = useState(false);
+
+  const handleBulkDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setBulkDragActive(false);
+    addFiles(Array.from(e.dataTransfer.files).filter(f => f.type === 'application/pdf'));
+  }, [addFiles]);
+
+  const handleBulkFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) addFiles(Array.from(e.target.files).filter(f => f.type === 'application/pdf'));
+    e.target.value = '';
+  };
+
+  // Auto-close when bulk processing completes
+  useEffect(() => {
+    if (step !== 'bulk' || bulkStep !== 'processing' || createdCourseIds.length === 0) return;
+    resetBulk();
+    onClose();
+  }, [step, bulkStep, createdCourseIds.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Reset state when modal opens/closes or existingCourse changes
   useEffect(() => {
     if (open) {
@@ -75,8 +112,9 @@ export function AddCourseModal({ open, onClose, existingCourse }: AddCourseModal
       setUploadedFilePath(null);
       setProcessingLog([]);
       setProcessingError(null);
+      resetBulk();
     }
-  }, [open, existingCourse]);
+  }, [open, existingCourse]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
@@ -217,6 +255,7 @@ export function AddCourseModal({ open, onClose, existingCourse }: AddCourseModal
     setUploadedFilePath(null);
     setProcessingLog([]);
     setProcessingError(null);
+    resetBulk();
   };
 
   const resetAndClose = () => {
@@ -230,6 +269,7 @@ export function AddCourseModal({ open, onClose, existingCourse }: AddCourseModal
     setUploadedFilePath(null);
     setProcessingLog([]);
     setProcessingError(null);
+    resetBulk();
     onClose();
   };
 
@@ -320,6 +360,26 @@ export function AddCourseModal({ open, onClose, existingCourse }: AddCourseModal
                   </div>
                 </div>
               </button>
+
+              <button
+                onClick={() => setStep('bulk')}
+                disabled={!activeSemester}
+                className="w-full p-6 rounded-2xl border-2 border-gray-200 hover:border-teal-400 hover:bg-teal-50 transition-colors text-left group disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <div className="flex items-start gap-4">
+                  <div className="w-12 h-12 bg-teal-100 group-hover:bg-teal-200 rounded-xl flex items-center justify-center flex-shrink-0">
+                    <Layers className="w-6 h-6 text-teal-600" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-1">
+                      Upload Multiple Syllabi
+                    </h3>
+                    <p className="text-sm text-gray-600">
+                      Upload several PDFs at once — we'll detect course names and codes automatically. All courses go into the current semester.
+                    </p>
+                  </div>
+                </div>
+              </button>
             </div>
 
             <div className="flex justify-end pt-4">
@@ -403,9 +463,6 @@ export function AddCourseModal({ open, onClose, existingCourse }: AddCourseModal
                 )}
               </div>
 
-              <p className="text-xs text-gray-500 text-center mt-4">
-                Have multiple syllabi? You can add more courses after this one.
-              </p>
             </div>
 
             <div className="flex gap-3 pt-4">
@@ -706,6 +763,183 @@ export function AddCourseModal({ open, onClose, existingCourse }: AddCourseModal
                 Save Course
               </Button>
             </div>
+          </>
+        )}
+        {step === 'bulk' && (
+          <>
+            <DialogHeader>
+              <DialogTitle>
+                {bulkStep === 'upload' && 'Upload Multiple Syllabi'}
+                {bulkStep === 'detecting' && 'Analyzing Syllabi…'}
+                {bulkStep === 'review' && 'Review Detected Courses'}
+                {bulkStep === 'processing' && 'Creating Courses…'}
+              </DialogTitle>
+              <DialogDescription>
+                {bulkStep === 'upload' && 'Drop your PDFs and we\'ll detect course names and codes automatically.'}
+                {bulkStep === 'detecting' && 'Reading each syllabus to extract course information.'}
+                {bulkStep === 'review' && 'Review the detected information and make any edits before confirming.'}
+                {bulkStep === 'processing' && 'Setting up your courses and uploading syllabi…'}
+              </DialogDescription>
+            </DialogHeader>
+
+            {bulkStep === 'upload' && (
+              <div className="py-4 space-y-4 min-w-0">
+                {bulkError && (
+                  <Alert className="rounded-lg bg-red-50 border-red-200">
+                    <AlertCircle className="h-4 w-4 text-red-600" />
+                    <AlertDescription className="text-sm text-red-800">{bulkError}</AlertDescription>
+                  </Alert>
+                )}
+
+                <div
+                  onDragEnter={() => setBulkDragActive(true)}
+                  onDragLeave={() => setBulkDragActive(false)}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={handleBulkDrop}
+                  onClick={() => bulkFileInputRef.current?.click()}
+                  className={`border-2 border-dashed rounded-2xl p-10 text-center transition-colors cursor-pointer overflow-x-hidden ${
+                    bulkDragActive
+                      ? 'border-teal-400 bg-teal-50'
+                      : 'border-gray-300 hover:border-gray-400'
+                  }`}
+                >
+                  <Upload className="w-10 h-10 text-gray-400 mx-auto mb-3" />
+                  <h3 className="text-base font-semibold text-gray-900 mb-1">
+                    Drop your syllabi here
+                  </h3>
+                  <p className="text-sm text-gray-500">
+                    PDF files only · click to browse
+                  </p>
+                  <input
+                    ref={bulkFileInputRef}
+                    type="file"
+                    accept=".pdf,application/pdf"
+                    multiple
+                    onChange={handleBulkFileInput}
+                    className="hidden"
+                  />
+                </div>
+
+                {fileItems.length > 0 && (
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    {fileItems.map(fi => (
+                      <div key={fi.id} className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <FileText className="w-4 h-4 text-gray-400 shrink-0" />
+                          <span className="text-sm text-gray-800 truncate flex-1 min-w-0">{fi.file.name}</span>
+                          <span className="text-xs text-gray-400 shrink-0">
+                            {(fi.file.size / (1024 * 1024)).toFixed(1)} MB
+                          </span>
+                        </div>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); removeFile(fi.id); }}
+                          className="text-gray-400 hover:text-gray-600 shrink-0 ml-2"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="flex gap-3 pt-2">
+                  <Button
+                    variant="outline"
+                    className="rounded-lg"
+                    onClick={() => { resetBulk(); setStep('choose'); }}
+                  >
+                    Back
+                  </Button>
+                  <Button
+                    className="flex-1 bg-teal-600 hover:bg-teal-700 rounded-lg"
+                    disabled={fileItems.length === 0}
+                    onClick={analyze}
+                  >
+                    Analyze
+                    <ChevronRight className="ml-1 w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {bulkStep === 'detecting' && (
+              <div className="py-6 space-y-3 min-w-0">
+                {fileItems.map(fi => (
+                  <div key={fi.id} className="flex items-center gap-3 bg-gray-50 rounded-lg px-4 py-3 overflow-hidden">
+                    <Loader2 className="w-4 h-4 text-teal-500 animate-spin shrink-0" />
+                    <span className="text-sm text-gray-700 truncate min-w-0">{fi.file.name}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {bulkStep === 'review' && (
+              // This is the review card
+              <div className="py-4 space-y-3 min-w-0">
+                <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-1">
+                  {detectedCourses.map((dc) => (
+                    <Card key={dc.id} className="p-3 rounded-xl space-y-2">
+                      {dc.error && (
+                        <Alert className="py-1.5 bg-amber-50 border-amber-200">
+                          <AlertCircle className="h-3 w-3 text-amber-500" />
+                          <AlertDescription className="text-xs text-amber-800">
+                            Detection failed — fill in the details manually.
+                          </AlertDescription>
+                        </Alert>
+                      )}
+                      <div className="flex items-center gap-2 text-xs text-gray-400 overflow-hidden">
+                        <FileText className="w-3 h-3 shrink-0" />
+                        <span className="truncate min-w-0">{dc.fileItem.file.name}</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <Label className="text-xs">Course Name</Label>
+                          <input
+                            value={dc.courseName}
+                            onChange={(e) => updateDetectedCourse(dc.id, { courseName: e.target.value })}
+                            placeholder="e.g. Calculus II"
+                            className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-xs">Course Code</Label>
+                          <input
+                            value={dc.courseCode}
+                            onChange={(e) => updateDetectedCourse(dc.id, { courseCode: e.target.value })}
+                            placeholder="e.g. MATH 202"
+                            className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+                          />
+                        </div>
+                      </div>
+                    </Card>
+                  ))}
+                </div>
+
+                <div className="flex gap-3 pt-2">
+                  <Button
+                    variant="outline"
+                    className="rounded-lg"
+                    onClick={() => { resetBulk(); setStep('choose'); }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    className="flex-1 bg-teal-600 hover:bg-teal-700 rounded-lg"
+                    onClick={confirm}
+                  >
+                    Confirm &amp; Add Courses
+                    <ChevronRight className="ml-1 w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {bulkStep === 'processing' && (
+              <div className="flex flex-col items-center gap-3 py-10">
+                <Loader2 className="w-10 h-10 text-teal-500 animate-spin" />
+                <p className="text-sm text-gray-600">Creating your courses…</p>
+              </div>
+            )}
           </>
         )}
       </DialogContent>

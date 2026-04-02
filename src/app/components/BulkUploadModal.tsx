@@ -151,7 +151,7 @@ export function BulkUploadModal({ open, onClose }: BulkUploadModalProps) {
                   <div key={fi.id} className="flex items-center justify-between px-2 py-1.5">
                     <div className="flex items-center gap-2 min-w-0">
                       <FileText className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-                      <span className="text-sm text-gray-700 truncate">{fi.file.name}</span>
+                      <span className="text-sm text-gray-700 truncate flex-1 min-w-0">{fi.file.name}</span>
                       <span className="text-xs text-gray-400 shrink-0">
                         {(fi.file.size / (1024 * 1024)).toFixed(1)} MB
                       </span>
@@ -289,7 +289,7 @@ export function BulkUploadModal({ open, onClose }: BulkUploadModalProps) {
                             </AlertDescription>
                           </Alert>
                         )}
-                        <div className="flex items-center gap-2 text-xs text-gray-400">
+                        <div className="flex items-center gap-2 text-xs text-gray-400 min-w-0">
                           <FileText className="w-3 h-3" />
                           <span className="truncate">{dc.fileItem.file.name}</span>
                         </div>
