@@ -54,7 +54,7 @@ export function AuthScreen() {
 
         if (data.session) {
           // Email confirmation not required — session is active immediately
-          navigate('/dashboard');
+          navigate('/onboarding');
         } else if (data.user) {
           // Email confirmation required — session won't exist until confirmed
           setEmailConfirmationSent(true);

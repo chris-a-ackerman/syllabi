@@ -39,12 +39,14 @@ import { Avatar, AvatarFallback } from '../components/ui/avatar';
 import { LogOut } from 'lucide-react';
 import { useState } from 'react';
 import { AddCourseModal } from '../components/AddCourseModal';
+import { BulkUploadModal } from '../components/BulkUploadModal';
 
 export function Courses() {
   const { user, semesters, courses, events, deleteCourse, signOut } = useApp();
   const navigate = useNavigate();
   const location = useLocation();
   const [showAddCourse, setShowAddCourse] = useState(false);
+  const [showBulkUpload, setShowBulkUpload] = useState(false);
   const [selectedCourseForUpload, setSelectedCourseForUpload] = useState<{
     id: string;
     name: string;
@@ -106,7 +108,7 @@ export function Courses() {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-6 py-8">
-        <div className="mb-8 flex items-start justify-between">
+        <div className="mb-8 flex items-start justify-between gap-4">
           <div className="flex-1">
             <h2 className="text-2xl font-bold text-gray-900 mb-2">
               Course Details
@@ -115,22 +117,34 @@ export function Courses() {
               Select a course to view details, deadlines, and policies
             </p>
           </div>
-          
-          {/* Semester Selector */}
-          <div className="w-64">
-            <label className="text-sm font-medium text-gray-700 mb-2 block">Semester</label>
-            <Select value={effectiveSemesterId} onValueChange={setSelectedSemesterId}>
-              <SelectTrigger className="rounded-lg bg-white border-gray-300">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="rounded-lg">
-                {semesters.map(semester => (
-                  <SelectItem key={semester.id} value={semester.id}>
-                    {semester.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+
+          <div className="flex items-end gap-3">
+            {/* Upload Multiple button */}
+            <Button
+              variant="outline"
+              className="rounded-lg shrink-0"
+              onClick={() => setShowBulkUpload(true)}
+            >
+              <Upload className="mr-2 h-4 w-4" />
+              Upload Multiple
+            </Button>
+
+            {/* Semester Selector */}
+            <div className="w-56">
+              <label className="text-sm font-medium text-gray-700 mb-2 block">Semester</label>
+              <Select value={effectiveSemesterId} onValueChange={setSelectedSemesterId}>
+                <SelectTrigger className="rounded-lg bg-white border-gray-300">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="rounded-lg">
+                  {semesters.map(semester => (
+                    <SelectItem key={semester.id} value={semester.id}>
+                      {semester.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </div>
 
@@ -278,6 +292,11 @@ export function Courses() {
           setSelectedCourseForUpload(undefined);
         }}
         existingCourse={selectedCourseForUpload}
+      />
+
+      <BulkUploadModal
+        open={showBulkUpload}
+        onClose={() => setShowBulkUpload(false)}
       />
 
       <AlertDialog open={!!courseToDelete} onOpenChange={() => setCourseToDelete(null)}>

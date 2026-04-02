@@ -8,9 +8,14 @@ export function AuthCallback() {
   useEffect(() => {
     // Supabase auto-exchanges the ?code= param via detectSessionInUrl.
     // We just wait for the resulting auth state change.
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_IN' && session) {
-        navigate('/dashboard', { replace: true });
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('onboarding_completed')
+          .eq('id', session.user.id)
+          .single();
+        navigate(profile?.onboarding_completed ? '/dashboard' : '/onboarding', { replace: true });
       } else if (event === 'SIGNED_OUT') {
         navigate('/?error=auth_callback_failed', { replace: true });
       }

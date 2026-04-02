@@ -5,7 +5,9 @@ import { Dashboard } from './pages/Dashboard';
 import { Courses } from './pages/Courses';
 import { CourseDetail } from './pages/CourseDetail';
 import { AdminPanel } from './pages/AdminPanel';
+import { Onboarding } from './pages/Onboarding';
 import { ProtectedRoute } from './components/ProtectedRoute';
+import { useApp } from './context/AppContext';
 
 // Root layout: renders child routes
 function RootLayout() {
@@ -45,6 +47,14 @@ function ProtectedAdminPanel() {
   );
 }
 
+function ProtectedOnboarding() {
+  const { user, loading } = useApp();
+  if (loading) return null;
+  if (!user) return <Navigate to="/" replace />;
+  if (user.onboardingCompleted) return <Navigate to="/dashboard" replace />;
+  return <Onboarding />;
+}
+
 function NotFound() {
   return <Navigate to="/" replace />;
 }
@@ -60,6 +70,10 @@ export const router = createBrowserRouter([
       {
         path: '/auth/callback',
         Component: AuthCallback,
+      },
+      {
+        path: '/onboarding',
+        Component: ProtectedOnboarding,
       },
       {
         path: '/dashboard',
