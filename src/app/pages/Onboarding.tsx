@@ -22,13 +22,6 @@ export function Onboarding() {
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isDraggingRef = useRef(false);
 
-  // Mark onboarding complete as soon as we enter the processing step
-  useEffect(() => {
-    if (step === 'processing' && user) {
-      markOnboardingComplete();
-    }
-  }, [step]); // eslint-disable-line react-hooks/exhaustive-deps
-
   // Poll for course status updates during processing
   useEffect(() => {
     if (step !== 'processing') return;
@@ -45,9 +38,12 @@ export function Onboarding() {
       created.every(c => c.status === 'ready' || c.status === 'failed');
     if (!allDone) return;
     if (pollingRef.current) clearInterval(pollingRef.current);
-    const t = setTimeout(() => navigate('/dashboard'), 5000);
+    const t = setTimeout(async () => {
+      await markOnboardingComplete();
+      navigate('/dashboard');
+    }, 1500);
     return () => clearTimeout(t);
-  }, [step, allCourses, createdCourseIds, navigate]);
+  }, [step, allCourses, createdCourseIds, navigate, markOnboardingComplete]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -394,7 +390,11 @@ export function Onboarding() {
             <Button
               variant="outline"
               className="w-full rounded-lg mt-2"
-              onClick={() => navigate('/dashboard')}
+              onClick={async () => {
+                if (pollingRef.current) clearInterval(pollingRef.current);
+                await markOnboardingComplete();
+                navigate('/dashboard');
+              }}
             >
               Go to Dashboard
             </Button>

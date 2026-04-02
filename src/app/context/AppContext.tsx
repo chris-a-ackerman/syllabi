@@ -417,32 +417,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     const { data, error } = await supabase
       .from('semesters')
-      .insert({
-        user_id: user.id,
-        name: semester.name,
-        start_date: semester.startDate,
-        end_date: semester.endDate,
-        is_active: semester.isActive,
-      })
+      .upsert(
+        {
+          user_id: user.id,
+          name: semester.name,
+          start_date: semester.startDate,
+          end_date: semester.endDate,
+          is_active: semester.isActive,
+        },
+        { onConflict: 'user_id,name' }
+      )
       .select()
       .single();
 
     if (error) {
-      // Unique constraint violation — semester with this name already exists for the user
-      if (error.code === '23505') {
-        const { data: existing } = await supabase
-          .from('semesters')
-          .select('id')
-          .eq('user_id', user.id)
-          .eq('name', semester.name)
-          .single();
-        return existing?.id ?? '';
-      }
       console.error('Error adding semester:', error);
       return '';
     }
 
-    setSemesters(prev => [dbSemesterToApp(data), ...prev]);
+    setSemesters(prev => {
+      if (prev.some(s => s.id === data.id)) return prev;
+      return [dbSemesterToApp(data), ...prev];
+    });
     return data.id;
   };
 

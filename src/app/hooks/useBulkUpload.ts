@@ -67,6 +67,7 @@ export function useBulkUpload() {
     //    Read each file into memory first so the upload never does disk I/O mid-stream
     //    (prevents hangs when files are stored in iCloud/OneDrive/network drives).
     const timestamp = Date.now();
+    console.log('Starting uploads for', fileItems.length, 'files');
     const uploadResults = await Promise.all(
       fileItems.map(async (fileItem) => {
         const tempFilePath = `${user.id}/temp/${timestamp}_${fileItem.file.name}`;
@@ -179,7 +180,7 @@ export function useBulkUpload() {
         name: semName,
         startDate,
         endDate,
-        isActive: false,
+        isActive: true,
       });
       if (semId) semesterMap.set(semName, semId);
     }
