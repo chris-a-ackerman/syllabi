@@ -17,6 +17,7 @@ import {
   Plus,
   MessageSquare,
   FileText,
+  Pencil,
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import {
@@ -29,6 +30,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '../components/ui/alert-dialog';
+import { AddCourseModal } from '../components/AddCourseModal';
 
 export function CourseDetail() {
   const { id } = useParams();
@@ -39,6 +41,7 @@ export function CourseDetail() {
   const [showNoteInput, setShowNoteInput] = useState(false);
   const [deleteNoteId, setDeleteNoteId] = useState<string | null>(null);
   const [showDeleteCourse, setShowDeleteCourse] = useState(false);
+  const [editModalOpen, setEditModalOpen] = useState(false);
 
   const course = courses.find(c => c.id === id);
   const courseEvents = events.filter(e => e.courseId === id && e.date);
@@ -77,13 +80,20 @@ export function CourseDetail() {
             Back to Courses
           </Button>
 
-          <div>
+          <div className="relative group inline-block">
             <h1 className="text-3xl font-bold text-gray-900 mb-2">{course.name}</h1>
             <div className="flex items-center gap-4 text-gray-600">
               <span className="font-medium">{course.code}</span>
-              <span>•</span>
+              {course.code && course.professor && <span>•</span>}
               <span>{course.professor}</span>
             </div>
+            <button
+              onClick={() => setEditModalOpen(true)}
+              className="absolute -top-1 -right-8 opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-md hover:bg-gray-100 text-gray-400 hover:text-gray-600"
+              aria-label="Edit course details"
+            >
+              <Pencil className="h-4 w-4" />
+            </button>
           </div>
         </div>
 
@@ -100,7 +110,7 @@ export function CourseDetail() {
               <p className="text-gray-600 mb-6">
                 Upload your syllabus to see course details, assignments, grading policies, and more.
               </p>
-              <Button 
+              <Button
                 onClick={() => navigate('/dashboard')}
                 className="bg-indigo-600 hover:bg-indigo-700 rounded-lg"
               >
@@ -110,6 +120,20 @@ export function CourseDetail() {
             </Card>
           </div>
         </div>
+
+        {/* Edit Course Details */}
+        <AddCourseModal
+          open={editModalOpen}
+          onClose={() => setEditModalOpen(false)}
+          editMode
+          existingCourse={{
+            id: course.id,
+            name: course.name,
+            code: course.code,
+            professor: course.professor,
+            color: course.color,
+          }}
+        />
       </div>
     );
   }
@@ -168,11 +192,20 @@ export function CourseDetail() {
         </Button>
 
         <div className="mb-4">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">{course.name}</h1>
-          <div className="flex items-center gap-4 text-gray-600">
-            <span className="font-medium">{course.code}</span>
-            <span>•</span>
-            <span>{course.professor}</span>
+          <div className="relative group inline-block">
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">{course.name}</h1>
+            <div className="flex items-center gap-4 text-gray-600">
+              <span className="font-medium">{course.code}</span>
+              {course.code && course.professor && <span>•</span>}
+              <span>{course.professor}</span>
+            </div>
+            <button
+              onClick={() => setEditModalOpen(true)}
+              className="absolute -top-1 -right-8 opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-md hover:bg-gray-100 text-gray-400 hover:text-gray-600"
+              aria-label="Edit course details"
+            >
+              <Pencil className="h-4 w-4" />
+            </button>
           </div>
         </div>
 
@@ -668,6 +701,20 @@ export function CourseDetail() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Edit Course Details */}
+      <AddCourseModal
+        open={editModalOpen}
+        onClose={() => setEditModalOpen(false)}
+        editMode
+        existingCourse={{
+          id: course.id,
+          name: course.name,
+          code: course.code,
+          professor: course.professor,
+          color: course.color,
+        }}
+      />
     </div>
   );
 }
