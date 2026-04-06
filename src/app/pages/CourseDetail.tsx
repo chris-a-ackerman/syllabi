@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useParams, useNavigate } from 'react-router';
+import { useParams, useNavigate, useSearchParams } from 'react-router';
 import { useApp } from '../context/AppContext';
 import { Button } from '../components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
@@ -35,7 +35,18 @@ import { AddCourseModal } from '../components/AddCourseModal';
 export function CourseDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { courses, events, notes, addNote, deleteNote, deleteCourse } = useApp();
+
+  const from = searchParams.get('from');
+  const backLabel = from === 'dashboard' ? 'Back to Dashboard' : 'Back to Courses';
+  const handleBack = () => {
+    if (from === 'dashboard') {
+      navigate('/dashboard');
+    } else {
+      navigate('/courses', { state: { semesterId: course?.semesterId } });
+    }
+  };
 
   const [noteText, setNoteText] = useState('');
   const [showNoteInput, setShowNoteInput] = useState(false);
@@ -52,8 +63,8 @@ export function CourseDetail() {
       <div className="min-h-screen bg-white flex items-center justify-center">
         <div className="text-center">
           <h2 className="text-2xl font-semibold text-gray-900 mb-2">Course not found</h2>
-          <Button onClick={() => navigate('/courses')} className="mt-4">
-            Back to Courses
+          <Button onClick={handleBack} className="mt-4">
+            {backLabel}
           </Button>
         </div>
       </div>
@@ -73,11 +84,11 @@ export function CourseDetail() {
         >
           <Button
             variant="ghost"
-            onClick={() => navigate('/courses', { state: { semesterId: course.semesterId } })}
+            onClick={handleBack}
             className="mb-4 rounded-lg"
           >
             <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Courses
+            {backLabel}
           </Button>
 
           <div className="relative group inline-block">
@@ -184,11 +195,11 @@ export function CourseDetail() {
       >
         <Button
           variant="ghost"
-          onClick={() => navigate('/courses', { state: { semesterId: course.semesterId } })}
+          onClick={handleBack}
           className="mb-4 rounded-lg -ml-2"
         >
           <ArrowLeft className="mr-2 h-4 w-4" />
-          Back to Courses
+          {backLabel}
         </Button>
 
         <div className="mb-4">
