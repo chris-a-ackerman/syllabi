@@ -6,6 +6,7 @@ import { Courses } from './pages/Courses';
 import { CourseDetail } from './pages/CourseDetail';
 import { AdminPanel } from './pages/AdminPanel';
 import { Onboarding } from './pages/Onboarding';
+import { CanvasSettings } from './pages/CanvasSettings';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { useApp } from './context/AppContext';
 
@@ -43,6 +44,14 @@ function ProtectedAdminPanel() {
   return (
     <ProtectedRoute adminOnly>
       <AdminPanel />
+    </ProtectedRoute>
+  );
+}
+
+function ProtectedCanvasSettings() {
+  return (
+    <ProtectedRoute>
+      <CanvasSettings />
     </ProtectedRoute>
   );
 }
@@ -90,6 +99,10 @@ export const router = createBrowserRouter([
       {
         path: '/admin',
         Component: ProtectedAdminPanel,
+      },
+      {
+        path: '/settings/canvas',
+        Component: ProtectedCanvasSettings,
       },
       {
         path: '*',
