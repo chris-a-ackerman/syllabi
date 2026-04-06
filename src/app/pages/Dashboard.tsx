@@ -516,8 +516,10 @@ export function Dashboard() {
                               size="sm"
                               className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
                               onClick={(e) => {
+                                console.log(`Navigating to course ${course.id} from dashboard`);
                                 e.preventDefault();
-                                navigate(`/course/${course.id}`);
+                                navigate(`/course/${course.id}?from=dashboard`);
+                                
                               }}
                             >
                               <ExternalLink className="h-3 w-3 text-gray-400" />
@@ -553,7 +555,7 @@ export function Dashboard() {
                               className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
                               onClick={(e) => {
                                 e.preventDefault();
-                                navigate(`/course/${course.id}`);
+                                navigate(`/course/${course.id}?from=dashboard`);
                               }}
                             >
                               <ExternalLink className="h-3 w-3 text-gray-400" />

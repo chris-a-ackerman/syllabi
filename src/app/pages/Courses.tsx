@@ -188,7 +188,7 @@ export function Courses() {
                   key={course.id}
                   className="p-6 rounded-2xl shadow-sm hover:shadow-md transition-shadow relative overflow-hidden cursor-pointer"
                   style={{ borderLeft: `4px solid ${course.color}` }}
-                  onClick={() => navigate(`/course/${course.id}`)}
+                  onClick={() => navigate(`/course/${course.id}?from=courses`)}
                 >
                   {/* Color accent */}
                   <div
@@ -264,7 +264,7 @@ export function Courses() {
                           className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 rounded-lg h-8"
                           onClick={(e) => {
                             e.stopPropagation();
-                            navigate(`/course/${course.id}`);
+                            navigate(`/course/${course.id}?from=courses`);
                           }}
                         >
                           View Details

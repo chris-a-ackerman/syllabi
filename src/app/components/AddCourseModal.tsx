@@ -25,7 +25,9 @@ interface AddCourseModalProps {
     name: string;
     code: string;
     color: string;
+    professor?: string;
   };
+  editMode?: boolean;
 }
 
 type Step = 'choose' | 'upload' | 'processing' | 'review' | 'manual' | 'manualSuccess' | 'error' | 'bulk';
@@ -41,9 +43,9 @@ const PRESET_COLORS = [
   '#10b981', // emerald
 ];
 
-export function AddCourseModal({ open, onClose, existingCourse }: AddCourseModalProps) {
+export function AddCourseModal({ open, onClose, existingCourse, editMode }: AddCourseModalProps) {
   const { addCourse, updateCourse, refreshCourses, refreshEvents, semesters, user } = useApp();
-  const initialStep = existingCourse ? 'upload' : 'choose';
+  const initialStep = editMode ? 'manual' : existingCourse ? 'upload' : 'choose';
   const [step, setStep] = useState<Step>(initialStep);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [dragActive, setDragActive] = useState(false);
@@ -102,12 +104,20 @@ export function AddCourseModal({ open, onClose, existingCourse }: AddCourseModal
   // Reset state when modal opens/closes or existingCourse changes
   useEffect(() => {
     if (open) {
-      setStep(existingCourse ? 'upload' : 'choose');
+      if (editMode && existingCourse) {
+        setStep('manual');
+        setCourseName(existingCourse.name);
+        setCourseCode(existingCourse.code);
+        setProfessor(existingCourse.professor ?? '');
+        setColor(existingCourse.color);
+      } else {
+        setStep(existingCourse ? 'upload' : 'choose');
+        setCourseName('');
+        setCourseCode('');
+        setProfessor('');
+        setColor(PRESET_COLORS[0]);
+      }
       setSelectedFile(null);
-      setCourseName('');
-      setCourseCode('');
-      setProfessor('');
-      setColor(PRESET_COLORS[0]);
       setCreatedCourseId(null);
       setUploadedFilePath(null);
       setProcessingLog([]);
@@ -285,7 +295,15 @@ export function AddCourseModal({ open, onClose, existingCourse }: AddCourseModal
   };
 
   const handleManualSave = () => {
-    if (!activeSemester || !courseName) return;
+    if (!courseName) return;
+
+    if (editMode && existingCourse?.id) {
+      updateCourse(existingCourse.id, { name: courseName, code: courseCode, professor, color });
+      resetAndClose();
+      return;
+    }
+
+    if (!activeSemester) return;
 
     addCourse({
       semesterId: activeSemester.id,
@@ -487,9 +505,11 @@ export function AddCourseModal({ open, onClose, existingCourse }: AddCourseModal
         {step === 'manual' && (
           <>
             <DialogHeader>
-              <DialogTitle>Create Course Manually</DialogTitle>
+              <DialogTitle>{editMode ? 'Edit Course' : 'Create Course Manually'}</DialogTitle>
               <DialogDescription>
-                Enter your course details. You can upload a syllabus later.
+                {editMode
+                  ? 'Update your course details below.'
+                  : 'Enter your course details. You can upload a syllabus later.'}
               </DialogDescription>
             </DialogHeader>
 
@@ -545,24 +565,28 @@ export function AddCourseModal({ open, onClose, existingCourse }: AddCourseModal
                 </div>
               </div>
 
-              <Alert className="rounded-lg bg-blue-50 border-blue-200">
-                <AlertCircle className="h-4 w-4 text-blue-600" />
-                <AlertDescription className="text-sm text-blue-800">
-                  After creating the course, you can upload your syllabus from the course details page to extract deadlines and events.
-                </AlertDescription>
-              </Alert>
+              {!editMode && (
+                <Alert className="rounded-lg bg-blue-50 border-blue-200">
+                  <AlertCircle className="h-4 w-4 text-blue-600" />
+                  <AlertDescription className="text-sm text-blue-800">
+                    After creating the course, you can upload your syllabus from the course details page to extract deadlines and events.
+                  </AlertDescription>
+                </Alert>
+              )}
             </div>
 
             <div className="flex gap-3 pt-4">
-              <Button variant="outline" onClick={handleStartOver} className="rounded-lg">
-                Back
-              </Button>
+              {!editMode && (
+                <Button variant="outline" onClick={handleStartOver} className="rounded-lg">
+                  Back
+                </Button>
+              )}
               <Button
                 onClick={handleManualSave}
                 disabled={!courseName}
                 className="flex-1 bg-indigo-600 hover:bg-indigo-700 rounded-lg"
               >
-                Create Course
+                {editMode ? 'Save Changes' : 'Create Course'}
               </Button>
             </div>
           </>
