@@ -1,6 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useNavigate } from 'react-router';
 import { useApp } from '../context/AppContext';
 import { useBulkUpload } from '../hooks/useBulkUpload';
+import { useCanvasFlow } from '../hooks/useCanvasFlow';
+import { supabase } from '../../lib/supabase';
 import {
   Dialog,
   DialogContent,
@@ -21,6 +24,9 @@ import {
   FileText,
   PenSquare,
   X,
+  GraduationCap,
+  CheckCircle2,
+  AlertTriangle,
 } from 'lucide-react';
 
 interface AddSemesterModalProps {
@@ -28,14 +34,16 @@ interface AddSemesterModalProps {
   onClose: () => void;
 }
 
-type ModalStep = 'choose' | 'manual' | 'bulk-upload';
+type ModalStep = 'choose' | 'manual' | 'bulk-upload' | 'canvas';
 
 export function AddSemesterModal({ open, onClose }: AddSemesterModalProps) {
+  const navigate = useNavigate();
   const { addSemester } = useApp();
   const [modalStep, setModalStep] = useState<ModalStep>('choose');
   const [name, setName] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [canvasConnected, setCanvasConnected] = useState<boolean | null>(null);
 
   const {
     step: bulkStep,
@@ -51,6 +59,8 @@ export function AddSemesterModal({ open, onClose }: AddSemesterModalProps) {
     confirm,
   } = useBulkUpload();
 
+  const canvasFlow = useCanvasFlow();
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dropRef = useRef<HTMLDivElement>(null);
 
@@ -62,8 +72,20 @@ export function AddSemesterModal({ open, onClose }: AddSemesterModalProps) {
       setStartDate('');
       setEndDate('');
       reset();
+      canvasFlow.reset();
     }
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Fetch Canvas connection status on open
+  useEffect(() => {
+    if (!open) return;
+    setCanvasConnected(null);
+    supabase
+      .from('profiles_safe')
+      .select('has_canvas_connected')
+      .single()
+      .then(({ data }) => setCanvasConnected(data?.has_canvas_connected ?? false));
+  }, [open]);
 
   // Close modal once courses are created — sidebar banner takes over processing status
   useEffect(() => {
@@ -129,6 +151,25 @@ export function AddSemesterModal({ open, onClose }: AddSemesterModalProps) {
                     </h3>
                     <p className="text-sm text-gray-600">
                       Upload one or more syllabus PDFs and we'll automatically detect the semester, course names, and dates.
+                    </p>
+                  </div>
+                </div>
+              </button>
+
+              <button
+                onClick={() => setModalStep('canvas')}
+                className="w-full p-6 rounded-2xl border-2 border-gray-200 hover:border-emerald-400 hover:bg-emerald-50 transition-colors text-left group"
+              >
+                <div className="flex items-start gap-4">
+                  <div className="w-12 h-12 bg-emerald-100 group-hover:bg-emerald-200 rounded-xl flex items-center justify-center flex-shrink-0">
+                    <GraduationCap className="w-6 h-6 text-emerald-600" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-1">
+                      Import from Canvas
+                    </h3>
+                    <p className="text-sm text-gray-600">
+                      Connect to Canvas LMS to automatically detect your courses and find syllabi.
                     </p>
                   </div>
                 </div>
@@ -434,6 +475,283 @@ export function AddSemesterModal({ open, onClose }: AddSemesterModalProps) {
                 <Loader2 className="w-8 h-8 text-indigo-500 animate-spin" />
                 <p className="text-sm text-gray-600">Creating your courses…</p>
               </div>
+            )}
+          </>
+        )}
+
+        {/* ── Canvas import flow ── */}
+        {modalStep === 'canvas' && (
+          <>
+            <DialogHeader>
+              <DialogTitle>Import from Canvas</DialogTitle>
+              <DialogDescription>
+                {canvasFlow.step === 'dates' && 'Enter your semester dates to find your Canvas courses.'}
+                {canvasFlow.step === 'detecting' && 'Searching Canvas for your courses…'}
+                {canvasFlow.step === 'review' && 'Review and confirm your courses before creating them.'}
+                {canvasFlow.step === 'processing' && 'Creating your semester and courses…'}
+                {canvasFlow.step === 'syllabi' && 'Courses created. Next we\'ll find your syllabi in Canvas.'}
+              </DialogDescription>
+            </DialogHeader>
+
+            {/* Canvas not connected */}
+            {canvasConnected === false && (
+              <div className="py-6 space-y-4">
+                <div className="flex flex-col items-center gap-3 text-center py-4">
+                  <div className="w-14 h-14 bg-gray-100 rounded-full flex items-center justify-center">
+                    <GraduationCap className="w-7 h-7 text-gray-400" />
+                  </div>
+                  <div>
+                    <p className="font-medium text-gray-900">Canvas not connected</p>
+                    <p className="text-sm text-gray-500 mt-1">
+                      Connect your Canvas account to import courses automatically.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex gap-3">
+                  <Button variant="outline" className="flex-1 rounded-lg" onClick={() => setModalStep('choose')}>
+                    Back
+                  </Button>
+                  <Button
+                    className="flex-1 bg-emerald-600 hover:bg-emerald-700 rounded-lg"
+                    onClick={() => { onClose(); navigate('/settings/canvas'); }}
+                  >
+                    Connect Canvas
+                    <ChevronRight className="ml-1 w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Loading connection status */}
+            {canvasConnected === null && (
+              <div className="flex items-center justify-center py-10">
+                <Loader2 className="w-6 h-6 text-gray-400 animate-spin" />
+              </div>
+            )}
+
+            {/* Canvas connected — flow steps */}
+            {canvasConnected === true && (
+              <>
+                {canvasFlow.error && (
+                  <Alert className="bg-red-50 border-red-200">
+                    <AlertCircle className="h-4 w-4 text-red-600" />
+                    <AlertDescription className="text-red-800">{canvasFlow.error}</AlertDescription>
+                  </Alert>
+                )}
+
+                {/* Step: dates */}
+                {canvasFlow.step === 'dates' && (
+                  <div className="space-y-4">
+                    <div>
+                      <Label htmlFor="canvasSemName">Semester Name</Label>
+                      <Input
+                        id="canvasSemName"
+                        value={canvasFlow.semesterName}
+                        onChange={(e) => canvasFlow.setSemesterName(e.target.value)}
+                        placeholder="e.g. Spring 2026"
+                        className="mt-1 rounded-lg"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="canvasStart">Start Date</Label>
+                        <Input
+                          id="canvasStart"
+                          type="date"
+                          value={canvasFlow.startDate}
+                          onChange={(e) => canvasFlow.setStartDate(e.target.value)}
+                          className="mt-1 rounded-lg"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="canvasEnd">End Date</Label>
+                        <Input
+                          id="canvasEnd"
+                          type="date"
+                          value={canvasFlow.endDate}
+                          onChange={(e) => canvasFlow.setEndDate(e.target.value)}
+                          className="mt-1 rounded-lg"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex gap-3 pt-2">
+                      <Button variant="outline" className="flex-1 rounded-lg" onClick={() => setModalStep('choose')}>
+                        Back
+                      </Button>
+                      <Button
+                        className="flex-1 bg-emerald-600 hover:bg-emerald-700 rounded-lg"
+                        disabled={!canvasFlow.semesterName || !canvasFlow.startDate || !canvasFlow.endDate}
+                        onClick={canvasFlow.detect}
+                      >
+                        Find Courses
+                        <ChevronRight className="ml-1 w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Step: detecting */}
+                {canvasFlow.step === 'detecting' && (
+                  <div className="flex flex-col items-center gap-3 py-8">
+                    <Loader2 className="w-8 h-8 text-emerald-500 animate-spin" />
+                    <p className="text-sm text-gray-600">Searching Canvas for your courses…</p>
+                  </div>
+                )}
+
+                {/* Step: review */}
+                {canvasFlow.step === 'review' && (
+                  <div className="space-y-4 overflow-hidden">
+                    {/* Editable semester header */}
+                    <Card className="p-4 rounded-xl space-y-3">
+                      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Semester</p>
+                      <div>
+                        <Label className="text-xs">Semester Name</Label>
+                        <Input
+                          value={canvasFlow.semesterName}
+                          onChange={(e) => canvasFlow.setSemesterName(e.target.value)}
+                          placeholder="e.g. Spring 2026"
+                          className="mt-1 rounded-lg h-8 text-sm"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <Label className="text-xs">Start Date</Label>
+                          <Input
+                            type="date"
+                            value={canvasFlow.startDate}
+                            onChange={(e) => canvasFlow.setStartDate(e.target.value)}
+                            className="mt-1 rounded-lg h-8 text-sm"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-xs">End Date</Label>
+                          <Input
+                            type="date"
+                            value={canvasFlow.endDate}
+                            onChange={(e) => canvasFlow.setEndDate(e.target.value)}
+                            className="mt-1 rounded-lg h-8 text-sm"
+                          />
+                        </div>
+                      </div>
+                    </Card>
+
+                    {/* Course list */}
+                    {canvasFlow.detectedCourses.length === 0 ? (
+                      <div className="text-center py-6">
+                        <p className="text-sm text-gray-500">No courses found for these dates.</p>
+                        <p className="text-xs text-gray-400 mt-1">Try adjusting your date range.</p>
+                      </div>
+                    ) : (
+                      <Card className="p-4 rounded-xl space-y-3">
+                        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                          Courses ({canvasFlow.detectedCourses.length})
+                        </p>
+                        <div className="space-y-4">
+                          {canvasFlow.detectedCourses.map((dc, i) => (
+                            <div key={dc.canvas_course_id} className="space-y-2">
+                              {dc.needs_review && (
+                                <div className="flex items-center gap-1.5 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">
+                                  <AlertTriangle className="w-3 h-3 shrink-0" />
+                                  No term dates — verify this course belongs to this semester
+                                </div>
+                              )}
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <Label className="text-xs">Course Name</Label>
+                                  <Input
+                                    value={dc.editedName}
+                                    onChange={(e) => canvasFlow.updateCourse(i, 'editedName', e.target.value)}
+                                    placeholder="Course name"
+                                    className="mt-1 rounded-lg h-8 text-sm"
+                                  />
+                                </div>
+                                <div>
+                                  <Label className="text-xs">Course Code</Label>
+                                  <Input
+                                    value={dc.editedCode}
+                                    onChange={(e) => canvasFlow.updateCourse(i, 'editedCode', e.target.value)}
+                                    placeholder="e.g. MATH 202"
+                                    className="mt-1 rounded-lg h-8 text-sm"
+                                  />
+                                </div>
+                              </div>
+                              {dc.instructor && (
+                                <p className="text-xs text-gray-400">Instructor: {dc.instructor}</p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </Card>
+                    )}
+
+                    <div className="flex gap-3">
+                      <Button
+                        variant="outline"
+                        className="flex-1 rounded-lg"
+                        onClick={() => canvasFlow.reset()}
+                      >
+                        Back
+                      </Button>
+                      <Button
+                        className="flex-1 bg-emerald-600 hover:bg-emerald-700 rounded-lg"
+                        disabled={canvasFlow.detectedCourses.length === 0}
+                        onClick={canvasFlow.confirm}
+                      >
+                        Confirm &amp; Create
+                        <ChevronRight className="ml-1 w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Step: processing */}
+                {canvasFlow.step === 'processing' && (
+                  <div className="space-y-3 py-4">
+                    {canvasFlow.detectedCourses.map((dc) => {
+                      const created = canvasFlow.createdCourseIds.length > 0;
+                      return (
+                        <div key={dc.canvas_course_id} className="flex items-center gap-3">
+                          {created ? (
+                            <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                          ) : (
+                            <Loader2 className="w-4 h-4 text-emerald-500 animate-spin shrink-0" />
+                          )}
+                          <span className="text-sm text-gray-700 truncate">
+                            {dc.editedName || dc.name}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Step: syllabi (placeholder) */}
+                {canvasFlow.step === 'syllabi' && (
+                  <div className="space-y-4 py-2">
+                    <div className="flex items-start gap-3 p-4 bg-emerald-50 border border-emerald-200 rounded-xl">
+                      <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-sm font-medium text-emerald-900">
+                          {canvasFlow.createdCourseIds.length} course{canvasFlow.createdCourseIds.length !== 1 ? 's' : ''} created
+                        </p>
+                        <p className="text-xs text-emerald-700 mt-0.5">
+                          Next, we'll search Canvas for your syllabi.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex flex-col items-center gap-2 py-4 text-center">
+                      <Loader2 className="w-6 h-6 text-gray-300 animate-spin" />
+                      <p className="text-sm text-gray-500">Syllabus search coming soon…</p>
+                    </div>
+                    <Button
+                      className="w-full bg-emerald-600 hover:bg-emerald-700 rounded-lg"
+                      onClick={onClose}
+                    >
+                      Done
+                    </Button>
+                  </div>
+                )}
+              </>
             )}
           </>
         )}
