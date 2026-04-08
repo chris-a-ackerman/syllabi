@@ -2,8 +2,18 @@ import { useState, useCallback } from 'react';
 import { useApp } from '../context/AppContext';
 import { supabase } from '../../lib/supabase';
 
-export type CanvasStep = 'dates' | 'detecting' | 'review' | 'processing' | 'syllabi';
+export type CanvasStep = 'dates' | 'detecting' | 'review' | 'processing' | 'syllabi' | 'downloading';
 export type SyllabusSearchStatus = 'searching' | 'found' | 'not_found' | 'error';
+export type SyllabusDownloadStatus = 'downloading' | 'started' | 'error' | 'skipped';
+
+export interface SyllabusFindResult {
+  status: SyllabusSearchStatus;
+  source_type?: 'file' | 'html' | 'page';
+  file_name?: string | null;
+  file_url?: string | null;
+  html_content?: string | null;
+  confidence?: 'high' | 'medium';
+}
 
 export interface CanvasDetectedCourse {
   canvas_course_id: string;
@@ -30,7 +40,8 @@ export function useCanvasFlow() {
   const [endDate, setEndDate] = useState('');
   const [detectedCourses, setDetectedCourses] = useState<CanvasDetectedCourse[]>([]);
   const [createdCourseIds, setCreatedCourseIds] = useState<string[]>([]);
-  const [syllabiResults, setSyllabiResults] = useState<Record<string, SyllabusSearchStatus>>({});
+  const [syllabiResults, setSyllabiResults] = useState<Record<string, SyllabusFindResult>>({});
+  const [downloadResults, setDownloadResults] = useState<Record<string, SyllabusDownloadStatus>>({});
   const [error, setError] = useState<string | null>(null);
 
   const reset = useCallback(() => {
@@ -41,6 +52,7 @@ export function useCanvasFlow() {
     setDetectedCourses([]);
     setCreatedCourseIds([]);
     setSyllabiResults({});
+    setDownloadResults({});
     setError(null);
   }, []);
 
@@ -88,10 +100,13 @@ export function useCanvasFlow() {
     );
   }, []);
 
+  const removeCourse = useCallback((index: number) => {
+    setDetectedCourses(prev => prev.filter((_, i) => i !== index));
+  }, []);
+
   const confirm = useCallback(async () => {
     setError(null);
     setStep('processing');
-    // CHECK HERE
 
     const semId = await addSemester({
       name: semesterName,
@@ -134,8 +149,8 @@ export function useCanvasFlow() {
     setStep('syllabi');
 
     // Kick off parallel syllabus searches for all created courses
-    const initialResults: Record<string, SyllabusSearchStatus> = {};
-    createdIds.forEach(id => { initialResults[id] = 'searching'; });
+    const initialResults: Record<string, SyllabusFindResult> = {};
+    createdIds.forEach(id => { initialResults[id] = { status: 'searching' }; });
     setSyllabiResults(initialResults);
 
     createdIds.forEach((courseId, i) => {
@@ -146,21 +161,64 @@ export function useCanvasFlow() {
           body: { course_id: courseId, canvas_course_id: dc.canvas_course_id },
         })
         .then(({ data, error: fnError }) => {
-          let status: SyllabusSearchStatus;
+          let result: SyllabusFindResult;
           if (fnError) {
-            status = 'error';
-          } else if (data?.success === false) {
-            status = 'not_found';
+            result = { status: 'error' };
+          } else if (data?.success === false || !data?.found) {
+            result = { status: 'not_found' };
           } else {
-            status = 'found';
+            result = {
+              status: 'found',
+              source_type: data.source_type,
+              file_name: data.file_name,
+              file_url: data.file_url,
+              html_content: data.html_content,
+              confidence: data.confidence,
+            };
           }
-          setSyllabiResults(prev => ({ ...prev, [courseId]: status }));
+          setSyllabiResults(prev => ({ ...prev, [courseId]: result }));
         })
         .catch(() => {
-          setSyllabiResults(prev => ({ ...prev, [courseId]: 'error' }));
+          setSyllabiResults(prev => ({ ...prev, [courseId]: { status: 'error' } }));
         });
     });
   }, [semesterName, startDate, endDate, detectedCourses, addSemester, addCourse]);
+
+  const downloadSyllabi = useCallback(async () => {
+    setStep('downloading');
+
+    // Initialize download statuses
+    const initial: Record<string, SyllabusDownloadStatus> = {};
+    createdCourseIds.forEach(id => {
+      initial[id] = syllabiResults[id]?.status === 'found' ? 'downloading' : 'skipped';
+    });
+    setDownloadResults(initial);
+
+    // Fire download for each found course in parallel
+    createdCourseIds.forEach(courseId => {
+      const result = syllabiResults[courseId];
+      if (result?.status !== 'found') return;
+
+      supabase.functions
+        .invoke('download-canvas-syllabus', {
+          body: {
+            course_id: courseId,
+            source_type: result.source_type,
+            file_url: result.file_url ?? undefined,
+            file_name: result.file_name ?? undefined,
+            html_content: result.html_content ?? undefined,
+          },
+        })
+        .then(({ data, error: fnError }) => {
+          const status: SyllabusDownloadStatus =
+            fnError || !data?.success ? 'error' : 'started';
+          setDownloadResults(prev => ({ ...prev, [courseId]: status }));
+        })
+        .catch(() => {
+          setDownloadResults(prev => ({ ...prev, [courseId]: 'error' }));
+        });
+    });
+  }, [createdCourseIds, syllabiResults]);
 
   return {
     step,
@@ -173,10 +231,13 @@ export function useCanvasFlow() {
     detectedCourses,
     createdCourseIds,
     syllabiResults,
+    downloadResults,
     error,
     reset,
     detect,
     updateCourse,
+    removeCourse,
     confirm,
+    downloadSyllabi,
   };
 }

@@ -94,14 +94,6 @@ export function AddSemesterModal({ open, onClose }: AddSemesterModalProps) {
     onClose();
   }, [modalStep, bulkStep, createdCourseIds.length, onClose]);
 
-  // Auto-close when all Canvas syllabus searches have settled
-  useEffect(() => {
-    if (canvasFlow.step !== 'syllabi') return;
-    const statuses = Object.values(canvasFlow.syllabiResults);
-    if (statuses.length === 0) return;
-    const allSettled = statuses.every(s => s !== 'searching');
-    if (allSettled) onClose();
-  }, [canvasFlow.step, canvasFlow.syllabiResults, onClose]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -499,7 +491,8 @@ export function AddSemesterModal({ open, onClose }: AddSemesterModalProps) {
                 {canvasFlow.step === 'detecting' && 'Searching Canvas for your courses…'}
                 {canvasFlow.step === 'review' && 'Review and confirm your courses before creating them.'}
                 {canvasFlow.step === 'processing' && 'Creating your semester and courses…'}
-                {canvasFlow.step === 'syllabi' && 'Courses created. Next we\'ll find your syllabi in Canvas.'}
+                {canvasFlow.step === 'syllabi' && 'Courses created. Searching Canvas for your syllabi…'}
+                {canvasFlow.step === 'downloading' && 'Downloading syllabi and starting processing…'}
               </DialogDescription>
             </DialogHeader>
 
@@ -658,8 +651,16 @@ export function AddSemesterModal({ open, onClose }: AddSemesterModalProps) {
                         </p>
                         <div className="space-y-4">
                           {canvasFlow.detectedCourses.map((dc, i) => (
-                            <div key={dc.canvas_course_id} className="space-y-2">
-                              <div className="grid grid-cols-2 gap-2">
+                            <div key={dc.canvas_course_id} className="space-y-2 relative">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="absolute -top-1 -right-1 h-6 w-6 text-gray-400 hover:text-red-500"
+                                onClick={() => canvasFlow.removeCourse(i)}
+                              >
+                                <X className="h-3 w-3" />
+                              </Button>
+                              <div className="grid grid-cols-2 gap-2 pr-6">
                                 <div>
                                   <Label className="text-xs">Course Name</Label>
                                   <Input
@@ -730,59 +731,135 @@ export function AddSemesterModal({ open, onClose }: AddSemesterModalProps) {
                 )}
 
                 {/* Step: syllabi */}
-                {canvasFlow.step === 'syllabi' && (
-                  <div className="space-y-4 py-2">
-                    <div className="flex items-start gap-3 p-4 bg-emerald-50 border border-emerald-200 rounded-xl">
-                      <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
-                      <div>
-                        <p className="text-sm font-medium text-emerald-900">
-                          {canvasFlow.createdCourseIds.length} course{canvasFlow.createdCourseIds.length !== 1 ? 's' : ''} created
-                        </p>
-                        <p className="text-xs text-emerald-700 mt-0.5">
-                          Searching Canvas for your syllabi…
-                        </p>
+                {canvasFlow.step === 'syllabi' && (() => {
+                  const findStatuses = Object.values(canvasFlow.syllabiResults);
+                  const allFindSettled = findStatuses.length > 0 && findStatuses.every(r => r.status !== 'searching');
+                  const foundCount = findStatuses.filter(r => r.status === 'found').length;
+                  return (
+                    <div className="space-y-4 py-2">
+                      <div className="flex items-start gap-3 p-4 bg-emerald-50 border border-emerald-200 rounded-xl">
+                        <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+                        <div>
+                          <p className="text-sm font-medium text-emerald-900">
+                            {canvasFlow.createdCourseIds.length} course{canvasFlow.createdCourseIds.length !== 1 ? 's' : ''} created
+                          </p>
+                          <p className="text-xs text-emerald-700 mt-0.5">
+                            {allFindSettled
+                              ? `${foundCount} syllab${foundCount !== 1 ? 'i' : 'us'} found in Canvas`
+                              : 'Searching Canvas for your syllabi…'}
+                          </p>
+                        </div>
                       </div>
+                      <div className="space-y-2">
+                        {canvasFlow.createdCourseIds.map((courseId, i) => {
+                          const dc = canvasFlow.detectedCourses[i];
+                          const result = canvasFlow.syllabiResults[courseId];
+                          const status = result?.status ?? 'searching';
+                          return (
+                            <div key={courseId} className="flex items-center gap-3 px-1">
+                              {status === 'searching' && (
+                                <Loader2 className="w-4 h-4 text-indigo-500 animate-spin shrink-0" />
+                              )}
+                              {status === 'found' && (
+                                <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                              )}
+                              {status === 'not_found' && (
+                                <XCircle className="w-4 h-4 text-amber-400 shrink-0" />
+                              )}
+                              {status === 'error' && (
+                                <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+                              )}
+                              <span className="text-sm text-gray-700 truncate flex-1">
+                                {dc?.editedName || dc?.name}
+                              </span>
+                              {status === 'not_found' && (
+                                <span className="text-xs text-amber-500 shrink-0">Not found</span>
+                              )}
+                              {status === 'error' && (
+                                <span className="text-xs text-red-400 shrink-0">Error</span>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <Button
+                        className="w-full bg-emerald-600 hover:bg-emerald-700 rounded-lg"
+                        disabled={!allFindSettled}
+                        onClick={canvasFlow.downloadSyllabi}
+                      >
+                        {allFindSettled ? (
+                          <>
+                            {foundCount > 0 ? 'Download & Process Syllabi' : 'Continue'}
+                            <ChevronRight className="ml-1 w-4 h-4" />
+                          </>
+                        ) : (
+                          <>
+                            <Loader2 className="mr-2 w-4 h-4 animate-spin" />
+                            Searching…
+                          </>
+                        )}
+                      </Button>
                     </div>
-                    <div className="space-y-2">
-                      {canvasFlow.createdCourseIds.map((courseId, i) => {
-                        const dc = canvasFlow.detectedCourses[i];
-                        const status = canvasFlow.syllabiResults[courseId] ?? 'searching';
-                        return (
-                          <div key={courseId} className="flex items-center gap-3 px-1">
-                            {status === 'searching' && (
-                              <Loader2 className="w-4 h-4 text-indigo-500 animate-spin shrink-0" />
-                            )}
-                            {status === 'found' && (
-                              <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
-                            )}
-                            {status === 'not_found' && (
-                              <XCircle className="w-4 h-4 text-amber-400 shrink-0" />
-                            )}
-                            {status === 'error' && (
-                              <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
-                            )}
-                            <span className="text-sm text-gray-700 truncate flex-1">
-                              {dc?.editedName || dc?.name}
-                            </span>
-                            {status === 'not_found' && (
-                              <span className="text-xs text-amber-500 shrink-0">Not found</span>
-                            )}
-                            {status === 'error' && (
-                              <span className="text-xs text-red-400 shrink-0">Error</span>
-                            )}
-                          </div>
-                        );
-                      })}
+                  );
+                })()}
+                {/* Step: downloading */}
+                {canvasFlow.step === 'downloading' && (() => {
+                  const dlStatuses = Object.values(canvasFlow.downloadResults);
+                  const allDlSettled = dlStatuses.length > 0 && dlStatuses.every(s => s !== 'downloading');
+                  return (
+                    <div className="space-y-4 py-2">
+                      <div className="space-y-2">
+                        {canvasFlow.createdCourseIds.map((courseId, i) => {
+                          const dc = canvasFlow.detectedCourses[i];
+                          const status = canvasFlow.downloadResults[courseId] ?? 'downloading';
+                          return (
+                            <div key={courseId} className="flex items-center gap-3 px-1">
+                              {status === 'downloading' && (
+                                <Loader2 className="w-4 h-4 text-emerald-500 animate-spin shrink-0" />
+                              )}
+                              {status === 'started' && (
+                                <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                              )}
+                              {status === 'error' && (
+                                <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+                              )}
+                              {status === 'skipped' && (
+                                <XCircle className="w-4 h-4 text-amber-400 shrink-0" />
+                              )}
+                              <span className="text-sm text-gray-700 truncate flex-1">
+                                {dc?.editedName || dc?.name}
+                              </span>
+                              {status === 'started' && (
+                                <span className="text-xs text-emerald-600 shrink-0">Processing started</span>
+                              )}
+                              {status === 'error' && (
+                                <span className="text-xs text-red-400 shrink-0">Download failed</span>
+                              )}
+                              {status === 'skipped' && (
+                                <span className="text-xs text-amber-500 shrink-0">No syllabus found</span>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {allDlSettled && (
+                        <div className="flex items-start gap-3 p-4 bg-indigo-50 border border-indigo-200 rounded-xl">
+                          <CheckCircle2 className="w-5 h-5 text-indigo-600 shrink-0 mt-0.5" />
+                          <p className="text-sm text-indigo-900">
+                            Processing has started. You can track progress on the dashboard.
+                          </p>
+                        </div>
+                      )}
+                      <Button
+                        variant="outline"
+                        className="w-full rounded-lg"
+                        onClick={onClose}
+                      >
+                        Done
+                      </Button>
                     </div>
-                    <Button
-                      variant="outline"
-                      className="w-full rounded-lg"
-                      onClick={onClose}
-                    >
-                      Done
-                    </Button>
-                  </div>
-                )}
+                  );
+                })()}
               </>
             )}
           </>
