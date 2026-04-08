@@ -27,6 +27,7 @@ import {
   GraduationCap,
   CheckCircle2,
   AlertTriangle,
+  XCircle,
 } from 'lucide-react';
 
 interface AddSemesterModalProps {
@@ -92,6 +93,15 @@ export function AddSemesterModal({ open, onClose }: AddSemesterModalProps) {
     if (modalStep !== 'bulk-upload' || bulkStep !== 'processing' || createdCourseIds.length === 0) return;
     onClose();
   }, [modalStep, bulkStep, createdCourseIds.length, onClose]);
+
+  // Auto-close when all Canvas syllabus searches have settled
+  useEffect(() => {
+    if (canvasFlow.step !== 'syllabi') return;
+    const statuses = Object.values(canvasFlow.syllabiResults);
+    if (statuses.length === 0) return;
+    const allSettled = statuses.every(s => s !== 'searching');
+    if (allSettled) onClose();
+  }, [canvasFlow.step, canvasFlow.syllabiResults, onClose]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -649,12 +659,6 @@ export function AddSemesterModal({ open, onClose }: AddSemesterModalProps) {
                         <div className="space-y-4">
                           {canvasFlow.detectedCourses.map((dc, i) => (
                             <div key={dc.canvas_course_id} className="space-y-2">
-                              {dc.needs_review && (
-                                <div className="flex items-center gap-1.5 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">
-                                  <AlertTriangle className="w-3 h-3 shrink-0" />
-                                  No term dates — verify this course belongs to this semester
-                                </div>
-                              )}
                               <div className="grid grid-cols-2 gap-2">
                                 <div>
                                   <Label className="text-xs">Course Name</Label>
@@ -725,7 +729,7 @@ export function AddSemesterModal({ open, onClose }: AddSemesterModalProps) {
                   </div>
                 )}
 
-                {/* Step: syllabi (placeholder) */}
+                {/* Step: syllabi */}
                 {canvasFlow.step === 'syllabi' && (
                   <div className="space-y-4 py-2">
                     <div className="flex items-start gap-3 p-4 bg-emerald-50 border border-emerald-200 rounded-xl">
@@ -735,16 +739,44 @@ export function AddSemesterModal({ open, onClose }: AddSemesterModalProps) {
                           {canvasFlow.createdCourseIds.length} course{canvasFlow.createdCourseIds.length !== 1 ? 's' : ''} created
                         </p>
                         <p className="text-xs text-emerald-700 mt-0.5">
-                          Next, we'll search Canvas for your syllabi.
+                          Searching Canvas for your syllabi…
                         </p>
                       </div>
                     </div>
-                    <div className="flex flex-col items-center gap-2 py-4 text-center">
-                      <Loader2 className="w-6 h-6 text-gray-300 animate-spin" />
-                      <p className="text-sm text-gray-500">Syllabus search coming soon…</p>
+                    <div className="space-y-2">
+                      {canvasFlow.createdCourseIds.map((courseId, i) => {
+                        const dc = canvasFlow.detectedCourses[i];
+                        const status = canvasFlow.syllabiResults[courseId] ?? 'searching';
+                        return (
+                          <div key={courseId} className="flex items-center gap-3 px-1">
+                            {status === 'searching' && (
+                              <Loader2 className="w-4 h-4 text-indigo-500 animate-spin shrink-0" />
+                            )}
+                            {status === 'found' && (
+                              <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                            )}
+                            {status === 'not_found' && (
+                              <XCircle className="w-4 h-4 text-amber-400 shrink-0" />
+                            )}
+                            {status === 'error' && (
+                              <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+                            )}
+                            <span className="text-sm text-gray-700 truncate flex-1">
+                              {dc?.editedName || dc?.name}
+                            </span>
+                            {status === 'not_found' && (
+                              <span className="text-xs text-amber-500 shrink-0">Not found</span>
+                            )}
+                            {status === 'error' && (
+                              <span className="text-xs text-red-400 shrink-0">Error</span>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                     <Button
-                      className="w-full bg-emerald-600 hover:bg-emerald-700 rounded-lg"
+                      variant="outline"
+                      className="w-full rounded-lg"
                       onClick={onClose}
                     >
                       Done

@@ -3,6 +3,7 @@ import { useApp } from '../context/AppContext';
 import { supabase } from '../../lib/supabase';
 
 export type CanvasStep = 'dates' | 'detecting' | 'review' | 'processing' | 'syllabi';
+export type SyllabusSearchStatus = 'searching' | 'found' | 'not_found' | 'error';
 
 export interface CanvasDetectedCourse {
   canvas_course_id: string;
@@ -29,6 +30,7 @@ export function useCanvasFlow() {
   const [endDate, setEndDate] = useState('');
   const [detectedCourses, setDetectedCourses] = useState<CanvasDetectedCourse[]>([]);
   const [createdCourseIds, setCreatedCourseIds] = useState<string[]>([]);
+  const [syllabiResults, setSyllabiResults] = useState<Record<string, SyllabusSearchStatus>>({});
   const [error, setError] = useState<string | null>(null);
 
   const reset = useCallback(() => {
@@ -38,6 +40,7 @@ export function useCanvasFlow() {
     setEndDate('');
     setDetectedCourses([]);
     setCreatedCourseIds([]);
+    setSyllabiResults({});
     setError(null);
   }, []);
 
@@ -88,6 +91,7 @@ export function useCanvasFlow() {
   const confirm = useCallback(async () => {
     setError(null);
     setStep('processing');
+    // CHECK HERE
 
     const semId = await addSemester({
       name: semesterName,
@@ -113,7 +117,7 @@ export function useCanvasFlow() {
         code: dc.editedCode || dc.course_code,
         professor: dc.instructor,
         color,
-        status: 'processing',
+        status: 'ready',
       });
       if (!courseId) continue;
 
@@ -128,6 +132,34 @@ export function useCanvasFlow() {
 
     setCreatedCourseIds(createdIds);
     setStep('syllabi');
+
+    // Kick off parallel syllabus searches for all created courses
+    const initialResults: Record<string, SyllabusSearchStatus> = {};
+    createdIds.forEach(id => { initialResults[id] = 'searching'; });
+    setSyllabiResults(initialResults);
+
+    createdIds.forEach((courseId, i) => {
+      const dc = detectedCourses[i];
+      if (!dc) return;
+      supabase.functions
+        .invoke('find-canvas-syllabus', {
+          body: { course_id: courseId, canvas_course_id: dc.canvas_course_id },
+        })
+        .then(({ data, error: fnError }) => {
+          let status: SyllabusSearchStatus;
+          if (fnError) {
+            status = 'error';
+          } else if (data?.success === false) {
+            status = 'not_found';
+          } else {
+            status = 'found';
+          }
+          setSyllabiResults(prev => ({ ...prev, [courseId]: status }));
+        })
+        .catch(() => {
+          setSyllabiResults(prev => ({ ...prev, [courseId]: 'error' }));
+        });
+    });
   }, [semesterName, startDate, endDate, detectedCourses, addSemester, addCourse]);
 
   return {
@@ -140,6 +172,7 @@ export function useCanvasFlow() {
     setEndDate,
     detectedCourses,
     createdCourseIds,
+    syllabiResults,
     error,
     reset,
     detect,
