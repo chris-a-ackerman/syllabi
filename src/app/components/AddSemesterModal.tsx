@@ -853,7 +853,8 @@ export function AddSemesterModal({ open, onClose }: AddSemesterModalProps) {
                       <Button
                         variant="outline"
                         className="w-full rounded-lg"
-                        onClick={onClose}
+                        // onClick={onClose}
+                        onClick={() => { onClose(); navigate(0); }}
                       >
                         Done
                       </Button>
