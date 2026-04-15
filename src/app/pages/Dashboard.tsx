@@ -23,7 +23,7 @@ import {
 } from '../components/ui/select';
 import { Badge } from '../components/ui/badge';
 import { Card } from '../components/ui/card';
-import { MessageSquare, Plus, LogOut, Calendar, Send, Settings2, BookOpen, Upload, ExternalLink, Menu, X, ChevronUp, ChevronDown, Trash2, Pencil, Flag, Loader2 } from 'lucide-react';
+import { MessageSquare, Plus, LogOut, Calendar, Send, Settings2, BookOpen, Upload, ExternalLink, Menu, X, ChevronUp, ChevronDown, Trash2, Pencil, Flag, Loader2, Cog } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -194,6 +194,10 @@ export function Dashboard() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="rounded-lg">
+                <DropdownMenuItem onClick={() => navigate('/settings/canvas')}>
+                  <Cog className="mr-2 h-4 w-4" />
+                  Settings
+                </DropdownMenuItem>
                 <DropdownMenuItem onClick={signOut}>
                   <LogOut className="mr-2 h-4 w-4" />
                   Sign Out
@@ -345,6 +349,10 @@ export function Dashboard() {
                 <div className="px-2 py-1.5 text-xs text-gray-500">
                   {user?.email}
                 </div>
+                <DropdownMenuItem onClick={() => navigate('/settings/canvas')}>
+                  <Cog className="mr-2 h-4 w-4" />
+                  Settings
+                </DropdownMenuItem>
                 <DropdownMenuItem onClick={signOut}>
                   <LogOut className="mr-2 h-4 w-4" />
                   Sign Out

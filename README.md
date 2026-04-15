@@ -1,223 +1,251 @@
-# Syllabi - Student Academic Assistant
+# Syllabi — Student Academic Assistant
 
 ## Overview
-Syllabi is a student-focused web application that helps students manage their academic life by uploading course syllabi and chatting with an AI to get answers about their schedule, deadlines, and course policies.
+
+Syllabi is a student-focused web application for managing academic life. Students upload course syllabi (PDF), and the app extracts structured data — events, grading rules, policies, and schedule — using Claude AI. A conversational assistant lets students ask questions about their deadlines, course policies, and schedule across all their courses.
 
 ## Design Philosophy
-- **Clean, modern, student-friendly design** with a white background and indigo/violet accent colors
-- **Cards with soft shadows and rounded corners** throughout the interface
-- **Mobile-first** but works seamlessly on desktop
-- **Calm and organized** interface designed to reduce stress for students
-- **Chat-first experience** - conversational AI is the primary interaction method
+
+- **Chat-first experience** — the AI assistant is the primary interface
+- **Clean, modern, student-friendly design** — white background, indigo/violet accents, soft shadows, rounded corners
+- **Mobile-first** — responsive layouts throughout
+- **Calm and organized** — designed to reduce academic stress
+
+---
 
 ## Tech Stack
-- **Frontend**: React + TypeScript + Tailwind CSS v4
-- **Routing**: React Router (Data mode)
-- **Backend** (planned): Supabase (auth, database, storage) + Supabase Edge Functions
-- **Current State**: UI-only with mock data and local state management
+
+- **Frontend**: React 19, TypeScript, Vite, Tailwind CSS v4
+- **Routing**: React Router v7 (data mode)
+- **Backend**: Supabase (Auth, PostgreSQL, Storage, Edge Functions)
+- **UI Components**: Shadcn/UI (Radix UI primitives)
+- **AI**: Claude `sonnet-4-6` (syllabus parsing), Claude `sonnet-4-6` (chat)
+- **Other**: date-fns, react-markdown, lucide-react, sonner (toasts)
+
+---
+
+## Quick Start
+
+```bash
+cd "Syllabi - Prototype"
+npm install
+npm run dev     # Vite dev server
+npm run build   # Production build
+```
+
+**Environment variables** (`.env` in `Syllabi - Prototype/`):
+
+```
+VITE_SUPABASE_URL=...
+VITE_SUPABASE_ANON_KEY=...
+```
+
+---
+
+## Routes
+
+| Path | Component | Notes |
+|---|---|---|
+| `/` | `AuthScreen` | Login / signup |
+| `/auth/callback` | `AuthCallback` | Google OAuth redirect handler |
+| `/onboarding` | `Onboarding` | First-time setup; protected |
+| `/dashboard` | `Dashboard` | Main chat interface; protected |
+| `/courses` | `Courses` | Course grid; protected |
+| `/course/:id` | `CourseDetail` | Per-course detail; protected |
+| `/admin` | `AdminPanel` | Admin only; protected + `is_admin` flag |
+| `/settings/canvas` | `CanvasSettings` | Canvas LMS integration; protected |
+
+All routes except `/` and `/auth/callback` are wrapped in `ProtectedRoute`. The admin route additionally checks `profiles.is_admin`.
+
+---
 
 ## Key Features
 
 ### 1. Authentication
-- Simple email/password login
-- Clean onboarding experience
 
-### 2. Semester Management
-- Users can create and manage multiple semesters
-- One active semester at a time
-- Semester selector with dropdown
+- Email/password signup and signin
+- Google OAuth (PKCE flow)
+- Email confirmation handling
+- New users are routed to Onboarding; returning users go to Dashboard
 
-### 3. Course Management
-- Add courses to semesters with details:
-  - Course name
-  - Course code
-  - Professor name
-  - Color coding for visual organization
-- Upload course syllabi (PDF format)
-- View all courses in a grid layout
-- Filter courses by semester
-- Detailed course view with:
-  - Course information
-  - Assignments list with due dates and point values
-  - Course policies
-  - Important dates
-  - Quick actions (download calendar, re-upload syllabus)
+### 2. Onboarding
 
-### 4. Chat Interface (Primary Feature)
-- **Conversational AI assistant** that students see first after adding courses
-- **Knowledge Base Settings** (sidebar):
-  - Select which courses to include in the conversation
-  - Upload syllabi for courses
-  - Quick actions for semester/course management
-  - Toggle sidebar visibility
-- **Chat Features**:
-  - Ask questions about selected courses
-  - Pre-populated suggested prompts for common questions
-  - Message history with timestamps
-  - Context-aware responses based on selected courses
-  - Can start course-specific chats from course detail pages
+Multi-step first-time setup flow (`Onboarding.tsx`):
 
-### 5. Navigation & User Flow
-- **Dashboard** (Chat-first interface) - Primary screen
-- **Courses Page** - Grid view of all courses with semester filtering
-- **Course Detail Page** - Detailed view of individual course
-- **Admin Page** - For AI configuration (admin users only)
+1. **Upload** — drag-and-drop or file picker for multiple PDFs
+2. **Detect** — PDFs sent to `detect-syllabi-info` edge function; Claude extracts course name, code, and semester dates
+3. **Review** — user confirms or edits detected courses, grouped by semester
+4. **Process** — courses and semesters created in DB; app polls `analysis_status` until complete
+5. **Redirect** — `profiles.onboarding_completed` set to `true`; user lands on Dashboard
 
-## User Flow Analysis
+### 3. Semester Management
 
-### Primary User Journey: New Student Setup
+- Create/edit/delete semesters (name, start date, end date)
+- One active semester at a time; controls which courses appear in chat sidebar
+- Semester selector dropdown on Dashboard and Courses page
 
-#### Step 1: Initial Setup
-1. User signs up / logs in
-2. Lands on dashboard with no semesters
-3. Prompted to "Set Up Your First Semester"
-4. Creates semester (e.g., "Spring 2026")
+### 4. Course Management
 
-#### Step 2: Adding Courses
-1. User clicks "Add Course" from dashboard sidebar or welcome screen
-2. Fills in course details in modal:
-   - Course name
-   - Course code
-   - Professor
-   - Color selection
-3. Can optionally upload syllabus PDF immediately
-4. Course appears in dashboard sidebar
+- Add courses manually or via PDF upload
+- Fields: name, code, professor, color (10 presets)
+- Bulk upload: upload multiple PDFs at once, detect all courses, review, and create in one flow
+- Canvas import: connect to a Canvas LMS instance and import courses directly
+- Course cards show status badge (`processing` / `ready` / `failed`) and event count
 
-#### Step 3: Uploading Syllabi
-**Option A - During course creation:**
-- Upload syllabus in the add course modal
+### 5. Syllabus Parsing
 
-**Option B - After course creation:**
-- From dashboard sidebar: Click "Upload Syllabus" on courses without syllabi
-- From courses page: Navigate to course detail and click "Re-upload Syllabus"
+Upload a PDF → `process-syllabus` edge function → Claude `sonnet-4-6` extracts:
 
-#### Step 4: Using the Chat Assistant
-1. From dashboard, select which courses to ask about (default: all courses with syllabi)
-2. Start conversation by:
-   - Clicking a suggested prompt, OR
-   - Typing a custom question
-3. AI responds based on uploaded syllabi and selected courses
-4. Continue conversation to get more details
+- **Course metadata**: name, code, professor
+- **Schedule**: meeting days/times, location, semester dates, breaks
+- **Events**: assignments, exams, quizzes, presentations — each with `date` (resolved to `YYYY-MM-DD`), `type`, `category`, and `confidence`
+- **Grading rules**: components with name, weight, count, drop policy
+- **Policies**: attendance, late work, academic integrity, AI policy, recording
 
-### Secondary User Journeys
+Full JSON stored in `courses.syllabus_analysis`; events flattened into `course_events`.
 
-#### Course-Specific Chat
-1. User navigates to "View Course Details" from dashboard
-2. Views course grid, filters by semester if needed
-3. Clicks into specific course detail page
-4. Reviews course information, assignments, policies
-5. Clicks "Chat About This Course" button
-6. Returns to dashboard with only that course selected in knowledge base
-7. Settings sidebar opens automatically showing the single course selection
+### 6. Course Detail
 
-#### Managing Multiple Semesters
-1. User creates new semester for upcoming term
-2. Switches active semester from dropdown
-3. Adds courses to new semester
-4. Can view courses from all semesters via Courses page filter
+Tabbed interface (`CourseDetail.tsx`):
 
-#### Admin Configuration
-1. Admin user accesses admin panel via badge in header
-2. Configures AI settings (enable/disable, model selection)
-3. Returns to dashboard
+| Tab | Contents |
+|---|---|
+| Events | All extracted events, grouped by date; confidence indicators |
+| Grading | Component breakdown with weights; late policy; grading scale |
+| Schedule | Meeting days/times, location, instructor info |
+| Policies | Attendance, late work, academic integrity, AI, recording, other |
+| Notes | Free-text notes per course (max 1,000 chars) |
+
+Quick actions: Chat About This Course, Download Calendar (.ics), Re-upload Syllabus, Delete Course.
+
+### 7. Chat Interface
+
+The Dashboard (`Dashboard.tsx`) is the primary screen:
+
+- **Sidebar — Knowledge Base tab**: course checkboxes, semester selector, quick actions
+- **Sidebar — Chat History tab**: previous conversations, rename/delete
+- **Message area**: full markdown rendering, timestamps, suggested prompts
+- **Feedback**: thumbs down on any AI response to submit feedback
+
+Each conversation is persisted as a `chats` + `chat_messages` record. The `chat` edge function receives the conversation history, selected course IDs, and semester context, and uses query-type detection (date / grading / policy / schedule / general) to fetch only relevant data before calling Claude.
+
+AI can be globally disabled by an admin; the UI respects the `app_settings.ai_enabled` flag.
+
+### 8. Calendar Export
+
+"Download Calendar" on any course detail page calls the `generate-ics` edge function, which builds an RFC 5545 `.ics` file from `course_events` and returns it as a download attachment.
+
+### 9. Canvas LMS Integration
+
+`/settings/canvas` (`CanvasSettings.tsx`):
+
+- Enter Canvas instance URL and personal API token
+- Token encrypted with pgcrypto and stored in `profiles.canvas_token_encrypted`
+- `find-canvas-courses` edge function fetches courses within a date range
+- `find-canvas-syllabus` + `download-canvas-syllabus` locate and pull syllabus PDFs from Canvas modules
+
+### 10. Admin Panel
+
+`/admin` (`AdminPanel.tsx`, admin-only):
+
+- **Overview tab**: toggle AI on/off globally (with confirmation); view usage stats
+- **Users tab**: paginated user list with search; powered by `admin-get-users` edge function
+
+---
 
 ## Component Architecture
 
 ### Pages
-- `/src/app/pages/Login.tsx` - Authentication
-- `/src/app/pages/Dashboard.tsx` - Main chat interface
-- `/src/app/pages/Courses.tsx` - Course grid with semester filter
-- `/src/app/pages/CourseDetail.tsx` - Individual course detail view
-- `/src/app/pages/Admin.tsx` - AI configuration (admin only)
 
-### Key Components
-- `/src/app/components/AddSemesterModal.tsx` - Create semester
-- `/src/app/components/AddCourseModal.tsx` - Create course & upload syllabus
-- `/src/app/components/ui/*` - Reusable UI components (Button, Card, Input, etc.)
+| File | Route |
+|---|---|
+| `src/app/pages/AuthScreen.tsx` | `/` |
+| `src/app/pages/AuthCallback.tsx` | `/auth/callback` |
+| `src/app/pages/Onboarding.tsx` | `/onboarding` |
+| `src/app/pages/Dashboard.tsx` | `/dashboard` |
+| `src/app/pages/Courses.tsx` | `/courses` |
+| `src/app/pages/CourseDetail.tsx` | `/course/:id` |
+| `src/app/pages/AdminPanel.tsx` | `/admin` |
+| `src/app/pages/CanvasSettings.tsx` | `/settings/canvas` |
+
+### Modals & Drawers
+
+| File | Purpose |
+|---|---|
+| `src/app/components/AddCourseModal.tsx` | Create course, upload syllabus, review extracted data |
+| `src/app/components/AddSemesterModal.tsx` | Create semester (manual, bulk upload, or Canvas import) |
+| `src/app/components/EditSemesterModal.tsx` | Edit/delete existing semester |
+| `src/app/components/BulkUploadModal.tsx` | Upload multiple PDFs, detect, review, create |
+| `src/app/components/ChatDrawer.tsx` | Compact chat sheet for quick questions |
+
+### Custom Hooks
+
+| File | Purpose |
+|---|---|
+| `src/app/hooks/useBulkUpload.ts` | Upload PDFs to storage, call `detect-syllabi-info`, manage detected course state |
+| `src/app/hooks/useBulkCourseUpload.ts` | Upload multiple syllabi to existing courses |
+| `src/app/hooks/useCanvasFlow.ts` | Multi-step Canvas course detection and syllabus download flow |
 
 ### Context
-- `/src/app/context/AppContext.tsx` - Global state management for:
-  - User authentication
-  - Semesters
-  - Courses
-  - Events/assignments
-  - Chat messages
-  - AI configuration
+
+`src/app/context/AppContext.tsx` — global state via React Context:
+
+- User auth, profile, `isAdmin`, `onboardingCompleted`
+- Semesters (CRUD, active semester)
+- Courses (CRUD, `refreshCourses`, `refreshEvents`)
+- Events, chat sessions, chat messages, notes
+- `aiEnabled`, `chatOpen`
 
 ### Routing
-- `/src/app/routes.ts` - React Router configuration
 
-## Current State & Recent Updates
+`src/app/routes.tsx` — React Router v7 data mode configuration.
 
-### Latest Changes
-1. ✅ Redesigned Dashboard as chat-first interface
-2. ✅ Created Courses page with grid layout
-3. ✅ Added semester dropdown filter for courses
-4. ✅ Optimized course upload modal (removed redundant info)
-5. ✅ Added grey outline to semester selector for better visibility
-6. ✅ Implemented "Chat About This Course" button in course detail page
-7. ✅ Course-specific chat pre-selection from navigation
+### Supabase Client
 
-### Mock Data
-Currently using mock data for:
-- User authentication (login always succeeds)
-- Course syllabi parsing (simulated AI extraction)
-- Chat responses (simulated AI assistant)
-- Sample semesters, courses, and assignments
-
-## Future Backend Integration (Planned)
-
-### Supabase Tables
-- `users` - User accounts and profiles
-- `semesters` - Academic terms
-- `courses` - Course information
-- `syllabi` - Uploaded PDF files (Supabase Storage)
-- `assignments` - Parsed assignment data
-- `chat_messages` - Conversation history
-- `settings` - User and AI configuration
-
-### Edge Functions
-- PDF parsing and data extraction
-- AI chat completions
-- Syllabus analysis
-
-## Design Tokens
-
-### Colors
-- Primary: Indigo/Violet (`indigo-600`, `indigo-700`)
-- Background: White
-- Secondary backgrounds: Gray-50, Gray-100
-- Borders: Gray-200, Gray-300
-- Text: Gray-900 (primary), Gray-600 (secondary), Gray-500 (tertiary)
-
-### Spacing & Layout
-- Rounded corners: `rounded-lg`, `rounded-xl`, `rounded-2xl`, `rounded-full`
-- Shadows: Soft shadows on cards
-- Consistent padding: `p-4`, `p-6`, `p-8`
-
-### Typography
-- Headings: Bold, high contrast
-- Body text: Regular weight, comfortable line-height
-- Code/monospace: For course codes
-
-## Notes for Development
-
-- Keep the chat interface as the primary experience
-- Maintain calm, stress-reducing design aesthetic
-- Ensure mobile responsiveness throughout
-- Use mock data until Supabase is integrated
-- Focus on student-centric language and flows
-- Prioritize quick access to deadline information
+`src/lib/supabase.ts` — PKCE flow, `isSupabaseConfigured()` helper.
 
 ---
 
-## Usage for Claude
+## Database Tables (referenced from frontend)
 
-Copy and paste this entire document when starting a new conversation with Claude about the Syllabi project. This provides complete context about:
-- The application's purpose and design philosophy
-- Current features and implementation state
-- User flows and interaction patterns
-- Technical architecture
-- Recent updates and changes
+| Table | Purpose |
+|---|---|
+| `profiles` | User data, `is_admin`, `onboarding_completed`, Canvas credentials |
+| `semesters` | Academic terms |
+| `courses` | Course info, `analysis_status`, `syllabus_analysis` JSONB |
+| `course_events` | Flattened extracted events |
+| `course_notes` | User notes per course |
+| `chats` | Conversation sessions |
+| `chat_courses` | Which courses a chat references |
+| `chat_messages` | Per-message history |
+| `chat_feedback` | User feedback on AI responses |
+| `app_settings` | Global `ai_enabled` kill switch |
 
-This ensures consistent understanding and maintains design/UX continuity across conversation sessions.
+---
+
+## Edge Functions (called from frontend)
+
+| Function | Purpose |
+|---|---|
+| `process-syllabus` | Parse PDF, extract structured data (called on course upload) |
+| `detect-syllabi-info` | Lightweight parse for onboarding/bulk upload flow |
+| `chat` | AI assistant responses with course/semester context |
+| `generate-ics` | Export course events as `.ics` calendar file |
+| `find-canvas-courses` | Fetch courses from Canvas instance |
+| `find-canvas-syllabus` | Search Canvas modules for syllabus documents |
+| `save-canvas-token` | Encrypt and store Canvas API credentials |
+| `admin-get-users` | Paginated user list (admin only) |
+
+---
+
+## Design Tokens
+
+**Colors**
+- Primary: `indigo-600` / `violet` accents
+- Background: white, `gray-50`, `gray-100`
+- Borders: `gray-200`, `gray-300`
+- Text: `gray-900` (primary), `gray-600` (secondary), `gray-500` (tertiary)
+
+**Course colors** (10 presets): indigo, violet, pink, salmon, orange, yellow, green, teal, blue, slate
+
+**Spacing**: `p-4`, `p-6`, `p-8`; rounded corners `rounded-lg` → `rounded-2xl` → `rounded-full`

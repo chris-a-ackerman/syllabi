@@ -168,7 +168,8 @@ const AppContext = createContext<AppState | undefined>(undefined);
 function mapAnalysisStatus(dbStatus: string | null): Course['status'] {
   if (dbStatus === 'complete') return 'ready';
   if (dbStatus === 'failed') return 'failed';
-  return 'processing'; // covers 'pending' and 'processing'
+  if (dbStatus === 'processing') return 'processing';
+  return 'ready'; // null or 'pending' = no syllabus uploaded yet
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
