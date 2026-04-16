@@ -234,6 +234,11 @@ export function AddCourseModal({ open, onClose, existingCourse, editMode }: AddC
         const completeness = fnData.completeness as 'complete' | 'partial' | 'minimal' | undefined;
         setExtractionQuality(completeness ?? 'partial');
         setExtractedCount(fnData.events_created ?? 0);
+
+        // Fire-and-forget Canvas matching for courses connected to Canvas
+        if (updatedCourse.canvas_course_id) {
+          supabase.functions.invoke('match-canvas-assignments', { body: { course_id: courseId } });
+        }
       }
 
       setStep('review');
