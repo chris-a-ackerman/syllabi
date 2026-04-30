@@ -15,11 +15,11 @@ Syllabi is a student-focused web application for managing academic life. Student
 
 ## Tech Stack
 
-- **Frontend**: React 19, TypeScript, Vite, Tailwind CSS v4
+- **Frontend**: React 18, TypeScript, Vite, Tailwind CSS v4
 - **Routing**: React Router v7 (data mode)
 - **Backend**: Supabase (Auth, PostgreSQL, Storage, Edge Functions)
 - **UI Components**: Shadcn/UI (Radix UI primitives)
-- **AI**: Claude `sonnet-4-6` (syllabus parsing), Claude `sonnet-4-6` (chat)
+- **AI**: Claude `sonnet-4-6` (syllabus parsing + chat), Claude `haiku-4-5` (lightweight syllabus detection)
 - **Other**: date-fns, react-markdown, lucide-react, sonner (toasts)
 
 ---
@@ -233,7 +233,10 @@ AI can be globally disabled by an admin; the UI respects the `app_settings.ai_en
 | `generate-ics` | Export course events as `.ics` calendar file |
 | `find-canvas-courses` | Fetch courses from Canvas instance |
 | `find-canvas-syllabus` | Search Canvas modules for syllabus documents |
+| `download-canvas-syllabus` | Download syllabus PDF from Canvas and trigger parsing |
+| `match-canvas-assignments` | Match Canvas assignments to extracted syllabus events |
 | `save-canvas-token` | Encrypt and store Canvas API credentials |
+| `delete-canvas-token` | Revoke stored Canvas credentials |
 | `admin-get-users` | Paginated user list (admin only) |
 
 ---

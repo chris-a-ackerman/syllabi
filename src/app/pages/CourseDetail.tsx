@@ -18,6 +18,9 @@ import {
   MessageSquare,
   FileText,
   Pencil,
+  ChevronDown,
+  ChevronUp,
+  ExternalLink,
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import {
@@ -53,6 +56,7 @@ export function CourseDetail() {
   const [deleteNoteId, setDeleteNoteId] = useState<string | null>(null);
   const [showDeleteCourse, setShowDeleteCourse] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
+  const [expandedEventId, setExpandedEventId] = useState<string | null>(null);
 
   const course = courses.find(c => c.id === id);
   const courseEvents = events.filter(e => e.courseId === id && e.date);
@@ -161,6 +165,20 @@ export function CourseDetail() {
     }
   };
 
+  const getSubmissionLabel = (types: string[]): string => {
+    const map: Record<string, string> = {
+      online_upload: 'File upload',
+      online_text_entry: 'Text entry',
+      online_quiz: 'Online quiz',
+      on_paper: 'In person',
+      none: 'No submission',
+    };
+    for (const t of types) {
+      if (map[t]) return map[t];
+    }
+    return types[0];
+  };
+
   // Group events by month
   const eventsByMonth = courseEvents.reduce((acc, event) => {
     const month = format(parseISO(event.date), 'MMMM yyyy');
@@ -264,32 +282,84 @@ export function CourseDetail() {
               <div key={month}>
                 <h3 className="text-lg font-semibold text-gray-900 mb-3">{month}</h3>
                 <div className="space-y-2">
-                  {monthEvents.map(event => (
-                    <Card key={event.id} className="p-4 rounded-xl shadow-sm hover:shadow-md transition-shadow">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-3 mb-2">
-                            <span className="font-medium text-gray-900">
-                              {format(parseISO(event.date), 'MMM d, yyyy')}
-                            </span>
-                            {event.time && (
-                              <>
-                                <span className="text-gray-400">•</span>
-                                <span className="text-gray-600">{event.time}</span>
-                              </>
+                  {monthEvents.map(event => {
+                    const meta = event.canvasMetadata ?? null;
+                    const isExpanded = expandedEventId === event.id;
+                    return (
+                      <Card key={event.id} className="p-4 rounded-xl shadow-sm hover:shadow-md transition-shadow">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-3 mb-2">
+                              <span className="font-medium text-gray-900">
+                                {format(parseISO(event.date), 'MMM d, yyyy')}
+                              </span>
+                              {event.time && (
+                                <>
+                                  <span className="text-gray-400">•</span>
+                                  <span className="text-gray-600">{event.time}</span>
+                                </>
+                              )}
+                              {event.confidence === 'low' && (
+                                <AlertTriangle className="w-4 h-4 text-yellow-600" />
+                              )}
+                            </div>
+                            <p className="text-gray-900 mb-2">{event.title}</p>
+                            <Badge className={`${getEventTypeColor(event.type)} rounded-full text-xs`}>
+                              {event.type.charAt(0).toUpperCase() + event.type.slice(1).replace('_', ' ')}
+                            </Badge>
+                          </div>
+                          {meta && (
+                            <button
+                              onClick={() => setExpandedEventId(isExpanded ? null : event.id)}
+                              className="shrink-0 p-1 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+                              aria-label={isExpanded ? 'Collapse details' : 'Expand details'}
+                            >
+                              {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                            </button>
+                          )}
+                        </div>
+
+                        {meta && isExpanded && (
+                          <div className="border-t border-gray-100 mt-3 pt-3 space-y-2 text-sm text-gray-700">
+                            {meta.description_summary && (
+                              <div>
+                                <span className="font-medium text-gray-500 text-xs uppercase tracking-wide">What to submit</span>
+                                <p className="mt-0.5">{meta.description_summary}</p>
+                              </div>
                             )}
-                            {event.confidence === 'low' && (
-                              <AlertTriangle className="w-4 h-4 text-yellow-600" />
+                            <div className="flex flex-wrap gap-x-6 gap-y-1.5">
+                              {meta.points_possible != null && (
+                                <span>{meta.points_possible} pts</span>
+                              )}
+                              {meta.submission_types && meta.submission_types.length > 0 && (
+                                <span>{getSubmissionLabel(meta.submission_types)}</span>
+                              )}
+                              {meta.unlock_at && (
+                                <span>Opens {format(parseISO(meta.unlock_at), 'MMM d')}</span>
+                              )}
+                              {meta.allowed_attempts != null && (
+                                <span>{meta.allowed_attempts} attempts allowed</span>
+                              )}
+                              {meta.time_limit != null && (
+                                <span>{meta.time_limit} min time limit</span>
+                              )}
+                            </div>
+                            {meta.canvas_url && (
+                              <a
+                                href={meta.canvas_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 text-indigo-600 hover:text-indigo-700 font-medium"
+                              >
+                                View on Canvas
+                                <ExternalLink className="w-3.5 h-3.5" />
+                              </a>
                             )}
                           </div>
-                          <p className="text-gray-900 mb-2">{event.title}</p>
-                          <Badge className={`${getEventTypeColor(event.type)} rounded-full text-xs`}>
-                            {event.type.charAt(0).toUpperCase() + event.type.slice(1).replace('-', ' ')}
-                          </Badge>
-                        </div>
-                      </div>
-                    </Card>
-                  ))}
+                        )}
+                      </Card>
+                    );
+                  })}
                 </div>
               </div>
             ))}
