@@ -364,11 +364,6 @@ export function Dashboard() {
         </div>
       </header>
 
-      <DeadlineUrgencyBanner
-        events={events.filter(e => activeCourses.some(c => c.id === e.courseId))}
-        courses={activeCourses}
-      />
-
       <main className="flex-1 flex overflow-hidden">
         {/* Mobile overlay backdrop */}
         {mobileMenuOpen && (
@@ -774,6 +769,12 @@ export function Dashboard() {
           {/* Chat Area */}
           <div className="flex-1 overflow-y-auto px-6 py-8">
             <div className="max-w-3xl mx-auto">
+
+              <DeadlineUrgencyBanner
+                events={events.filter(e => activeCourses.some(c => c.id === e.courseId))}
+                courses={activeCourses}
+                activeSemesterId={activeSemester?.id}
+              />
 
               {/* Welcome / Empty State */}
               {chatMessages.length === 0 && (
