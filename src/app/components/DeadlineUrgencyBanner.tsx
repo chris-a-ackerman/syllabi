@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { parseISO, isAfter, isBefore, startOfDay, addDays, differenceInCalendarDays } from 'date-fns';
 import { ChevronDown, ChevronUp, X, AlertCircle } from 'lucide-react';
@@ -45,11 +45,9 @@ export function DeadlineUrgencyBanner({ events, courses, activeSemesterId }: Dea
   const [collapsed, setCollapsed] = useState(false);
 
   // Reset dismissal when active semester changes
-  const [lastSemesterId, setLastSemesterId] = useState(activeSemesterId);
-  if (activeSemesterId !== lastSemesterId) {
-    setLastSemesterId(activeSemesterId);
+  useEffect(() => {
     setDismissed(false);
-  }
+  }, [activeSemesterId]);
 
   const urgentEvents = useMemo(() => {
     const today = startOfDay(new Date());
@@ -98,7 +96,7 @@ export function DeadlineUrgencyBanner({ events, courses, activeSemesterId }: Dea
   const count = urgentEvents.length;
 
   return (
-    <div className="border border-amber-200 bg-amber-50 rounded-xl mx-4 mb-3">
+    <div className="border border-amber-200 bg-amber-50 rounded-xl mb-3">
       <div className="flex items-center gap-2 px-4 py-2.5">
         <AlertCircle className="h-4 w-4 shrink-0 text-amber-600" />
 
