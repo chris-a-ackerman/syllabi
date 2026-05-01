@@ -37,6 +37,7 @@ import {
 import { AddSemesterModal } from '../components/AddSemesterModal';
 import { AddCourseModal } from '../components/AddCourseModal';
 import { EditSemesterModal } from '../components/EditSemesterModal';
+import { DeadlineUrgencyBanner } from '../components/DeadlineUrgencyBanner';
 import { format, parseISO } from 'date-fns';
 import { toast } from 'sonner';
 
@@ -362,6 +363,11 @@ export function Dashboard() {
           </div>
         </div>
       </header>
+
+      <DeadlineUrgencyBanner
+        events={events.filter(e => activeCourses.some(c => c.id === e.courseId))}
+        courses={activeCourses}
+      />
 
       <main className="flex-1 flex overflow-hidden">
         {/* Mobile overlay backdrop */}

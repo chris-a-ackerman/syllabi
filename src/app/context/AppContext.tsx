@@ -98,6 +98,7 @@ export interface Event {
   date: string | null;
   time?: string | null;
   type: 'exam' | 'deadline' | 'quiz' | 'presentation' | 'project_due' | 'no_class' | 'other';
+  canvasAssignmentId?: string | null;
   confidence?: 'low' | 'medium' | 'high';
   canvasMetadata?: CanvasMetadata | null;
 }
@@ -232,6 +233,7 @@ function dbEventToApp(row: any): Event {
     type: row.type as Event['type'],
     confidence: row.confidence as Event['confidence'],
     canvasMetadata: row.canvas_metadata ?? null,
+    canvasAssignmentId: row.canvas_assignment_id ?? null,
   };
 }
 
