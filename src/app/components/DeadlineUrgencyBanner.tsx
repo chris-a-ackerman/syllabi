@@ -132,7 +132,7 @@ export function DeadlineUrgencyBanner({ events, courses, activeSemesterId }: Dea
             {urgentEvents.map(({ event, course, daysUntil }) => (
               <Link
                 key={event.id}
-                to={`/course/${event.courseId}?from=dashboard`}
+                to={`/course/${event.courseId}?from=dashboard#event-${event.id}`}
                 className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium transition-opacity hover:opacity-80 ${getUrgencyColor(daysUntil)}`}
               >
                 {/* Course color dot */}

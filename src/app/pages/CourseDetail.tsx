@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useParams, useNavigate, useSearchParams } from 'react-router';
+import { useEffect, useState } from 'react';
+import { useParams, useNavigate, useSearchParams, useLocation } from 'react-router';
 import { useApp } from '../context/AppContext';
 import { Button } from '../components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
@@ -39,6 +39,7 @@ export function CourseDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const location = useLocation();
   const { courses, events, notes, addNote, deleteNote, deleteCourse } = useApp();
 
   const from = searchParams.get('from');
@@ -61,6 +62,24 @@ export function CourseDetail() {
   const course = courses.find(c => c.id === id);
   const courseEvents = events.filter(e => e.courseId === id && e.date);
   const courseNotes = notes.filter(n => n.courseId === id);
+
+  useEffect(() => {
+    const match = location.hash.match(/^#event-(.+)$/);
+    if (!match) return;
+    const targetId = match[1];
+    const target = courseEvents.find(e => e.id === targetId);
+    if (!target) return;
+
+    if (target.canvasMetadata) {
+      setExpandedEventId(targetId);
+    }
+
+    requestAnimationFrame(() => {
+      document
+        .getElementById(`event-${targetId}`)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+  }, [location.hash, courseEvents]);
 
   if (!course) {
     return (
@@ -286,7 +305,7 @@ export function CourseDetail() {
                     const meta = event.canvasMetadata ?? null;
                     const isExpanded = expandedEventId === event.id;
                     return (
-                      <Card key={event.id} className="p-4 rounded-xl shadow-sm hover:shadow-md transition-shadow">
+                      <Card id={`event-${event.id}`} key={event.id} className="p-4 rounded-xl shadow-sm hover:shadow-md transition-shadow">
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-3 mb-2">
