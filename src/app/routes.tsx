@@ -7,6 +7,7 @@ import { CourseDetail } from './pages/CourseDetail';
 import { AdminPanel } from './pages/AdminPanel';
 import { Onboarding } from './pages/Onboarding';
 import { CanvasSettings } from './pages/CanvasSettings';
+import { Agenda } from './pages/Agenda';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { useApp } from './context/AppContext';
 
@@ -52,6 +53,14 @@ function ProtectedCanvasSettings() {
   return (
     <ProtectedRoute>
       <CanvasSettings />
+    </ProtectedRoute>
+  );
+}
+
+function ProtectedAgenda() {
+  return (
+    <ProtectedRoute>
+      <Agenda />
     </ProtectedRoute>
   );
 }
@@ -103,6 +112,10 @@ export const router = createBrowserRouter([
       {
         path: '/settings/canvas',
         Component: ProtectedCanvasSettings,
+      },
+      {
+        path: '/agenda',
+        Component: ProtectedAgenda,
       },
       {
         path: '*',

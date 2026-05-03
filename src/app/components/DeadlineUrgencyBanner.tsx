@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { parseISO, isAfter, isBefore, startOfDay, addDays, differenceInCalendarDays } from 'date-fns';
-import { ChevronDown, ChevronUp, X, AlertCircle } from 'lucide-react';
+import { ChevronDown, ChevronUp, X, AlertCircle, ArrowRight } from 'lucide-react';
 import type { Event, Course } from '../context/AppContext';
 
 interface DeadlineUrgencyBannerProps {
@@ -106,6 +106,13 @@ export function DeadlineUrgencyBanner({ events, courses, activeSemesterId }: Dea
               ? '1 deadline coming up'
               : `${count} deadlines coming up`}
           </span>
+          <Link
+            to="/agenda"
+            className="inline-flex items-center gap-0.5 text-amber-700 hover:text-amber-900 text-xs font-medium underline underline-offset-2 transition-colors"
+          >
+            View all
+            <ArrowRight className="h-3 w-3" />
+          </Link>
         </div>
 
         <button

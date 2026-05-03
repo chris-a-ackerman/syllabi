@@ -23,7 +23,7 @@ import {
 } from '../components/ui/select';
 import { Badge } from '../components/ui/badge';
 import { Card } from '../components/ui/card';
-import { MessageSquare, Plus, LogOut, Calendar, Send, Settings2, BookOpen, Upload, ExternalLink, Menu, X, ChevronUp, ChevronDown, Trash2, Pencil, Flag, Loader2, Cog } from 'lucide-react';
+import { MessageSquare, Plus, LogOut, Calendar, Send, Settings2, BookOpen, Upload, ExternalLink, Menu, X, ChevronUp, ChevronDown, Trash2, Pencil, Flag, Loader2, Cog, ListChecks } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -617,6 +617,16 @@ export function Dashboard() {
                   >
                     <BookOpen className="mr-2 h-4 w-4" />
                     View Course Details
+                  </Button>
+                  <Button
+                    onClick={() => navigate('/agenda')}
+                    variant="outline"
+                    size="sm"
+                    className="w-full justify-start rounded-lg"
+                    disabled={activeCourses.length === 0}
+                  >
+                    <ListChecks className="mr-2 h-4 w-4" />
+                    View Agenda
                   </Button>
                 </div>
               </div>
