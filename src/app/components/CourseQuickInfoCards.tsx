@@ -17,14 +17,16 @@ export function CourseQuickInfoCards({ course, events }: CourseQuickInfoCardsPro
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  // Future events only (date >= today, date must be non-null)
-  const futureEvents = events.filter(e => {
-    if (!e.date) return false;
-    const d = parseISO(e.date);
-    return d >= today;
-  });
+  // Future events only (date >= today, date must be non-null, no_class excluded)
+  const futureEvents = events
+    .filter(e => {
+      if (!e.date) return false;
+      const d = parseISO(e.date);
+      return d >= today && e.type !== 'no_class';
+    })
+    .sort((a, b) => parseISO(a.date!).getTime() - parseISO(b.date!).getTime());
 
-  // Card 1: Next deadline — soonest future event of any type
+  // Card 1: Next deadline — soonest future non-no_class event
   const nextDeadline = futureEvents.length > 0 ? futureEvents[0] : null;
 
   // Card 2: Next exam — soonest future event with type exam or quiz
@@ -83,7 +85,7 @@ export function CourseQuickInfoCards({ course, events }: CourseQuickInfoCardsPro
             {card.label}
           </p>
           <p
-            className={`font-semibold text-gray-900 leading-snug break-words ${
+            className={`font-semibold leading-snug break-words ${
               card.primary === '—' ? 'text-gray-400' : 'text-gray-900'
             }`}
           >
