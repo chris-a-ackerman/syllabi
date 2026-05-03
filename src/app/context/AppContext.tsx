@@ -80,6 +80,17 @@ export interface Course {
   schedule?: CourseSchedule;
 }
 
+export interface CanvasMetadata {
+  points_possible: number | null;
+  submission_types: string[] | null;
+  assignment_group: string | null;
+  description_summary: string | null;
+  canvas_url: string | null;
+  unlock_at: string | null;
+  allowed_attempts: number | null;
+  time_limit: number | null;
+}
+
 export interface Event {
   id: string;
   courseId: string;
@@ -87,7 +98,9 @@ export interface Event {
   date: string | null;
   time?: string | null;
   type: 'exam' | 'deadline' | 'quiz' | 'presentation' | 'project_due' | 'no_class' | 'other';
+  canvasAssignmentId?: string | null;
   confidence?: 'low' | 'medium' | 'high';
+  canvasMetadata?: CanvasMetadata | null;
 }
 
 export interface GradingComponent {
@@ -219,6 +232,8 @@ function dbEventToApp(row: any): Event {
     time: row.time ?? null,
     type: row.type as Event['type'],
     confidence: row.confidence as Event['confidence'],
+    canvasMetadata: row.canvas_metadata ?? null,
+    canvasAssignmentId: row.canvas_assignment_id ?? null,
   };
 }
 

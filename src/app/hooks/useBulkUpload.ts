@@ -232,6 +232,14 @@ export function useBulkUpload() {
 
   const retryProcessing = useCallback(async (courseId: string) => {
     await supabase.functions.invoke('process-syllabus', { body: { course_id: courseId } });
+    const { data: course } = await supabase
+      .from('courses')
+      .select('canvas_course_id')
+      .eq('id', courseId)
+      .single();
+    if (course?.canvas_course_id) {
+      supabase.functions.invoke('match-canvas-assignments', { body: { course_id: courseId } });
+    }
   }, []);
 
   return {

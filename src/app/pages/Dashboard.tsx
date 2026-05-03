@@ -37,6 +37,7 @@ import {
 import { AddSemesterModal } from '../components/AddSemesterModal';
 import { AddCourseModal } from '../components/AddCourseModal';
 import { EditSemesterModal } from '../components/EditSemesterModal';
+import { DeadlineUrgencyBanner } from '../components/DeadlineUrgencyBanner';
 import { format, parseISO } from 'date-fns';
 import { toast } from 'sonner';
 
@@ -524,7 +525,6 @@ export function Dashboard() {
                               size="sm"
                               className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
                               onClick={(e) => {
-                                console.log(`Navigating to course ${course.id} from dashboard`);
                                 e.preventDefault();
                                 navigate(`/course/${course.id}?from=dashboard`);
                                 
@@ -768,6 +768,12 @@ export function Dashboard() {
           {/* Chat Area */}
           <div className="flex-1 overflow-y-auto px-6 py-8">
             <div className="max-w-3xl mx-auto">
+
+              <DeadlineUrgencyBanner
+                events={events.filter(e => activeCourses.some(c => c.id === e.courseId))}
+                courses={activeCourses}
+                activeSemesterId={activeSemester?.id}
+              />
 
               {/* Welcome / Empty State */}
               {chatMessages.length === 0 && (
