@@ -34,6 +34,7 @@ import {
   AlertDialogTitle,
 } from '../components/ui/alert-dialog';
 import { AddCourseModal } from '../components/AddCourseModal';
+import { CourseQuickInfoCards } from '../components/CourseQuickInfoCards';
 
 export function CourseDetail() {
   const { id } = useParams();
@@ -284,8 +285,13 @@ export function CourseDetail() {
         </div>
       </div>
 
+      {/* Quick Info Cards */}
+      <div className="px-4 pt-6 md:px-6 md:pt-8 max-w-7xl mx-auto">
+        <CourseQuickInfoCards course={course} events={courseEvents} />
+      </div>
+
       {/* Tabs */}
-      <div className="px-4 py-6 md:px-6 md:py-8 max-w-7xl mx-auto">
+      <div className="px-4 pb-6 md:px-6 md:pb-8 max-w-7xl mx-auto">
         <Tabs defaultValue="events" className="w-full">
           <TabsList className="mb-6 rounded-lg w-full overflow-x-auto flex">
             <TabsTrigger value="events" className="rounded-lg flex-1">Events</TabsTrigger>
