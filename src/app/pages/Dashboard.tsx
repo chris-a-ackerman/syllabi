@@ -324,6 +324,16 @@ export function Dashboard() {
               <Flag className="h-4 w-4 text-gray-700" />
               <span className="text-sm font-medium text-gray-900 tracking-tight">Feedback</span>
             </Button>
+            {/* Agenda — desktop only */}
+            <Button
+              onClick={() => navigate('/agenda')}
+              variant="ghost"
+              size="sm"
+              className="rounded-lg hidden md:inline-flex"
+              title="Agenda"
+            >
+              <ListChecks className="h-5 w-5 text-gray-600" />
+            </Button>
             {/* Settings toggle — desktop only */}
             <Button
               onClick={() => setShowSettings(!showSettings)}
@@ -617,16 +627,6 @@ export function Dashboard() {
                   >
                     <BookOpen className="mr-2 h-4 w-4" />
                     View Course Details
-                  </Button>
-                  <Button
-                    onClick={() => navigate('/agenda')}
-                    variant="outline"
-                    size="sm"
-                    className="w-full justify-start rounded-lg"
-                    disabled={activeCourses.length === 0}
-                  >
-                    <ListChecks className="mr-2 h-4 w-4" />
-                    View Agenda
                   </Button>
                 </div>
               </div>

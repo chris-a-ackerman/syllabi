@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate, useSearchParams, useLocation } from 'react-router';
 import { useApp } from '../context/AppContext';
+import { getEventTypeColor } from '@/lib/eventHelpers';
 import { Button } from '../components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { Card } from '../components/ui/card';
@@ -44,10 +45,15 @@ export function CourseDetail() {
   const { courses, events, notes, addNote, deleteNote, deleteCourse } = useApp();
 
   const from = searchParams.get('from');
-  const backLabel = from === 'dashboard' ? 'Back to Dashboard' : 'Back to Courses';
+  const backLabel =
+    from === 'dashboard' ? 'Back to Dashboard'
+    : from === 'agenda' ? 'Back to Agenda'
+    : 'Back to Courses';
   const handleBack = () => {
     if (from === 'dashboard') {
       navigate('/dashboard');
+    } else if (from === 'agenda') {
+      navigate('/agenda');
     } else {
       navigate('/courses', { state: { semesterId: course?.semesterId } });
     }
@@ -172,18 +178,6 @@ export function CourseDetail() {
       </div>
     );
   }
-
-  const getEventTypeColor = (type: string) => {
-    switch (type) {
-      case 'exam': return 'bg-red-100 text-red-800';
-      case 'deadline': return 'bg-orange-100 text-orange-800';
-      case 'quiz': return 'bg-yellow-100 text-yellow-800';
-      case 'no_class': return 'bg-gray-100 text-gray-800';
-      case 'presentation': return 'bg-purple-100 text-purple-800';
-      case 'project_due': return 'bg-orange-100 text-orange-800';
-      default: return 'bg-blue-100 text-blue-800';
-    }
-  };
 
   const getSubmissionLabel = (types: string[]): string => {
     const map: Record<string, string> = {
