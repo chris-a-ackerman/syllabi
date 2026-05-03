@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate, useSearchParams, useLocation } from 'react-router';
 import { useApp } from '../context/AppContext';
-import { getEventTypeColor } from '@/lib/eventHelpers';
+import { getEventTypeColor, getEventTypeLabel } from '@/lib/eventHelpers';
 import { Button } from '../components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { Card } from '../components/ui/card';
@@ -324,7 +324,7 @@ export function CourseDetail() {
                             </div>
                             <p className="text-gray-900 mb-2">{event.title}</p>
                             <Badge className={`${getEventTypeColor(event.type)} rounded-full text-xs`}>
-                              {event.type.charAt(0).toUpperCase() + event.type.slice(1).replace('_', ' ')}
+                              {getEventTypeLabel(event.type)}
                             </Badge>
                           </div>
                           {meta && (

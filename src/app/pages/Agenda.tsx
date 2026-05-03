@@ -186,7 +186,7 @@ export function Agenda() {
                           <button
                             key={event.id}
                             type="button"
-                            className="w-full text-left"
+                            className="w-full text-left rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
                             onClick={() => navigate(`/course/${event.courseId}?from=agenda`)}
                           >
                             <Card className="px-4 py-3 rounded-xl shadow-sm hover:shadow-md transition-shadow cursor-pointer">

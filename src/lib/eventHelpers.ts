@@ -4,7 +4,7 @@ import type { Event } from '@/app/context/AppContext';
  * Returns Tailwind color classes for an event-type badge.
  * Canonical source — imported by Agenda, CourseDetail, and DeadlineUrgencyBanner.
  */
-export function getEventTypeColor(type: string): string {
+export function getEventTypeColor(type: Event['type']): string {
   switch (type) {
     case 'exam':         return 'bg-red-100 text-red-800';
     case 'deadline':     return 'bg-orange-100 text-orange-800';
