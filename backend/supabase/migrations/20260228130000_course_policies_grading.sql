@@ -1,0 +1,3 @@
+ALTER TABLE public.courses
+  ADD COLUMN IF NOT EXISTS policies JSONB,
+  ADD COLUMN IF NOT EXISTS grading_rules JSONB;
