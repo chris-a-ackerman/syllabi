@@ -23,7 +23,7 @@ import {
 } from '../components/ui/select';
 import { Badge } from '../components/ui/badge';
 import { Card } from '../components/ui/card';
-import { MessageSquare, Plus, LogOut, Calendar, Send, Settings2, BookOpen, Upload, ExternalLink, Menu, X, ChevronUp, ChevronDown, Trash2, Pencil, Flag, Loader2, Cog } from 'lucide-react';
+import { MessageSquare, Plus, LogOut, Calendar, Send, Settings2, BookOpen, Upload, ExternalLink, Menu, X, ChevronUp, ChevronDown, Trash2, Pencil, Flag, Loader2, Cog, ListChecks } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -324,6 +324,17 @@ export function Dashboard() {
               <Flag className="h-4 w-4 text-gray-700" />
               <span className="text-sm font-medium text-gray-900 tracking-tight">Feedback</span>
             </Button>
+            {/* Agenda — desktop only */}
+            <Button
+              onClick={() => navigate('/agenda')}
+              variant="ghost"
+              size="sm"
+              className="rounded-lg hidden md:inline-flex"
+              title="Agenda"
+              aria-label="Agenda"
+            >
+              <ListChecks className="h-5 w-5 text-gray-600" />
+            </Button>
             {/* Settings toggle — desktop only */}
             <Button
               onClick={() => setShowSettings(!showSettings)}
@@ -395,6 +406,18 @@ export function Dashboard() {
                 </Button>
                 <h2 className="text-lg font-semibold text-gray-900">Menu</h2>
               </div>
+              {/* Agenda — mobile only; the header entry above is desktop only */}
+              <button
+                type="button"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  navigate('/agenda');
+                }}
+                className="md:hidden w-full flex items-center gap-2 mb-5 px-3 py-2 rounded-lg bg-white border border-gray-200 text-sm font-medium text-gray-900 hover:border-indigo-300 transition-colors"
+              >
+                <ListChecks className="h-4 w-4 text-gray-600" />
+                Agenda
+              </button>
               {/* Pill Navigation */}
               <div className="bg-gray-200 rounded-full p-1 flex mb-6">
                 <button

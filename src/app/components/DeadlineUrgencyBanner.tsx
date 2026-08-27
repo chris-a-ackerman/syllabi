@@ -3,23 +3,12 @@ import { Link } from 'react-router';
 import { parseISO, isAfter, isBefore, startOfDay, addDays, differenceInCalendarDays } from 'date-fns';
 import { ChevronDown, ChevronUp, X, AlertCircle } from 'lucide-react';
 import type { Event, Course } from '../context/AppContext';
+import { getEventTypeLabel } from '@/lib/eventHelpers';
 
 interface DeadlineUrgencyBannerProps {
   events: Event[];
   courses: Course[];
   activeSemesterId?: string;
-}
-
-function getEventTypeLabel(type: Event['type']): string {
-  switch (type) {
-    case 'exam': return 'Exam';
-    case 'deadline': return 'Deadline';
-    case 'quiz': return 'Quiz';
-    case 'presentation': return 'Presentation';
-    case 'project_due': return 'Project';
-    case 'no_class': return 'No Class';
-    default: return 'Event';
-  }
 }
 
 // Four-tier color scheme:
