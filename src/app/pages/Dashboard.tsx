@@ -23,7 +23,7 @@ import {
 } from '../components/ui/select';
 import { Badge } from '../components/ui/badge';
 import { Card } from '../components/ui/card';
-import { MessageSquare, Plus, LogOut, Calendar, Send, Settings2, BookOpen, Upload, ExternalLink, Menu, X, ChevronUp, ChevronDown, Trash2, Pencil, Flag, Loader2, Cog } from 'lucide-react';
+import { MessageSquare, Plus, LogOut, Calendar, Send, Settings2, BookOpen, Upload, ExternalLink, Menu, X, ChevronUp, ChevronDown, Trash2, Pencil, Flag, Loader2, Cog, ListChecks } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -323,6 +323,16 @@ export function Dashboard() {
             >
               <Flag className="h-4 w-4 text-gray-700" />
               <span className="text-sm font-medium text-gray-900 tracking-tight">Feedback</span>
+            </Button>
+            {/* Agenda — desktop only */}
+            <Button
+              onClick={() => navigate('/agenda')}
+              variant="ghost"
+              size="sm"
+              className="rounded-lg hidden md:inline-flex"
+              title="Agenda"
+            >
+              <ListChecks className="h-5 w-5 text-gray-600" />
             </Button>
             {/* Settings toggle — desktop only */}
             <Button
