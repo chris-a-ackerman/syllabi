@@ -52,7 +52,7 @@ export function Agenda() {
       .map(e => ({
         event: e,
         course: activeCourses.find(c => c.id === e.courseId),
-        dateKey: e.date!,
+        dateKey: e.date!.slice(0, 10),
       }))
       .sort((a, b) => {
         if (a.dateKey !== b.dateKey) return a.dateKey < b.dateKey ? -1 : 1;
@@ -90,14 +90,14 @@ export function Agenda() {
         const weekMon = parseISO(weekKey);
         return {
           weekKey,
-          weekLabel: `Week of ${format(weekMon, 'MMMM d')}`,
+          weekLabel: `Week of ${format(weekMon, 'MMM d')}`,
           days: Array.from(daysMap.entries())
             .sort(([a], [b]) => (a < b ? -1 : 1))
             .map(([dateKey, items]) => {
               const parsed = parseISO(dateKey);
               return {
                 dateKey,
-                dayLabel: format(parsed, 'EEEE, MMMM d'),
+                dayLabel: format(parsed, 'EEEE, MMM d'),
                 dateShort: format(parsed, 'MMM d'),
                 items,
               };
