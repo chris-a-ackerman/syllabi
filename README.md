@@ -182,7 +182,7 @@ AI can be globally disabled by an admin; the UI respects the `app_settings.ai_en
 | `src/app/pages/AdminPanel.tsx` | `/admin` |
 | `src/app/pages/CanvasSettings.tsx` | `/settings/canvas` |
 
-### Modals & Drawers
+### Modals
 
 | File | Purpose |
 |---|---|
@@ -190,7 +190,6 @@ AI can be globally disabled by an admin; the UI respects the `app_settings.ai_en
 | `src/app/components/AddSemesterModal.tsx` | Create semester (manual, bulk upload, or Canvas import) |
 | `src/app/components/EditSemesterModal.tsx` | Edit/delete existing semester |
 | `src/app/components/BulkUploadModal.tsx` | Upload multiple PDFs, detect, review, create |
-| `src/app/components/ChatDrawer.tsx` | Compact chat sheet for quick questions |
 
 ### Custom Hooks
 
