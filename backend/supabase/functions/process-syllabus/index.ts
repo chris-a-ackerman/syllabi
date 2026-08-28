@@ -183,11 +183,14 @@ serve(async (req) => {
       });
     }
 
-    // 1. Fetch course + semester data
+    // 1. Fetch course + semester data.
+    // Scoped to the caller: this is a service-role client, so without the
+    // user_id filter any authenticated user could reprocess anyone's course.
     const { data: course, error: courseError } = await supabase
       .from("courses")
       .select("*, semesters(name, start_date, end_date)")
       .eq("id", course_id)
+      .eq("user_id", user.id)
       .single();
 
     if (courseError || !course) {

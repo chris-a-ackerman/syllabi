@@ -61,11 +61,14 @@ If Claude wraps its response in markdown code fences despite the prompt, the fun
 ```toml
 # config.toml
 [functions.process-syllabus]
-verify_jwt = true
+verify_jwt = false
 import_map = "./functions/process-syllabus/deno.json"
 ```
 
-JWT verification is enforced — all calls require a valid Supabase auth token.
+`verify_jwt = false` so the CORS preflight (`OPTIONS`) is not rejected by the
+platform. JWT verification is instead done inside the function: it requires an
+`Authorization` header, resolves it with `supabase.auth.getUser(token)`, and
+returns 401 if that fails. The course is then looked up scoped to that user.
 
 ### Environment Variables (required)
 
