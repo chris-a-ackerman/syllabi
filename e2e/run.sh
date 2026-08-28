@@ -31,6 +31,13 @@ if [ -z "$CHROME_BIN" ]; then
 fi
 if [ -z "$CHROME_BIN" ]; then echo "No Chrome/Chromium found; set CHROME_BIN." >&2; exit 1; fi
 
+# The CDP client in render-pass.mjs uses the global WebSocket, unflagged only
+# from node 22.4; on older runtimes it dies with "WebSocket is not defined".
+if ! node -e 'process.exit(+process.versions.node.split(".")[0] >= 22 ? 0 : 1)'; then
+  echo "e2e requires node >= 22 (global WebSocket for CDP); found $(node -v)." >&2
+  exit 1
+fi
+
 cleanup() {
   [ -n "${VITE_PID:-}" ] && kill "$VITE_PID" 2>/dev/null || true
   [ -n "${CHROME_PID:-}" ] && kill "$CHROME_PID" 2>/dev/null || true
