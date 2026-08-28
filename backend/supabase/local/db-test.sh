@@ -15,7 +15,14 @@
 
 set -euo pipefail
 
-ADMIN_URL="${ADMIN_URL:-postgres://postgres@localhost:5432/postgres}"
+command -v psql >/dev/null || { echo "psql not found on PATH" >&2; exit 1; }
+
+if [ -z "${ADMIN_URL:-}" ]; then
+  ADMIN_URL="postgres://postgres@localhost:5432/postgres"
+  # Homebrew Postgres has no `postgres` role; fall back to the OS user (libpq default)
+  psql "$ADMIN_URL" -qAtc 'select 1' >/dev/null 2>&1 ||
+    ADMIN_URL="postgres://localhost:5432/postgres"
+fi
 TEST_DB="${TEST_DB:-syllabi_test}"
 RUN_VERIFY=1
 
@@ -29,8 +36,6 @@ done
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MIGRATIONS="$HERE/../migrations"
-
-command -v psql >/dev/null || { echo "psql not found on PATH" >&2; exit 1; }
 
 # Rewrite only the database component of the admin URL, preserving any query
 # string (?host=/var/run/postgresql, ?sslmode=..., and friends).

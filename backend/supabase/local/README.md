@@ -25,7 +25,10 @@ Match production's major version where you can — `config.toml` sets
 `major_version = 17`. The migrations here are not version-sensitive, but
 matching removes one variable.
 
-Point the script at your server if it isn't on the default socket:
+The script connects as the `postgres` role if it exists, otherwise as your OS
+user (the libpq default). Homebrew installs don't create a `postgres` role —
+their superuser is named after your macOS account — so the fallback covers
+that case with no setup. Point the script elsewhere with `ADMIN_URL`:
 
 ```bash
 ADMIN_URL=postgres://postgres@localhost:5432/postgres npm run db:test
