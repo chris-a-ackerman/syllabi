@@ -103,16 +103,6 @@ export interface Event {
   canvasMetadata?: CanvasMetadata | null;
 }
 
-export interface GradingComponent {
-  id: string;
-  courseId: string;
-  name: string;
-  weight: number;
-  count?: number;
-  dropPolicy?: string;
-  latePolicy?: string;
-}
-
 export interface Note {
   id: string;
   courseId: string;

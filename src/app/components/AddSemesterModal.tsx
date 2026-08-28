@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router';
-import { useApp } from '../context/AppContext';
+import { useData } from '../context/DataProvider';
 import { useBulkUpload } from '../hooks/useBulkUpload';
 import { useCanvasFlow } from '../hooks/useCanvasFlow';
 import { supabase } from '../../lib/supabase';
@@ -38,7 +38,7 @@ type ModalStep = 'choose' | 'manual' | 'bulk-upload' | 'canvas';
 
 export function AddSemesterModal({ open, onClose }: AddSemesterModalProps) {
   const navigate = useNavigate();
-  const { addSemester } = useApp();
+  const { addSemester } = useData();
   const [modalStep, setModalStep] = useState<ModalStep>('choose');
   const [name, setName] = useState('');
   const [startDate, setStartDate] = useState('');

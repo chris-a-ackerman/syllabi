@@ -193,6 +193,76 @@ await check(
     expectText: ['Organic Chemistry I', 'Date TBD', 'Final Exam'],
   }
 );
+// ── Notes persist to the DB (SYL-37) ────────────────────────────────────────
+// Notes used to live in React state only, so they vanished on reload. This
+// walks the real Notes tab and then reloads to prove the row came back.
+const COURSE_1 = '/course/aaaaaaaa-0000-0000-0000-000000000001';
+const NOTE_TEXT = 'E2E note: midterm covers chapters 1-5';
+
+await send('Page.navigate', { url: BASE + COURSE_1 });
+await wait(4000);
+events = [];
+const noteSaved = await evaluate(`(async () => {
+  ${SET_VALUE}
+  // Radix tabs activate on mousedown/focus, so a bare .click() is not enough.
+  const press = (text) => {
+    const el = [...document.querySelectorAll('button, a')].find(
+      (x) => (x.innerText || '').trim().includes(text)
+    );
+    if (!el) return false;
+    el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    el.focus();
+    el.click();
+    return true;
+  };
+  const click = press;
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  if (!click('Notes')) return 'no Notes tab';
+  await sleep(1000);
+  // The seeded note has always been in course_notes; until SYL-37 nothing read it.
+  if (!(document.getElementById('root')?.innerText || '').includes('Office hours moved to Thursday'))
+    return 'seeded note is not rendered';
+  if (!click('Add Note')) return 'no Add Note button';
+  await sleep(1000);
+  const box = document.querySelector('textarea');
+  if (!box) return 'no note textarea';
+  setValue(box, ${JSON.stringify(NOTE_TEXT)});
+  await sleep(300);
+  if (!click('Save Note')) return 'no Save Note button';
+  return 'ok';
+})()`);
+
+if (noteSaved !== 'ok') {
+  console.log(`FAIL  Adding a note through the UI: ${noteSaved}`);
+  failures++;
+} else {
+  await wait(3000);
+  // Full reload: anything still on screen came back from the database.
+  await send('Page.navigate', { url: BASE + COURSE_1 });
+  await wait(4000);
+  const survived = await evaluate(`(async () => {
+    const el = [...document.querySelectorAll('button, a')].find(
+      (x) => (x.innerText || '').trim().includes('Notes')
+    );
+    if (!el) return 'no Notes tab after reload';
+    el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    el.focus();
+    el.click();
+    await new Promise((r) => setTimeout(r, 1000));
+    return (document.getElementById('root')?.innerText || '').includes(${JSON.stringify(NOTE_TEXT)})
+      ? 'ok'
+      : 'note missing after reload';
+  })()`);
+  const errors = problems();
+  if (survived === 'ok' && errors.length === 0) {
+    console.log('PASS  Seeded note renders, and a note added in the UI survived a reload');
+  } else {
+    console.log(`FAIL  Note did not persist: ${survived}`);
+    errors.forEach((e) => console.log(`        ${e.slice(0, 220)}`));
+    failures++;
+  }
+}
+
 await check('Agenda renders grouped by week', '/agenda', {
   expectText: ['Agenda', 'Problem Set 1 due'],
 });

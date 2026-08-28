@@ -1,5 +1,6 @@
 import { useNavigate, useLocation } from 'react-router';
-import { useApp } from '../context/AppContext';
+import { useAuth } from '../context/AuthProvider';
+import { useData } from '../context/DataProvider';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
@@ -43,7 +44,8 @@ import { BulkUploadModal } from '../components/BulkUploadModal';
 import { EditSemesterModal } from '../components/EditSemesterModal';
 
 export function Courses() {
-  const { user, semesters, courses, events, deleteCourse, signOut } = useApp();
+  const { user, signOut } = useAuth();
+  const { semesters, courses, events, deleteCourse } = useData();
   const navigate = useNavigate();
   const location = useLocation();
   const [showAddCourse, setShowAddCourse] = useState(false);

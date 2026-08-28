@@ -109,5 +109,14 @@ if [ "$ACTIVE_NAME" != "E2E Semester" ]; then
   exit 1
 fi
 echo "PASS  creating a semester made it the only active one (SYL-35 isActive fix)"
+
+echo ""
+echo "Checking the note written through the UI landed in course_notes..."
+NOTE_COUNT="$(psql "$DB_URL" -At -c "SELECT count(*) FROM course_notes WHERE user_id='$UID1' AND body='E2E note: midterm covers chapters 1-5'")"
+if [ "$NOTE_COUNT" != "1" ]; then
+  echo "FAIL  expected 1 UI-authored row in course_notes, found $NOTE_COUNT"
+  exit 1
+fi
+echo "PASS  the note added in the UI is a real course_notes row (SYL-37)"
 echo ""
 echo "Authenticated E2E pass succeeded."

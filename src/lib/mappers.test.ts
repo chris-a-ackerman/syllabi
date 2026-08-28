@@ -4,6 +4,7 @@ import {
   dbChatToApp,
   dbCourseToApp,
   dbEventToApp,
+  dbNoteToApp,
   dbSemesterToApp,
   mapAnalysisStatus,
 } from './mappers';
@@ -172,6 +173,25 @@ describe('dbChatToApp / dbChatMessageToApp', () => {
       content: 'Hello',
       timestamp: '2026-08-28T00:00:01Z',
       sequence: 2,
+    });
+  });
+});
+
+describe('dbNoteToApp', () => {
+  it('maps a course_notes row, renaming body -> text', () => {
+    expect(
+      dbNoteToApp({
+        id: 'n1',
+        course_id: 'c1',
+        user_id: 'u1',
+        body: 'Midterm covers ch 1-5',
+        created_at: '2026-08-01T12:00:00Z',
+      })
+    ).toEqual({
+      id: 'n1',
+      courseId: 'c1',
+      text: 'Midterm covers ch 1-5',
+      createdAt: '2026-08-01T12:00:00Z',
     });
   });
 });

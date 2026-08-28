@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router';
-import { useApp } from '../context/AppContext';
+import { useData } from '../context/DataProvider';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { Card } from '../components/ui/card';
@@ -16,7 +16,7 @@ import {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function Agenda() {
-  const { semesters, courses, events } = useApp();
+  const { semesters, courses, events } = useData();
   const navigate = useNavigate();
 
   const activeSemester = semesters.find(s => s.isActive);

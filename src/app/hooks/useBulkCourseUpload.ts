@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
-import { useApp } from '../context/AppContext';
+import { useAuth } from '../context/AuthProvider';
+import { useData } from '../context/DataProvider';
 import { supabase } from '../../lib/supabase';
 import { FileItem, COURSE_COLORS } from './useBulkUpload';
 
@@ -16,7 +17,8 @@ export interface BulkDetectedCourse {
 }
 
 export function useBulkCourseUpload(semesterId: string) {
-  const { user, addCourse } = useApp();
+  const { user } = useAuth();
+  const { addCourse } = useData();
   const [step, setStep] = useState<BulkCourseUploadStep>('upload');
   const [fileItems, setFileItems] = useState<FileItem[]>([]);
   const [detectedCourses, setDetectedCourses] = useState<BulkDetectedCourse[]>([]);

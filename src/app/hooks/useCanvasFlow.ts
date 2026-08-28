@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { useApp } from '../context/AppContext';
+import { useData } from '../context/DataProvider';
 import { supabase } from '../../lib/supabase';
 
 export type CanvasStep = 'dates' | 'detecting' | 'review' | 'processing' | 'syllabi' | 'downloading';
@@ -33,7 +33,7 @@ const COURSE_COLORS = [
 ];
 
 export function useCanvasFlow() {
-  const { addSemester, addCourse } = useApp();
+  const { addSemester, addCourse } = useData();
   const [step, setStep] = useState<CanvasStep>('dates');
   const [semesterName, setSemesterName] = useState('');
   const [startDate, setStartDate] = useState('');

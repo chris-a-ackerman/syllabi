@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate, useSearchParams, useLocation } from 'react-router';
-import { useApp } from '../context/AppContext';
+import { useData } from '../context/DataProvider';
 import { getEventTypeColor, getEventTypeLabel } from '@/lib/eventHelpers';
 import { toPercent } from '@/lib/gradeWeight';
 import { Button } from '../components/ui/button';
@@ -42,7 +42,7 @@ export function CourseDetail() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const location = useLocation();
-  const { courses, events, notes, addNote, deleteNote, deleteCourse } = useApp();
+  const { courses, events, notes, addNote, deleteNote, deleteCourse } = useData();
 
   const from = searchParams.get('from');
   const backLabel =

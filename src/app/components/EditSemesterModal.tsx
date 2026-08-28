@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useApp } from '../context/AppContext';
+import { useData } from '../context/DataProvider';
 import type { Semester } from '@/lib/types';
 import {
   Dialog,
@@ -19,7 +19,7 @@ interface EditSemesterModalProps {
 }
 
 export function EditSemesterModal({ open, onClose, semester }: EditSemesterModalProps) {
-  const { courses, updateSemester, deleteSemester } = useApp();
+  const { courses, updateSemester, deleteSemester } = useData();
   const [name, setName] = useState(semester.name);
   const [startDate, setStartDate] = useState(semester.startDate);
   const [endDate, setEndDate] = useState(semester.endDate);

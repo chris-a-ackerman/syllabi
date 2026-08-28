@@ -1,6 +1,7 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router';
-import { useApp } from '../context/AppContext';
+import { useAuth } from '../context/AuthProvider';
+import { useData } from '../context/DataProvider';
 import { useBulkUpload } from '../hooks/useBulkUpload';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
@@ -11,7 +12,8 @@ import { Upload, Check, X, Loader2, AlertCircle, ChevronRight, FileText, Refresh
 
 export function Onboarding() {
   const navigate = useNavigate();
-  const { user, courses: allCourses, markOnboardingComplete, refreshCourses, refreshEvents } = useApp();
+  const { user, markOnboardingComplete } = useAuth();
+  const { courses: allCourses, refreshCourses, refreshEvents } = useData();
   const {
     step, fileItems, detectedCourses, createdCourseIds, globalError,
     addFiles, removeFile, analyze, updateDetectedCourse, confirm, retryProcessing,

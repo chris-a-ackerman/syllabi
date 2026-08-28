@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useApp } from '../context/AppContext';
+import { useAuth } from '../context/AuthProvider';
+import { useData } from '../context/DataProvider';
 import { supabase } from '../../lib/supabase';
 import { deleteCourse } from '@/lib/api/courses';
 import {
@@ -45,7 +46,8 @@ const PRESET_COLORS = [
 ];
 
 export function AddCourseModal({ open, onClose, existingCourse, editMode }: AddCourseModalProps) {
-  const { addCourse, updateCourse, refreshCourses, refreshEvents, semesters, user } = useApp();
+  const { addCourse, updateCourse, refreshCourses, refreshEvents, semesters } = useData();
+  const { user } = useAuth();
   const initialStep = editMode ? 'manual' : existingCourse ? 'upload' : 'choose';
   const [step, setStep] = useState<Step>(initialStep);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);

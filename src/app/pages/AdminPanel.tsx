@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
-import { useApp } from '../context/AppContext';
+import { useChat } from '../context/ChatProvider';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
@@ -79,7 +79,7 @@ const mockUsers = [
 
 export function AdminPanel() {
   const navigate = useNavigate();
-  const { aiEnabled, setAiEnabled } = useApp();
+  const { aiEnabled, setAiEnabled } = useChat();
   const [activeTab, setActiveTab] = useState<AdminTab>('overview');
   const [showDisableConfirm, setShowDisableConfirm] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');

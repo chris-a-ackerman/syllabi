@@ -1,6 +1,6 @@
 import { ReactNode } from 'react';
 import { Navigate } from 'react-router';
-import { useApp } from '../context/AppContext';
+import { useAuth } from '../context/AuthProvider';
 
 interface ProtectedRouteProps {
   children: ReactNode;
@@ -8,7 +8,7 @@ interface ProtectedRouteProps {
 }
 
 export function ProtectedRoute({ children, adminOnly = false }: ProtectedRouteProps) {
-  const { user, loading } = useApp();
+  const { user, loading } = useAuth();
 
   if (loading) {
     return null;

@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
-import { useApp } from '../context/AppContext';
+import { useAuth } from '../context/AuthProvider';
+import { useData } from '../context/DataProvider';
 import { supabase } from '../../lib/supabase';
 
 export type BulkUploadStep = 'upload' | 'detecting' | 'review' | 'processing';
@@ -29,7 +30,8 @@ export interface DetectedCourse {
 }
 
 export function useBulkUpload() {
-  const { user, addSemester, addCourse } = useApp();
+  const { user } = useAuth();
+  const { addSemester, addCourse } = useData();
   const [step, setStep] = useState<BulkUploadStep>('upload');
   const [fileItems, setFileItems] = useState<FileItem[]>([]);
   const [detectedCourses, setDetectedCourses] = useState<DetectedCourse[]>([]);
