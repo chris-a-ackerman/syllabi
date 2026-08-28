@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend-unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      # Build smoke: catches broken imports/exports Vite would only surface at build time
+      - run: npm run build
+
+  db-test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17 # matches backend/supabase/config.toml major_version
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - '5432:5432'
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Rebuild schema from migrations and run security assertions
+        run: ./backend/supabase/local/db-test.sh
+        env:
+          ADMIN_URL: postgres://postgres:postgres@localhost:5432/postgres

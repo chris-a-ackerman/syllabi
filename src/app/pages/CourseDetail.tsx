@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate, useSearchParams, useLocation } from 'react-router';
 import { useApp } from '../context/AppContext';
 import { getEventTypeColor, getEventTypeLabel } from '@/lib/eventHelpers';
+import { toPercent } from '@/lib/gradeWeight';
 import { Button } from '../components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { Card } from '../components/ui/card';
@@ -395,8 +396,6 @@ export function CourseDetail() {
           <TabsContent value="grading" className="space-y-6">
             {(() => {
               const components = course.grading_rules?.components ?? [];
-              // Weights may be decimals (0.15) or percents (15) depending on which run produced the data.
-              const toPercent = (w: number) => w > 0 && w <= 1 ? Math.round(w * 100) : Math.round(w);
 
               if (components.length === 0) {
                 return (

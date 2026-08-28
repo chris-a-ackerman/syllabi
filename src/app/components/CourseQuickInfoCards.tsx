@@ -1,16 +1,11 @@
 import { parseISO, format } from 'date-fns';
 import { Card } from './ui/card';
 import type { Course, Event } from '../context/AppContext';
+import { toPercent } from '@/lib/gradeWeight';
 
 interface CourseQuickInfoCardsProps {
   course: Course;
   events: Event[];
-}
-
-// Replicates the toPercent helper used in CourseDetail grading tab (line ~399).
-// Weights may be decimals (0.15) or percents (15) depending on extraction run.
-function toPercent(w: number): number {
-  return w > 0 && w <= 1 ? Math.round(w * 100) : Math.round(w);
 }
 
 export function CourseQuickInfoCards({ course, events }: CourseQuickInfoCardsProps) {
