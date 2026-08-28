@@ -8,7 +8,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { Card } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Textarea } from '../components/ui/textarea';
-import { Alert, AlertDescription } from '../components/ui/alert';
 import {
   ArrowLeft,
   Calendar,
@@ -194,13 +193,21 @@ export function CourseDetail() {
     return types[0];
   };
 
-  // Group events by month
+  // Group events by month. course_events.date is nullable — the parser stores
+  // the raw text in date_unresolved when it can't resolve a date — so those
+  // events are collected into a trailing bucket instead of being dropped.
+  const UNDATED_GROUP = 'Date TBD';
+
   const eventsByMonth = courseEvents.reduce((acc, event) => {
+    if (!event.date) return acc;
     const month = format(parseISO(event.date), 'MMMM yyyy');
     if (!acc[month]) acc[month] = [];
     acc[month].push(event);
     return acc;
   }, {} as Record<string, typeof courseEvents>);
+
+  const undatedEvents = courseEvents.filter((e) => !e.date);
+  if (undatedEvents.length > 0) eventsByMonth[UNDATED_GROUP] = undatedEvents;
 
   const handleAddNote = () => {
     if (!noteText.trim()) return;
@@ -311,7 +318,7 @@ export function CourseDetail() {
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-3 mb-2">
                               <span className="font-medium text-gray-900">
-                                {format(parseISO(event.date), 'MMM d, yyyy')}
+                                {event.date ? format(parseISO(event.date), 'MMM d, yyyy') : '—'}
                               </span>
                               {event.time && (
                                 <>

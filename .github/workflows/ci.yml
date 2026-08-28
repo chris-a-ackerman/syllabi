@@ -19,6 +19,8 @@ jobs:
           node-version: '20'
           cache: npm
       - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
       - run: npm test
       # Build smoke: catches broken imports/exports Vite would only surface at build time
       - run: npm run build

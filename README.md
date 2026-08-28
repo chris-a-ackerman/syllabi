@@ -33,6 +33,20 @@ npm run dev     # Vite dev server
 npm run build   # Production build
 ```
 
+**Code quality checks:**
+
+```bash
+npm run typecheck     # tsc --noEmit (strict mode)
+npm run lint          # ESLint over src/
+npm run lint:fix      # ESLint with --fix
+npm run format        # Prettier --write
+npm run format:check  # Prettier --check (CI)
+npm test              # Vitest unit tests
+```
+
+Config lives in `tsconfig.json`, `eslint.config.js` (flat config) and `.prettierrc`.
+`npm run typecheck` and `npm run lint` must both pass before opening a PR.
+
 **Environment variables** (`.env` in `Syllabi - Prototype/`):
 
 ```

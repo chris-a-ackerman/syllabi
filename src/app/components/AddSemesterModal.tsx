@@ -26,7 +26,6 @@ import {
   X,
   GraduationCap,
   CheckCircle2,
-  AlertTriangle,
   XCircle,
 } from 'lucide-react';
 
@@ -109,7 +108,7 @@ export function AddSemesterModal({ open, onClose }: AddSemesterModalProps) {
 
   const handleManualSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    addSemester({ name, startDate, endDate });
+    addSemester({ name, startDate, endDate, isActive: true });
     onClose();
   };
 
@@ -363,7 +362,7 @@ export function AddSemesterModal({ open, onClose }: AddSemesterModalProps) {
             {/* Step 3: Review */}
             {bulkStep === 'review' && (
               <div className="space-y-4 overflow-hidden">
-                {Object.entries(semesterGroups).map(([semKey, groupCourses]) => (
+                {Object.values(semesterGroups).map((groupCourses) => (
                   <Card key={groupCourses[0].id} className="p-4 rounded-xl space-y-3">
                     <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Semester</p>
 

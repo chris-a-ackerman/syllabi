@@ -8,7 +8,6 @@ import {
   BookOpen,
   Calendar,
   Upload,
-  AlertCircle,
   MoreHorizontal,
   Trash2,
   Pencil,
