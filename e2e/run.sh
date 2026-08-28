@@ -118,5 +118,14 @@ if [ "$NOTE_COUNT" != "1" ]; then
   exit 1
 fi
 echo "PASS  the note added in the UI is a real course_notes row (SYL-37)"
+
+echo ""
+echo "Checking the admin AI toggle wrote app_settings..."
+AI_ROW="$(psql "$DB_URL" -At -c "SELECT ai_enabled || '|' || coalesce(updated_by::text,'') FROM app_settings WHERE id='global'")"
+if [ "$AI_ROW" != "false|$UID1" ]; then
+  echo "FAIL  expected app_settings to read 'false|$UID1' after the admin disabled AI, found '$AI_ROW'"
+  exit 1
+fi
+echo "PASS  the admin toggle disabled AI in app_settings, stamped with the admin's id (SYL-37)"
 echo ""
 echo "Authenticated E2E pass succeeded."

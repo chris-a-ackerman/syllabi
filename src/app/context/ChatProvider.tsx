@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from 'react';
 import { useAuth } from './AuthProvider';
+import { useSettings } from './SettingsProvider';
 import * as chatApi from '@/lib/api/chat';
 import type { Chat, ChatMessage } from '@/lib/types';
 
@@ -15,13 +16,11 @@ interface ChatState {
   chats: Chat[];
   currentChatId: string | null;
   chatMessages: ChatMessage[];
-  aiEnabled: boolean;
   addChatMessage: (message: Omit<ChatMessage, 'id' | 'timestamp'>, context?: { semesterId: string; courseIds: string[] }) => void;
   startNewChat: () => void;
   selectChat: (chatId: string) => Promise<void>;
   deleteChat: (chatId: string) => Promise<void>;
   renameChat: (chatId: string, title: string) => Promise<void>;
-  setAiEnabled: (enabled: boolean) => void;
   submitFeedback: (description: string) => Promise<void>;
 }
 
@@ -29,14 +28,12 @@ const ChatContext = createContext<ChatState | undefined>(undefined);
 
 export function ChatProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
+  // The global kill switch gates the AI call below; it lives in SettingsProvider
+  // because the AdminPanel writes it and chat only reads it.
+  const { aiEnabled } = useSettings();
   const [chats, setChats] = useState<Chat[]>([]);
   const [currentChatId, setCurrentChatId] = useState<string | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
-  // NOTE: client-local only — resets to true on reload, and the AdminPanel
-  // toggle does not persist. The `chat` Edge Function enforces the real
-  // `app_settings.ai_enabled` flag server-side. Carried over unchanged by
-  // SYL-37; wiring it to the server flag is a behavior change, not a move.
-  const [aiEnabled, setAiEnabled] = useState(true);
 
   // Load the user's chats, and the most recent conversation, on sign-in
   useEffect(() => {
@@ -244,16 +241,14 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     chats,
     currentChatId,
     chatMessages,
-    aiEnabled,
     addChatMessage,
     startNewChat,
     selectChat,
     deleteChat,
     renameChat,
-    setAiEnabled,
     submitFeedback,
   }), [
-    chats, currentChatId, chatMessages, aiEnabled,
+    chats, currentChatId, chatMessages,
     addChatMessage, startNewChat, selectChat, deleteChat, renameChat, submitFeedback,
   ]);
 

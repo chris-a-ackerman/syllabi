@@ -8,6 +8,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuthProvider, useAuth } from './AuthProvider';
 import { ChatProvider, useChat } from './ChatProvider';
 import { DataProvider, useData } from './DataProvider';
+import { SettingsProvider } from './SettingsProvider';
 
 // SYL-37: the three providers exist so that chat activity does not re-render
 // the rest of the app. This pins that: a chat state update must re-render chat
@@ -39,13 +40,15 @@ function ChatConsumer() {
 function renderApp() {
   return render(
     <AuthProvider>
-      <DataProvider>
-        <ChatProvider>
-          <AuthConsumer />
-          <DataConsumer />
-          <ChatConsumer />
-        </ChatProvider>
-      </DataProvider>
+      <SettingsProvider>
+        <DataProvider>
+          <ChatProvider>
+            <AuthConsumer />
+            <DataConsumer />
+            <ChatConsumer />
+          </ChatProvider>
+        </DataProvider>
+      </SettingsProvider>
     </AuthProvider>
   );
 }
@@ -98,12 +101,14 @@ describe('provider render isolation', () => {
 
     render(
       <AuthProvider>
-        <DataProvider>
-          <ChatProvider>
-            <Probe />
-            <ChatConsumer />
-          </ChatProvider>
-        </DataProvider>
+        <SettingsProvider>
+          <DataProvider>
+            <ChatProvider>
+              <Probe />
+              <ChatConsumer />
+            </ChatProvider>
+          </DataProvider>
+        </SettingsProvider>
       </AuthProvider>
     );
     await act(async () => {});

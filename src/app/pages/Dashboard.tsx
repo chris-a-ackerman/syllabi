@@ -5,6 +5,7 @@ import { useNavigate, useLocation } from 'react-router';
 import { useAuth } from '../context/AuthProvider';
 import { useData } from '../context/DataProvider';
 import { useChat } from '../context/ChatProvider';
+import { useSettings } from '../context/SettingsProvider';
 import { Button } from '../components/ui/button';
 import { Avatar, AvatarFallback } from '../components/ui/avatar';
 import { Input } from '../components/ui/input';
@@ -55,7 +56,8 @@ const SUGGESTED_PROMPTS = [
 export function Dashboard() {
   const { user, signOut } = useAuth();
   const { semesters, courses, events, setActiveSemester, refreshCourses, refreshEvents } = useData();
-  const { aiEnabled, chats, currentChatId, chatMessages, addChatMessage, startNewChat, selectChat, deleteChat, renameChat, submitFeedback } = useChat();
+  const { chats, currentChatId, chatMessages, addChatMessage, startNewChat, selectChat, deleteChat, renameChat, submitFeedback } = useChat();
+  const { aiEnabled } = useSettings();
   const navigate = useNavigate();
   const location = useLocation();
   const [showAddSemester, setShowAddSemester] = useState(false);

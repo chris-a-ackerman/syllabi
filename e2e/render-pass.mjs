@@ -277,6 +277,78 @@ await check('Admin panel renders (in-app navigation)', '/admin', {
   expectText: ['Admin Panel'],
 });
 
+// ── The AI kill switch is a real app_settings write (SYL-37) ────────────────
+// It used to be client-local: the toggle moved a boolean that reset on reload.
+// We are already on /admin from the check above.
+console.log('');
+events = [];
+const disabled = await evaluate(`(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const byText = (text) =>
+    [...document.querySelectorAll('button, a')].find(
+      (x) => (x.innerText || '').trim() === text
+    );
+
+  const tab = byText('Access Control');
+  if (!tab) return 'no Access Control tab';
+  tab.click();
+  await sleep(1000);
+
+  const sw = document.querySelector('[role="switch"]');
+  if (!sw) return 'no AI switch';
+  if (sw.getAttribute('aria-checked') !== 'true') return 'AI switch did not start enabled';
+  sw.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+  sw.click();
+  await sleep(1000);
+
+  const confirm = byText('Disable');
+  if (!confirm) return 'no Disable confirmation button';
+  confirm.click();
+  return 'ok';
+})()`);
+
+if (disabled !== 'ok') {
+  console.log(`FAIL  Disabling AI through the admin toggle: ${disabled}`);
+  failures++;
+} else {
+  await wait(3000);
+  // Full reload. /admin has to be reached in-app (see the note above), which
+  // also means the flag survives a fresh AuthProvider + SettingsProvider mount.
+  await send('Page.navigate', { url: `${BASE}/dashboard` });
+  await wait(4000);
+  events = [];
+  const stillOff = await evaluate(`(async () => {
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    const byText = (text) =>
+      [...document.querySelectorAll('button, a')].find(
+        (x) => (x.innerText || '').trim() === text
+      );
+    const admin = [...document.querySelectorAll('button, a')].find(
+      (x) => (x.innerText || '').trim().includes('Admin')
+    );
+    if (!admin) return 'no Admin link after reload';
+    admin.click();
+    await sleep(3000);
+    const tab = byText('Access Control');
+    if (!tab) return 'no Access Control tab after reload';
+    tab.click();
+    await sleep(1000);
+    const sw = document.querySelector('[role="switch"]');
+    if (!sw) return 'no AI switch after reload';
+    return sw.getAttribute('aria-checked') === 'false'
+      ? 'ok'
+      : 'AI switch came back enabled — the write did not persist';
+  })()`);
+  const errors = problems();
+  if (stillOff === 'ok' && errors.length === 0) {
+    console.log('PASS  AI kill switch stayed off across a full reload (DB assertion follows)');
+  } else {
+    console.log(`FAIL  AI kill switch did not persist: ${stillOff}`);
+    errors.forEach((e) => console.log(`        ${e.slice(0, 220)}`));
+    failures++;
+  }
+}
+
 // ── Semester isActive behaviour (SYL-35 fixes) ──────────────────────────────
 console.log('');
 await send('Page.navigate', { url: `${BASE}/dashboard` });
