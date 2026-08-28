@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.24.3";
+import { stripJsonFences } from "../_shared/strip-json-fences.ts";
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -144,11 +145,7 @@ serve(async (req) => {
 
         let parsed;
         try {
-          const cleaned = rawOutput
-            .replace(/^[\s\S]*?```json\n?/, "")
-            .replace(/\n?```[\s\S]*$/, "")
-            .trim();
-          parsed = JSON.parse(cleaned);
+          parsed = JSON.parse(stripJsonFences(rawOutput));
         } catch {
           return { file_path: filePath, error: "Could not parse Claude response" };
         }
