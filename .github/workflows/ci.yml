@@ -75,6 +75,33 @@ jobs:
         run: supabase stop --no-backup
         working-directory: backend
 
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - uses: supabase/setup-cli@v1
+        with:
+          # Matches the contract job; 2.116 verifies local ES256 tokens via JWKS.
+          version: 2.116.0
+      - run: npm ci
+      - name: Start Supabase stack (trimmed)
+        run: supabase start -x studio,imgproxy,logflare,vector
+        working-directory: backend
+      # Creates its own test users with a password generated for this run
+      # against the ephemeral local stack — no stored credentials.
+      - name: Authenticated E2E pass
+        run: ./e2e/run.sh
+        env:
+          CHROME_BIN: /usr/bin/google-chrome
+      - name: Stop stack
+        if: always()
+        run: supabase stop --no-backup
+        working-directory: backend
+
   db-test:
     runs-on: ubuntu-latest
     services:
