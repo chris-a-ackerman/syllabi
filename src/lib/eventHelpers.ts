@@ -1,4 +1,4 @@
-import type { Event } from '@/app/context/AppContext';
+import type { Event } from '@/lib/types';
 
 /**
  * Returns Tailwind color classes for an event-type badge.

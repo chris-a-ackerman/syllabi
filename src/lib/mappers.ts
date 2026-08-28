@@ -7,7 +7,7 @@ import type {
   GradingRules,
   Policies,
   Semester,
-} from '@/app/context/AppContext';
+} from '@/lib/types';
 
 // ─── DB → App mappers ────────────────────────────────────────────────────────
 // These will be replaced by generated Supabase types once `supabase gen types` is run.

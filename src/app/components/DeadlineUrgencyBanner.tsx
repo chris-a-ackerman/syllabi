@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { startOfDay } from 'date-fns';
 import { ChevronDown, ChevronUp, X, AlertCircle } from 'lucide-react';
-import type { Event, Course } from '../context/AppContext';
+import type { Event, Course } from '@/lib/types';
 import { getEventTypeLabel } from '@/lib/eventHelpers';
 import { getRelativeLabel, getUrgencyColor, selectUrgentDeadlines } from '@/lib/deadlineUrgency';
 

@@ -1,5 +1,5 @@
 import { parseISO, isAfter, isBefore, startOfDay, addDays, differenceInCalendarDays } from 'date-fns';
-import type { Event, Course } from '@/app/context/AppContext';
+import type { Event, Course } from '@/lib/types';
 
 export interface UrgentDeadline {
   event: Event;

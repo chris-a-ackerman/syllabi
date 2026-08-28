@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { useApp, type Semester } from '../context/AppContext';
+import { useApp } from '../context/AppContext';
+import type { Semester } from '@/lib/types';
 import {
   Dialog,
   DialogContent,

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { startOfDay, parseISO } from 'date-fns';
 import { getRelativeLabel, getUrgencyColor, selectUrgentDeadlines } from './deadlineUrgency';
-import type { Event, Course } from '@/app/context/AppContext';
+import type { Event, Course } from '@/lib/types';
 
 // Fixed clock: Tuesday, Sep 1 2026.
 const TODAY = startOfDay(parseISO('2026-09-01'));

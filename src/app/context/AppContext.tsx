@@ -1,148 +1,21 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { supabase, isSupabaseConfigured } from '../../lib/supabase';
-import {
-  dbChatMessageToApp,
-  dbChatToApp,
-  dbCourseToApp,
-  dbEventToApp,
-  dbSemesterToApp,
-} from '../../lib/mappers';
+import * as authApi from '@/lib/api/auth';
+import * as chatApi from '@/lib/api/chat';
+import * as coursesApi from '@/lib/api/courses';
+import * as eventsApi from '@/lib/api/events';
+import * as semestersApi from '@/lib/api/semesters';
+import type {
+  Chat,
+  ChatMessage,
+  Course,
+  Event,
+  GradingComponent,
+  Note,
+  Semester,
+  User,
+} from '@/lib/types';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
-
-export interface User {
-  id: string;
-  email: string;
-  displayName: string;
-  avatar?: string;
-  isAdmin: boolean;
-  onboardingCompleted: boolean;
-}
-
-export interface Semester {
-  id: string;
-  name: string;
-  startDate: string;
-  endDate: string;
-  isActive: boolean;
-}
-
-export interface CourseSchedule {
-  // Meeting pattern
-  meeting_days?: string[] | null;
-  meeting_times?: { start: string | null; end: string | null } | null;
-  location?: string | null;
-  instructor?: {
-    name?: string | null;
-    email?: string | null;
-    office?: string | null;
-    office_hours?: string | null;
-  } | null;
-  // Semester structure
-  semester_start?: string | null;
-  semester_end?: string | null;
-  total_weeks?: number | null;
-  finals_period_start?: string | null;
-  finals_period_end?: string | null;
-  breaks?: Array<{ name: string; start_date: string; end_date: string }>;
-  notes?: string | null;
-}
-
-export interface Policies {
-  attendance?: string | null;
-  late_work?: string | null;
-  academic_integrity?: string | null;
-  technology?: string | null;
-  ai_policy?: string | null;
-  recording?: string | null;
-  other?: string[];
-}
-
-export interface GradingRulesComponent {
-  name: string;
-  weight: number;
-  count?: number | null;
-  description?: string | null;
-  drop_lowest?: number;
-}
-
-export interface GradingRules {
-  components: GradingRulesComponent[];
-  late_policy?: string | null;
-  grading_scale?: string | null;
-}
-
-export interface Course {
-  id: string;
-  semesterId: string;
-  name: string;
-  code: string;
-  professor: string;
-  color: string;
-  status: 'processing' | 'ready' | 'failed';
-  syllabusUrl?: string;
-  extractionQuality?: 'complete' | 'partial' | 'minimal';
-  extractedCount?: number;
-  grading_rules?: GradingRules;
-  policies?: Policies;
-  schedule?: CourseSchedule;
-}
-
-export interface CanvasMetadata {
-  points_possible: number | null;
-  submission_types: string[] | null;
-  assignment_group: string | null;
-  description_summary: string | null;
-  canvas_url: string | null;
-  unlock_at: string | null;
-  allowed_attempts: number | null;
-  time_limit: number | null;
-}
-
-export interface Event {
-  id: string;
-  courseId: string;
-  title: string;
-  date: string | null;
-  time?: string | null;
-  type: 'exam' | 'deadline' | 'quiz' | 'presentation' | 'project_due' | 'no_class' | 'other';
-  category?: string | null;
-  canvasAssignmentId?: string | null;
-  confidence?: 'low' | 'medium' | 'high';
-  canvasMetadata?: CanvasMetadata | null;
-}
-
-export interface GradingComponent {
-  id: string;
-  courseId: string;
-  name: string;
-  weight: number;
-  count?: number;
-  dropPolicy?: string;
-  latePolicy?: string;
-}
-
-export interface Note {
-  id: string;
-  courseId: string;
-  text: string;
-  createdAt: string;
-}
-
-export interface ChatMessage {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;
-  timestamp: string;
-  sequence?: number;
-}
-
-export interface Chat {
-  id: string;
-  semesterId: string;
-  title: string | null;
-  courseIds: string[];
-  createdAt: string;
-}
 
 interface AppState {
   user: User | null;
@@ -215,25 +88,20 @@ function enrichUserWithProfile(
   userId: string,
   setUser: React.Dispatch<React.SetStateAction<User | null>>,
 ) {
-  supabase
-    .from('profiles')
-    .select('display_name, is_admin, onboarding_completed')
-    .eq('id', userId)
-    .single()
-    .then(({ data: profile }) => {
-      if (!profile) return;
-      setUser(prev => {
-        if (!prev || prev.id !== userId) return prev;
-        const displayName = profile.display_name || prev.displayName;
-        return {
-          ...prev,
-          displayName,
-          avatar: getInitials(displayName),
-          isAdmin: profile.is_admin ?? false,
-          onboardingCompleted: profile.onboarding_completed ?? false,
-        };
-      });
+  authApi.fetchProfile(userId).then(({ data: profile }) => {
+    if (!profile) return;
+    setUser(prev => {
+      if (!prev || prev.id !== userId) return prev;
+      const displayName = profile.display_name || prev.displayName;
+      return {
+        ...prev,
+        displayName,
+        avatar: getInitials(displayName),
+        isAdmin: profile.is_admin ?? false,
+        onboardingCompleted: profile.onboarding_completed ?? false,
+      };
     });
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -302,46 +170,33 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     const fetchData = async () => {
       const [
-        { data: semesterRows, error: semErr },
-        { data: courseRows, error: courseErr },
-        { data: eventRows, error: eventErr },
+        { data: fetchedSemesters, error: semErr },
+        { data: fetchedCourses, error: courseErr },
+        { data: fetchedEvents, error: eventErr },
       ] = await Promise.all([
-        supabase.from('semesters').select('*').order('created_at', { ascending: false }),
-        supabase.from('courses').select('*').order('created_at', { ascending: false }),
-        supabase.from('course_events').select('*').order('date', { ascending: true }),
+        semestersApi.fetchSemesters(),
+        coursesApi.fetchCourses(),
+        eventsApi.fetchEvents(),
       ]);
 
       if (semErr) console.error('Error fetching semesters:', semErr);
       if (courseErr) console.error('Error fetching courses:', courseErr);
       if (eventErr) console.error('Error fetching events:', eventErr);
 
-      const fetchedCourses = (courseRows ?? []).map(dbCourseToApp);
-      setSemesters((semesterRows ?? []).map(dbSemesterToApp));
+      setSemesters(fetchedSemesters);
       setCourses(fetchedCourses);
-      setEvents((eventRows ?? []).map(dbEventToApp));
+      setEvents(fetchedEvents);
       if (fetchedCourses.length > 0) setChatOpen(true);
 
-      const { data: chatRows, error: chatErr } = await supabase
-        .from('chats')
-        .select('*, chat_courses(course_id)')
-        .order('created_at', { ascending: false });
+      const { data: mappedChats, error: chatErr } = await chatApi.fetchChats();
       if (chatErr) console.error('Error fetching chats:', chatErr);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const mappedChats = (chatRows ?? []).map((row: any) =>
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        dbChatToApp(row, (row.chat_courses ?? []).map((cc: any) => cc.course_id))
-      );
       setChats(mappedChats);
 
       if (mappedChats.length > 0) {
         const mostRecentId = mappedChats[0].id;
         setCurrentChatId(mostRecentId);
-        const { data: msgRows } = await supabase
-          .from('chat_messages')
-          .select('*')
-          .eq('chat_id', mostRecentId)
-          .order('sequence', { ascending: true });
-        setChatMessages((msgRows ?? []).map(dbChatMessageToApp));
+        const { data: messages } = await chatApi.fetchChatMessages(mostRecentId);
+        setChatMessages(messages);
       }
     };
 
@@ -353,69 +208,45 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     // Deactivate all existing semesters if the new one is active
     if (semester.isActive) {
-      await supabase.from('semesters').update({ is_active: false }).eq('user_id', user.id);
+      await semestersApi.deactivateSemesters(user.id);
       setSemesters(prev => prev.map(s => ({ ...s, isActive: false })));
     }
 
-    const { data, error } = await supabase
-      .from('semesters')
-      .upsert(
-        {
-          user_id: user.id,
-          name: semester.name,
-          start_date: semester.startDate,
-          end_date: semester.endDate,
-          is_active: semester.isActive,
-        },
-        { onConflict: 'user_id,name' }
-      )
-      .select()
-      .single();
+    const { data: newSemester, error } = await semestersApi.upsertSemester(user.id, semester);
 
-    if (error) {
+    if (error || !newSemester) {
       console.error('Error adding semester:', error);
       return '';
     }
 
     setSemesters(prev => {
-      if (prev.some(s => s.id === data.id)) return prev;
-      return [dbSemesterToApp(data), ...prev];
+      if (prev.some(s => s.id === newSemester.id)) return prev;
+      return [newSemester, ...prev];
     });
-    return data.id;
+    return newSemester.id;
   };
 
   const updateSemester = async (id: string, updates: { name: string; startDate: string; endDate: string; isActive: boolean }) => {
     if (!user) return;
     if (updates.isActive) {
-      await supabase.from('semesters').update({ is_active: false }).eq('user_id', user.id);
+      await semestersApi.deactivateSemesters(user.id);
       setSemesters(prev => prev.map(s => ({ ...s, isActive: false })));
     }
-    await supabase.from('semesters').update({
-      name: updates.name,
-      start_date: updates.startDate,
-      end_date: updates.endDate,
-      is_active: updates.isActive,
-    }).eq('id', id);
+    await semestersApi.updateSemester(id, updates);
     setSemesters(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s));
   };
 
   const deleteSemester = async (id: string) => {
     if (!user) return;
     const courseIds = courses.filter(c => c.semesterId === id).map(c => c.id);
-    if (courseIds.length > 0) {
-      await supabase.from('course_events').delete().in('course_id', courseIds);
-      await supabase.from('grading_components').delete().in('course_id', courseIds);
-      await supabase.from('notes').delete().in('course_id', courseIds);
-      await supabase.from('courses').delete().in('id', courseIds);
-    }
-    await supabase.from('semesters').delete().eq('id', id);
+    await semestersApi.deleteSemesterWithCourses(id, courseIds);
     setCourses(prev => prev.filter(c => c.semesterId !== id));
     setSemesters(prev => {
       const remaining = prev.filter(s => s.id !== id);
       const wasActive = prev.find(s => s.id === id)?.isActive;
       if (wasActive && remaining.length > 0) {
         const next = remaining[0];
-        supabase.from('semesters').update({ is_active: true }).eq('id', next.id);
+        semestersApi.activateSemester(next.id);
         return remaining.map(s => ({ ...s, isActive: s.id === next.id }));
       }
       return remaining;
@@ -424,49 +255,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const markOnboardingComplete = async () => {
     if (!user) return;
-    await supabase
-      .from('profiles')
-      .update({ onboarding_completed: true, onboarding_completed_at: new Date().toISOString() })
-      .eq('id', user.id);
+    await authApi.markOnboardingComplete(user.id);
     setUser(prev => prev ? { ...prev, onboardingCompleted: true } : prev);
   };
 
   const setActiveSemester = async (id: string) => {
     if (!user) return;
     setSemesters(prev => prev.map(s => ({ ...s, isActive: s.id === id }))); // Optimistic update
-    await supabase.from('semesters').update({ is_active: false }).eq('user_id', user.id);
-    await supabase.from('semesters').update({ is_active: true }).eq('id', id);
+    await semestersApi.deactivateSemesters(user.id);
+    await semestersApi.activateSemester(id);
   };
 
   const addCourse = async (course: Omit<Course, 'id'>): Promise<string | undefined> => {
     if (!user) return undefined;
 
-    const { data, error } = await supabase
-      .from('courses')
-      .insert({
-        user_id: user.id,
-        semester_id: course.semesterId,
-        name: course.name,
-        code: course.code,
-        professor: course.professor,
-        color: course.color,
-      })
-      .select()
-      .single();
+    const { data: newCourse, error } = await coursesApi.insertCourse(user.id, course);
 
-    if (error) {
+    if (error || !newCourse) {
       console.error('Error adding course:', error);
       return undefined;
     }
 
-    const newCourse = dbCourseToApp(data);
     setCourses(prev => [newCourse, ...prev]);
     if (courses.length === 0) setChatOpen(true);
-    return data.id;
+    return newCourse.id;
   };
 
   const deleteCourse = async (id: string) => {
-    const { error } = await supabase.from('courses').delete().eq('id', id);
+    const { error } = await coursesApi.deleteCourse(id);
     if (error) {
       console.error('Error deleting course:', error);
       return;
@@ -478,34 +294,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setCourses(prev => prev.map(c => c.id === id ? { ...c, ...updates } : c));
 
     // Persist subset of fields that map 1:1 to DB columns
-    const dbUpdates: Record<string, unknown> = {};
-    if (updates.name !== undefined) dbUpdates.name = updates.name;
-    if (updates.code !== undefined) dbUpdates.code = updates.code;
-    if (updates.professor !== undefined) dbUpdates.professor = updates.professor;
-    if (updates.color !== undefined) dbUpdates.color = updates.color;
-
-    if (Object.keys(dbUpdates).length > 0) {
-      supabase.from('courses').update(dbUpdates).eq('id', id)
-        .then(({ error }) => { if (error) console.error('Error updating course:', error); });
-    }
+    coursesApi.updateCourse(id, updates)
+      .then(({ error }) => { if (error) console.error('Error updating course:', error); });
   };
 
   const refreshCourses = async () => {
-    const { data: courseRows, error } = await supabase
-      .from('courses')
-      .select('*')
-      .order('created_at', { ascending: false });
+    const { data, error } = await coursesApi.fetchCourses();
     if (error) { console.error('Error refreshing courses:', error); return; }
-    setCourses((courseRows ?? []).map(dbCourseToApp));
+    setCourses(data);
   };
 
   const refreshEvents = async () => {
-    const { data: eventRows, error } = await supabase
-      .from('course_events')
-      .select('*')
-      .order('date', { ascending: true });
+    const { data, error } = await eventsApi.fetchEvents();
     if (error) { console.error('Error refreshing events:', error); return; }
-    setEvents((eventRows ?? []).map(dbEventToApp));
+    setEvents(data);
   };
 
   const addNote = (note: Omit<Note, 'id' | 'createdAt'>) => {
@@ -536,17 +338,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       let semesterId = context?.semesterId;
 
       if (!chatId && user && context) {
-        const { data: chatData, error: chatError } = await supabase
-          .from('chats')
-          .insert({
-            user_id: user.id,
-            semester_id: context.semesterId,
-            title: message.role === 'user' ? message.content.slice(0, 100) : null,
-          })
-          .select()
-          .single();
+        const { data: newChat, error: chatError } = await chatApi.createChat(
+          user.id,
+          context.semesterId,
+          message.role === 'user' ? message.content.slice(0, 100) : null,
+          context.courseIds,
+        );
 
-        if (chatError || !chatData) {
+        if (chatError || !newChat) {
           console.error('[chat] Error creating chat record:', chatError);
           setChatMessages(prev => [...prev, {
             id: `error-${Date.now()}`,
@@ -557,16 +356,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        chatId = chatData.id;
+        chatId = newChat.id;
         setCurrentChatId(chatId);
 
         if (context.courseIds.length > 0) {
-          await supabase.from('chat_courses').insert(
-            context.courseIds.map(cid => ({ chat_id: chatId, course_id: cid }))
-          );
+          await chatApi.linkChatCourses(newChat.id, context.courseIds);
         }
 
-        setChats(prev => [dbChatToApp(chatData, context.courseIds), ...prev]);
+        setChats(prev => [newChat, ...prev]);
       }
 
       // For existing chats, look up semesterId from chats state
@@ -576,18 +373,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       if (!chatId) return;
 
-      const { data: msgData, error: msgError } = await supabase
-        .from('chat_messages')
-        .insert({ chat_id: chatId, sequence: userSequence, role: message.role, content: message.content })
-        .select()
-        .single();
+      const { data: userMessage, error: msgError } = await chatApi.insertChatMessage(
+        chatId, userSequence, message.role, message.content,
+      );
 
-      if (msgError || !msgData) {
+      if (msgError || !userMessage) {
         console.error('[chat] Error saving user message to DB:', msgError);
         return;
       }
 
-      setChatMessages(prev => prev.map(m => m.id === tempId ? dbChatMessageToApp(msgData) : m));
+      setChatMessages(prev => prev.map(m => m.id === tempId ? userMessage : m));
 
       if (message.role === 'user' && aiEnabled && semesterId) {
         const aiSequence = userSequence + 1;
@@ -595,13 +390,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const courseIds = context?.courseIds ?? chats.find(c => c.id === chatId)?.courseIds ?? [];
         console.log('[chat] Calling edge function — semester_id:', semesterId, 'course_ids:', courseIds, 'history length:', conversationHistory.length);
 
-        const { data: fnData, error: fnError } = await supabase.functions.invoke('chat', {
-          body: {
-            message: message.content,
-            semester_id: semesterId,
-            conversation_history: conversationHistory,
-            course_ids: courseIds,
-          },
+        const { data: fnData, error: fnError } = await chatApi.sendChatQuery({
+          message: message.content,
+          semester_id: semesterId,
+          conversation_history: conversationHistory,
+          course_ids: courseIds,
         });
 
         const addErrorMessage = (text: string) => {
@@ -638,13 +431,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        const { data: aiMsgData, error: aiMsgError } = await supabase
-          .from('chat_messages')
-          .insert({ chat_id: chatId, sequence: aiSequence, role: 'assistant', content: aiContent })
-          .select()
-          .single();
+        const { data: aiMessage, error: aiMsgError } = await chatApi.insertChatMessage(
+          chatId, aiSequence, 'assistant', aiContent,
+        );
 
-        if (aiMsgError || !aiMsgData) {
+        if (aiMsgError || !aiMessage) {
           console.error('[chat] Error saving AI message to DB:', aiMsgError);
           // Still show the reply to the user even if DB persistence fails
           setChatMessages(prev => [...prev, {
@@ -657,7 +448,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        setChatMessages(prev => [...prev, dbChatMessageToApp(aiMsgData)]);
+        setChatMessages(prev => [...prev, aiMessage]);
       }
     })();
   };
@@ -669,19 +460,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const selectChat = async (chatId: string) => {
     setCurrentChatId(chatId);
-    const { data: msgRows, error } = await supabase
-      .from('chat_messages')
-      .select('*')
-      .eq('chat_id', chatId)
-      .order('sequence', { ascending: true });
+    const { data, error } = await chatApi.fetchChatMessages(chatId);
     if (error) { console.error('Error fetching chat messages:', error); return; }
-    setChatMessages((msgRows ?? []).map(dbChatMessageToApp));
+    setChatMessages(data);
   };
 
   const deleteChat = async (chatId: string) => {
-    await supabase.from('chat_messages').delete().eq('chat_id', chatId);
-    await supabase.from('chat_courses').delete().eq('chat_id', chatId);
-    await supabase.from('chats').delete().eq('id', chatId);
+    await chatApi.deleteChat(chatId);
     setChats(prev => prev.filter(c => c.id !== chatId));
     if (currentChatId === chatId) {
       setCurrentChatId(null);
@@ -690,7 +475,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const renameChat = async (chatId: string, title: string) => {
-    await supabase.from('chats').update({ title }).eq('id', chatId);
+    await chatApi.renameChat(chatId, title);
     setChats(prev => prev.map(c => c.id === chatId ? { ...c, title } : c));
   };
 
@@ -700,14 +485,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const chat = chats.find(c => c.id === currentChatId);
     const lastMessage = chatMessages[chatMessages.length - 1];
 
-    await supabase.from('chat_feedback').insert({
-      user_id: user.id,
-      chat_id: currentChatId,
-      semester_id: chat?.semesterId ?? null,
-      course_ids: chat?.courseIds ?? [],
-      reported_at_sequence: lastMessage?.sequence ?? null,
+    await chatApi.insertChatFeedback({
+      userId: user.id,
+      chatId: currentChatId,
+      semesterId: chat?.semesterId ?? null,
+      courseIds: chat?.courseIds ?? [],
+      reportedAtSequence: lastMessage?.sequence ?? null,
       description,
-      conversation_snapshot: chatMessages.map(m => ({
+      conversationSnapshot: chatMessages.map(m => ({
         role: m.role,
         content: m.content,
         sequence: m.sequence,

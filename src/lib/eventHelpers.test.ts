@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { getEventTypeColor, getEventTypeLabel } from './eventHelpers';
-import type { Event } from '@/app/context/AppContext';
+import type { Event } from '@/lib/types';
 
 const ALL_TYPES: Event['type'][] = [
   'exam', 'deadline', 'quiz', 'presentation', 'project_due', 'no_class', 'other',

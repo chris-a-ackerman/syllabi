@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useApp } from '../context/AppContext';
 import { supabase } from '../../lib/supabase';
+import { deleteCourse } from '@/lib/api/courses';
 import {
   Dialog,
   DialogContent,
@@ -293,7 +294,7 @@ export function AddCourseModal({ open, onClose, existingCourse, editMode }: AddC
       await supabase.storage.from('syllabi').remove([uploadedFilePath]);
     }
     if (createdCourseId) {
-      await supabase.from('courses').delete().eq('id', createdCourseId);
+      await deleteCourse(createdCourseId);
       await refreshCourses();
     }
     resetAndClose();
