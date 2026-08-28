@@ -36,7 +36,7 @@ export function EditSemesterModal({ open, onClose, semester }: EditSemesterModal
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    await updateSemester(semester.id, { name, startDate, endDate });
+    await updateSemester(semester.id, { name, startDate, endDate, isActive: semester.isActive });
     onClose();
   };
 

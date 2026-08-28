@@ -8,7 +8,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { Card } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Textarea } from '../components/ui/textarea';
-import { Alert, AlertDescription } from '../components/ui/alert';
 import {
   ArrowLeft,
   Calendar,
@@ -68,14 +67,19 @@ export function CourseDetail() {
   const [expandedEventId, setExpandedEventId] = useState<string | null>(null);
 
   const course = courses.find(c => c.id === id);
-  const courseEvents = events.filter(e => e.courseId === id && e.date);
+  // Narrowed via a type predicate so the date-formatting call sites below
+  // typecheck without a redundant runtime guard.
+  const courseEvents = events.filter(
+    (e): e is typeof e & { date: string } => e.courseId === id && !!e.date
+  );
+  const undatedCourseEvents = events.filter(e => e.courseId === id && !e.date);
   const courseNotes = notes.filter(n => n.courseId === id);
 
   useEffect(() => {
     const match = location.hash.match(/^#event-(.+)$/);
     if (!match) return;
     const targetId = match[1];
-    const target = courseEvents.find(e => e.id === targetId);
+    const target = [...courseEvents, ...undatedCourseEvents].find(e => e.id === targetId);
     if (!target) return;
 
     if (target.canvasMetadata) {
@@ -87,7 +91,7 @@ export function CourseDetail() {
         .getElementById(`event-${targetId}`)
         ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     });
-  }, [location.hash, courseEvents]);
+  }, [location.hash, courseEvents, undatedCourseEvents]);
 
   if (!course) {
     return (
@@ -194,13 +198,19 @@ export function CourseDetail() {
     return types[0];
   };
 
-  // Group events by month
+  // Group events by month. course_events.date is nullable — the parser stores
+  // the raw text in date_unresolved when it can't resolve a date — so those
+  // events get a trailing bucket instead of being dropped from the tab.
+  const UNDATED_GROUP = 'Date TBD';
+
   const eventsByMonth = courseEvents.reduce((acc, event) => {
     const month = format(parseISO(event.date), 'MMMM yyyy');
     if (!acc[month]) acc[month] = [];
     acc[month].push(event);
     return acc;
-  }, {} as Record<string, typeof courseEvents>);
+  }, {} as Record<string, typeof events>);
+
+  if (undatedCourseEvents.length > 0) eventsByMonth[UNDATED_GROUP] = undatedCourseEvents;
 
   const handleAddNote = () => {
     if (!noteText.trim()) return;
@@ -311,7 +321,7 @@ export function CourseDetail() {
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-3 mb-2">
                               <span className="font-medium text-gray-900">
-                                {format(parseISO(event.date), 'MMM d, yyyy')}
+                                {event.date ? format(parseISO(event.date), 'MMM d, yyyy') : '—'}
                               </span>
                               {event.time && (
                                 <>
@@ -384,7 +394,7 @@ export function CourseDetail() {
               </div>
             ))}
 
-            {courseEvents.length === 0 && (
+            {courseEvents.length === 0 && undatedCourseEvents.length === 0 && (
               <Card className="p-12 text-center rounded-2xl">
                 <Calendar className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                 <p className="text-gray-600">No events found for this course</p>

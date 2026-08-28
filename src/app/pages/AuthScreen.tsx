@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
-import { useApp } from '../context/AppContext';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
@@ -17,7 +16,6 @@ export function AuthScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [emailConfirmationSent, setEmailConfirmationSent] = useState(false);
-  const { setUser } = useApp();
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -75,8 +73,8 @@ export function AuthScreen() {
           navigate('/dashboard');
         }
       }
-    } catch (err: any) {
-      setError(err.message || 'An error occurred during authentication');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'An error occurred during authentication');
     } finally {
       setLoading(false);
     }
@@ -102,8 +100,8 @@ export function AuthScreen() {
       });
 
       if (error) throw error;
-    } catch (err: any) {
-      setError(err.message || 'An error occurred during Google sign-in');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'An error occurred during Google sign-in');
       setLoading(false);
     }
   };

@@ -33,6 +33,20 @@ npm run dev     # Vite dev server
 npm run build   # Production build
 ```
 
+**Code quality checks:**
+
+```bash
+npm run typecheck     # tsc --noEmit (strict mode)
+npm run lint          # ESLint over src/
+npm run lint:fix      # ESLint with --fix
+npm run format        # Prettier --write
+npm run format:check  # Prettier --check (CI)
+npm test              # Vitest unit tests
+```
+
+Config lives in `tsconfig.json`, `eslint.config.js` (flat config) and `.prettierrc`.
+`npm run typecheck` and `npm run lint` must both pass before opening a PR.
+
 **Environment variables** (`.env` in `Syllabi - Prototype/`):
 
 ```
@@ -168,7 +182,7 @@ AI can be globally disabled by an admin; the UI respects the `app_settings.ai_en
 | `src/app/pages/AdminPanel.tsx` | `/admin` |
 | `src/app/pages/CanvasSettings.tsx` | `/settings/canvas` |
 
-### Modals & Drawers
+### Modals
 
 | File | Purpose |
 |---|---|
@@ -176,7 +190,6 @@ AI can be globally disabled by an admin; the UI respects the `app_settings.ai_en
 | `src/app/components/AddSemesterModal.tsx` | Create semester (manual, bulk upload, or Canvas import) |
 | `src/app/components/EditSemesterModal.tsx` | Edit/delete existing semester |
 | `src/app/components/BulkUploadModal.tsx` | Upload multiple PDFs, detect, review, create |
-| `src/app/components/ChatDrawer.tsx` | Compact chat sheet for quick questions |
 
 ### Custom Hooks
 

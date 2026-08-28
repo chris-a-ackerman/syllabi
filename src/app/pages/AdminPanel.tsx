@@ -79,7 +79,7 @@ const mockUsers = [
 
 export function AdminPanel() {
   const navigate = useNavigate();
-  const { aiEnabled, setAiEnabled, courses } = useApp();
+  const { aiEnabled, setAiEnabled } = useApp();
   const [activeTab, setActiveTab] = useState<AdminTab>('overview');
   const [showDisableConfirm, setShowDisableConfirm] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
