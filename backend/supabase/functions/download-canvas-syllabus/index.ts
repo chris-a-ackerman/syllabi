@@ -1,6 +1,7 @@
 // supabase/functions/download-canvas-syllabus/index.ts
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { assertSafeCanvasUrl, UnsafeCanvasUrlError } from "../_shared/canvas-url.ts";
 
 declare const EdgeRuntime: { waitUntil: (p: Promise<unknown>) => void };
 
@@ -96,6 +97,27 @@ serve(async (req) => {
     // Canvas token is only required for file downloads
     if (source_type === "file" && !canvasToken) {
       return json({ error: "No Canvas token found. Please connect Canvas first." }, 400);
+    }
+
+    // file_url comes straight from the request body and is fetched below with
+    // the user's Canvas token, so pin it to the host of their connected Canvas
+    // instance before any request leaves the function. Checked here rather than
+    // at the fetch so a rejection cannot leave canvas_sync_status on "running".
+    if (source_type === "file" && file_url) {
+      const canvasBaseUrl: string | null = profileResult.data?.canvas_base_url ?? null;
+      if (!canvasBaseUrl) {
+        return json({ error: "No Canvas instance connected. Please connect Canvas first." }, 400);
+      }
+      try {
+        const allowedHost = (await assertSafeCanvasUrl(canvasBaseUrl)).hostname;
+        await assertSafeCanvasUrl(file_url, allowedHost);
+      } catch (err) {
+        if (err instanceof UnsafeCanvasUrlError) {
+          console.error(`[download] REJECTED file_url ${file_url}: ${err.message}`);
+          return json({ error: `file_url is not an allowed Canvas URL: ${err.message}` }, 400);
+        }
+        throw err;
+      }
     }
 
     // 4. Mark process_syllabus as running (clear any prior error for this step)

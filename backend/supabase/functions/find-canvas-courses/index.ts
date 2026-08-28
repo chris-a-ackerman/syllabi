@@ -1,6 +1,7 @@
 // supabase/functions/find-canvas-courses/index.ts
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { assertSafeCanvasUrl, UnsafeCanvasUrlError } from "../_shared/canvas-url.ts";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -92,6 +93,15 @@ serve(async (req) => {
 
     if (!decryptedToken || !canvasBaseUrl) {
       return json({ error: "No Canvas token found. Please connect Canvas first." }, 400);
+    }
+
+    try {
+      await assertSafeCanvasUrl(canvasBaseUrl);
+    } catch (err) {
+      if (err instanceof UnsafeCanvasUrlError) {
+        return json({ error: `Stored Canvas URL is not usable: ${err.message}` }, 400);
+      }
+      throw err;
     }
 
     // 5. Fetch all active courses from Canvas with pagination
