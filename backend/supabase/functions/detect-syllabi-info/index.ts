@@ -27,6 +27,9 @@ const DETECT_SYSTEM_PROMPT = `Extract course and semester info from this syllabu
   "confidence": "<high | medium | low>"
 }`;
 
+// Bounds the fan-out: each path costs one Storage download and one Haiku call.
+const MAX_FILE_PATHS = 10;
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 204, headers: corsHeaders });
@@ -56,6 +59,29 @@ serve(async (req) => {
         status: 400,
         headers: { "Content-Type": "application/json", ...corsHeaders },
       });
+    }
+
+    if (file_paths.length > MAX_FILE_PATHS) {
+      return new Response(
+        JSON.stringify({ error: `At most ${MAX_FILE_PATHS} file_paths per request` }),
+        { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
+    // Downloads below use the service-role Storage client, which bypasses the
+    // syllabi bucket's owner-folder RLS. Enforce the same rule here — a path
+    // must sit in the caller's own {user.id}/ folder — before anything is read.
+    const isOwnedByCaller = (filePath: unknown): boolean => {
+      if (typeof filePath !== "string") return false;
+      const segments = filePath.split("/");
+      return segments[0] === user.id && segments.every((segment) => segment !== "..");
+    };
+
+    if (!file_paths.every(isOwnedByCaller)) {
+      return new Response(
+        JSON.stringify({ error: "file_paths must be inside your own storage folder" }),
+        { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
     }
 
     // Process all files in parallel; partial failures are OK
