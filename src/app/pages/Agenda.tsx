@@ -5,23 +5,13 @@ import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { Card } from '../components/ui/card';
 import { ArrowLeft, Calendar } from 'lucide-react';
-import {
-  parseISO,
-  startOfDay,
-  differenceInCalendarDays,
-  format,
-  startOfWeek,
-} from 'date-fns';
+import { startOfDay } from 'date-fns';
 import { getEventTypeColor, getEventTypeLabel } from '@/lib/eventHelpers';
-import type { Event, Course } from '../context/AppContext';
-
-// ── Enriched event type ───────────────────────────────────────────────────────
-
-interface EnrichedEvent {
-  event: Event;
-  course: Course | undefined;
-  dateKey: string; // YYYY-MM-DD
-}
+import {
+  enrichAndSortEvents,
+  groupEventsByWeek,
+  type EnrichedEvent,
+} from '@/lib/agendaGrouping';
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -40,71 +30,11 @@ export function Agenda() {
   // All events for active semester courses — future only (date >= today)
   const enrichedEvents = useMemo<EnrichedEvent[]>(() => {
     if (!activeSemester) return [];
-    const today = startOfDay(new Date());
-
-    return events
-      .filter(e => {
-        if (!e.date) return false;
-        if (!activeCourses.some(c => c.id === e.courseId)) return false;
-        const eventDate = startOfDay(parseISO(e.date));
-        return differenceInCalendarDays(eventDate, today) >= 0;
-      })
-      .map(e => ({
-        event: e,
-        course: activeCourses.find(c => c.id === e.courseId),
-        dateKey: e.date!.slice(0, 10),
-      }))
-      .sort((a, b) => {
-        if (a.dateKey !== b.dateKey) return a.dateKey < b.dateKey ? -1 : 1;
-        const priority: Record<string, number> = {
-          exam: 0, quiz: 1, presentation: 2, project_due: 3, deadline: 4, other: 5, no_class: 6,
-        };
-        return (priority[a.event.type] ?? 5) - (priority[b.event.type] ?? 5);
-      });
+    return enrichAndSortEvents(events, activeCourses, startOfDay(new Date()));
   }, [events, activeCourses, activeSemester]);
 
   // Group into weeks (Mon-start) then days
-  const weekGroups = useMemo(() => {
-    // Map: weekKey (YYYY-MM-DD of Mon) → Map: dateKey → EnrichedEvent[]
-    const weeks = new Map<string, Map<string, EnrichedEvent[]>>();
-
-    for (const item of enrichedEvents) {
-      const parsed = parseISO(item.dateKey);
-      const weekStart = startOfWeek(parsed, { weekStartsOn: 1 }); // Monday
-      const weekKey = format(weekStart, 'yyyy-MM-dd');
-
-      if (!weeks.has(weekKey)) {
-        weeks.set(weekKey, new Map());
-      }
-      const days = weeks.get(weekKey)!;
-      if (!days.has(item.dateKey)) {
-        days.set(item.dateKey, []);
-      }
-      days.get(item.dateKey)!.push(item);
-    }
-
-    // Convert to sorted array
-    return Array.from(weeks.entries())
-      .sort(([a], [b]) => (a < b ? -1 : 1))
-      .map(([weekKey, daysMap]) => {
-        const weekMon = parseISO(weekKey);
-        return {
-          weekKey,
-          weekLabel: `Week of ${format(weekMon, 'MMM d')}`,
-          days: Array.from(daysMap.entries())
-            .sort(([a], [b]) => (a < b ? -1 : 1))
-            .map(([dateKey, items]) => {
-              const parsed = parseISO(dateKey);
-              return {
-                dateKey,
-                dayLabel: format(parsed, 'EEEE, MMM d'),
-                dateShort: format(parsed, 'MMM d'),
-                items,
-              };
-            }),
-        };
-      });
-  }, [enrichedEvents]);
+  const weekGroups = useMemo(() => groupEventsByWeek(enrichedEvents), [enrichedEvents]);
 
   return (
     <div className="min-h-screen bg-white">
