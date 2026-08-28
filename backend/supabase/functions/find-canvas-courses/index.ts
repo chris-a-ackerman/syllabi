@@ -2,6 +2,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { assertSafeCanvasUrl, UnsafeCanvasUrlError } from "../_shared/canvas-url.ts";
+import { isoToDate } from "../_shared/iso-date.ts";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -19,12 +20,6 @@ const supabaseService = createClient(
   Deno.env.get("SUPABASE_URL")!,
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
 );
-
-// Convert an ISO 8601 datetime string to YYYY-MM-DD, or return null
-function isoToDate(iso: string | null | undefined): string | null {
-  if (!iso) return null;
-  return iso.slice(0, 10);
-}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {

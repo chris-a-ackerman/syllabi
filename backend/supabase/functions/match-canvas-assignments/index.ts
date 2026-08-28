@@ -3,6 +3,9 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.24.3";
 import { assertSafeCanvasUrl, UnsafeCanvasUrlError } from "../_shared/canvas-url.ts";
+import { isoToDate } from "../_shared/iso-date.ts";
+import { stripHtml } from "../_shared/strip-html.ts";
+import { stripJsonFences } from "../_shared/strip-json-fences.ts";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -63,14 +66,6 @@ Rules:
 - canvas_assignment_id must be an exact string from the provided Canvas list
 - course_event_id must be an exact UUID from the provided syllabus list
 - List ALL unmatched Canvas assignment IDs in unmatched_canvas_assignment_ids`;
-
-function isoToDate(iso: string): string {
-  return iso.slice(0, 10);
-}
-
-function stripHtml(html: string): string {
-  return html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
-}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -200,8 +195,7 @@ serve(async (req) => {
 
       let matchResult: MatchResult;
       try {
-        const cleaned = rawOutput.replace(/^```json\n?/, "").replace(/\n?```$/, "").trim();
-        matchResult = JSON.parse(cleaned);
+        matchResult = JSON.parse(stripJsonFences(rawOutput));
       } catch (e) {
         throw new Error(`Failed to parse matching response: ${(e as Error).message}`);
       }

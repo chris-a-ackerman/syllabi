@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.24.3";
+import { mapAnalysisToCourseUpdate, mapEventsToRows, stripJsonFences } from "./parse.ts";
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -290,11 +291,7 @@ Return the complete JSON analysis as specified.`;
     let analysisJson;
     try {
       // Strip any accidental markdown code fences
-      const cleaned = rawOutput
-        .replace(/^[\s\S]*?```json\n?/, "")  // remove everything up to and including ```json
-        .replace(/\n?```[\s\S]*$/, "")        // remove ``` and everything after
-        .trim();
-      analysisJson = JSON.parse(cleaned);
+      analysisJson = JSON.parse(stripJsonFences(rawOutput));
       console.log(`[process-syllabus][parse] parse_successful=${analysisJson.parse_successful} | events_count=${analysisJson.events?.length ?? 0} | confidence=${analysisJson.extraction_quality?.confidence_score} | missing_fields=${JSON.stringify(analysisJson.extraction_quality?.missing_fields ?? [])}`);
       console.log(`[process-syllabus][parse] course_title="${analysisJson.course?.title}" | code="${analysisJson.course?.code}" | instructor="${analysisJson.course?.instructor?.name}"`);
     } catch (parseError) {
@@ -309,31 +306,12 @@ Return the complete JSON analysis as specified.`;
     }
 
     // 8. Store full analysis on course, update basic fields + extracted columns
-    const courseName =
-      analysisJson.course?.name ||
-      analysisJson.course?.title ||
-      analysisJson.course?.course_name ||
-      course.name;
-    const courseCode =
-      analysisJson.course?.code ||
-      analysisJson.course?.course_code ||
-      course.code;
-    const courseProfessor =
-      analysisJson.course?.professor ||
-      analysisJson.course?.instructor?.name ||
-      (Array.isArray(analysisJson.course?.instructors) ? analysisJson.course.instructors[0]?.name : null) ||
-      course.professor;
-
-    // Combine schedule metadata + meeting info from the course section into one column.
-    const scheduleData = analysisJson.schedule
-      ? {
-          ...analysisJson.schedule,
-          meeting_days: analysisJson.course?.meeting_days ?? null,
-          meeting_times: analysisJson.course?.meeting_times ?? null,
-          location: analysisJson.course?.location ?? null,
-          instructor: analysisJson.course?.instructor ?? null,
-        }
-      : null;
+    const {
+      name: courseName,
+      code: courseCode,
+      professor: courseProfessor,
+      schedule: scheduleData,
+    } = mapAnalysisToCourseUpdate(analysisJson, course);
 
     await supabase
       .from("courses")
@@ -358,18 +336,7 @@ Return the complete JSON analysis as specified.`;
     const events = analysisJson.events || [];
     let insertError = null;
     if (events.length > 0) {
-      const eventRows = events.map((event: any) => ({
-        course_id,
-        user_id: course.user_id,
-        date: event.date || null,
-        date_unresolved: event.date_unresolved || null,
-        time: event.time || null,
-        title: event.title || "Untitled Event",
-        type: event.type || "other",
-        category: event.category || null,
-        is_recurring_instance: event.is_recurring_instance || false,
-        confidence: ["high", "medium", "low"].includes(event.confidence) ? event.confidence : "medium",
-      }));
+      const eventRows = mapEventsToRows(events, course_id, course.user_id);
 
       const nullDateCount = eventRows.filter((e: any) => !e.date).length;
       console.log(`[process-syllabus][events] mapped ${eventRows.length} rows | null_dates=${nullDateCount}`);
