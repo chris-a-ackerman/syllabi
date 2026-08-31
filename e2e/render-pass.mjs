@@ -72,11 +72,6 @@ await send('Network.enable');
 const KNOWN_PRE_EXISTING = [
   // The app ships no favicon.
   /favicon\.ico/,
-  // src/app/components/ui/* are the React 19 flavour of shadcn (plain function
-  // components) running on React 18, so Radix's Presence/SlotClone forwards a
-  // ref into a component that never called forwardRef. Dev-mode warning only,
-  // fires whenever a Dialog opens.
-  /Function components cannot be given refs/,
 ];
 
 /** Console errors, exceptions and failed requests since the last reset. */
