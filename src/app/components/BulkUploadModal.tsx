@@ -1,5 +1,6 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { useData } from '../context/DataProvider';
+import { useProcessingPoll } from '../hooks/useProcessingPoll';
 import { useBulkUpload } from '../hooks/useBulkUpload';
 import {
   Dialog,
@@ -36,32 +37,27 @@ export function BulkUploadModal({ open, onClose }: BulkUploadModalProps) {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dropRef = useRef<HTMLDivElement>(null);
-  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Reset state whenever the modal opens
   useEffect(() => {
     if (open) reset();
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Poll during processing
-  useEffect(() => {
-    if (step !== 'processing') return;
-    pollingRef.current = setInterval(() => { refreshCourses(); }, 3000);
-    return () => { if (pollingRef.current) clearInterval(pollingRef.current); };
-  }, [step, refreshCourses]);
+  const created = allCourses.filter(c => createdCourseIds.includes(c.id));
+  const allDone =
+    createdCourseIds.length > 0 &&
+    created.length === createdCourseIds.length &&
+    created.every(c => c.status === 'ready' || c.status === 'failed');
+
+  // Poll during processing; stop as soon as every course has settled
+  useProcessingPoll(step === 'processing' && !allDone, refreshCourses);
 
   // Close automatically when all courses are done
   useEffect(() => {
-    if (step !== 'processing' || createdCourseIds.length === 0) return;
-    const created = allCourses.filter(c => createdCourseIds.includes(c.id));
-    const allDone =
-      created.length === createdCourseIds.length &&
-      created.every(c => c.status === 'ready' || c.status === 'failed');
-    if (!allDone) return;
-    if (pollingRef.current) clearInterval(pollingRef.current);
+    if (step !== 'processing' || !allDone) return;
     const t = setTimeout(() => onClose(), 5000);
     return () => clearTimeout(t);
-  }, [step, allCourses, createdCourseIds, onClose]);
+  }, [step, allDone, onClose]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();

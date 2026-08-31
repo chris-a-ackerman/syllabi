@@ -43,12 +43,22 @@ const send = (method, params = {}) =>
     ws.send(JSON.stringify({ id, method, params }));
   });
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-const evaluate = async (expression) =>
-  (await send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true })).result
-    ?.result?.value;
+const evaluate = async (expression) => {
+  const msg = await send('Runtime.evaluate', {
+    expression,
+    returnByValue: true,
+    awaitPromise: true,
+  });
+  if (msg.error) console.log(`        [cdp error] ${JSON.stringify(msg.error)}`);
+  const details = msg.result?.exceptionDetails;
+  if (details)
+    console.log(`        [page exception] ${details.exception?.description ?? details.text}`);
+  return msg.result?.result?.value;
+};
 
 await send('Runtime.enable');
 await send('Log.enable');
+await send('Inspector.enable');
 await send('Page.enable');
 await send('Network.enable');
 
@@ -83,6 +93,7 @@ function problems() {
       out.push('log: ' + e.params.entry.text);
     if (e.method === 'Network.loadingFailed' && !e.params.errorText.includes('ERR_ABORTED'))
       out.push('network: ' + e.params.errorText);
+    if (e.method === 'Inspector.targetCrashed') out.push('tab crashed');
   }
   return out.filter((p) => !KNOWN_PRE_EXISTING.some((re) => re.test(p)));
 }
@@ -203,6 +214,7 @@ await send('Page.navigate', { url: BASE + COURSE_1 });
 await wait(4000);
 events = [];
 const noteSaved = await evaluate(`(async () => {
+  try {
   ${SET_VALUE}
   // Radix tabs activate on mousedown/focus, so a bare .click() is not enough.
   const press = (text) => {
@@ -230,6 +242,9 @@ const noteSaved = await evaluate(`(async () => {
   await sleep(300);
   if (!click('Save Note')) return 'no Save Note button';
   return 'ok';
+  } catch (e) {
+    return 'exception: ' + ((e && e.stack) || e);
+  }
 })()`);
 
 if (noteSaved !== 'ok') {
@@ -283,6 +298,7 @@ await check('Admin panel renders (in-app navigation)', '/admin', {
 console.log('');
 events = [];
 const disabled = await evaluate(`(async () => {
+  try {
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const byText = (text) =>
     [...document.querySelectorAll('button, a')].find(
@@ -305,6 +321,9 @@ const disabled = await evaluate(`(async () => {
   if (!confirm) return 'no Disable confirmation button';
   confirm.click();
   return 'ok';
+  } catch (e) {
+    return 'exception: ' + ((e && e.stack) || e);
+  }
 })()`);
 
 if (disabled !== 'ok') {
@@ -355,6 +374,7 @@ await send('Page.navigate', { url: `${BASE}/dashboard` });
 await wait(4000);
 events = [];
 const created = await evaluate(`(async () => {
+  try {
   ${SET_VALUE}
   const click = (text) => {
     const el = [...document.querySelectorAll('button, a')].find((x) => (x.innerText || '').trim().includes(text));
@@ -376,9 +396,13 @@ const created = await evaluate(`(async () => {
   setValue(end, '2027-08-15');
   name.closest('form').requestSubmit();
   return 'ok';
+  } catch (e) {
+    return 'exception: ' + ((e && e.stack) || e);
+  }
 })()`);
 if (created !== 'ok') {
   console.log(`FAIL  Creating a semester through the UI: ${created}`);
+  problems().forEach((e) => console.log(`        ${e.slice(0, 220)}`));
   failures++;
 } else {
   await wait(5000);
