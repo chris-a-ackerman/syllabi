@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router';
 import { useAuth } from '../context/AuthProvider';
 import { useData } from '../context/DataProvider';
 import { useBulkUpload } from '../hooks/useBulkUpload';
+import { useProcessingPoll } from '../hooks/useProcessingPoll';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 import { Input } from '../components/ui/input';
@@ -21,31 +22,26 @@ export function Onboarding() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dropRef = useRef<HTMLDivElement>(null);
-  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isDraggingRef = useRef(false);
 
-  // Poll for course status updates during processing
-  useEffect(() => {
-    if (step !== 'processing') return;
-    pollingRef.current = setInterval(() => { refreshCourses(); }, 3000);
-    return () => { if (pollingRef.current) clearInterval(pollingRef.current); };
-  }, [step, refreshCourses]);
+  const created = allCourses.filter(c => createdCourseIds.includes(c.id));
+  const allDone =
+    createdCourseIds.length > 0 &&
+    created.length === createdCourseIds.length &&
+    created.every(c => c.status === 'ready' || c.status === 'failed');
+
+  // Poll for course status updates during processing; stop once all have settled
+  useProcessingPoll(step === 'processing' && !allDone, refreshCourses);
 
   // Auto-navigate when all courses finish
   useEffect(() => {
-    if (step !== 'processing' || createdCourseIds.length === 0) return;
-    const created = allCourses.filter(c => createdCourseIds.includes(c.id));
-    const allDone =
-      created.length === createdCourseIds.length &&
-      created.every(c => c.status === 'ready' || c.status === 'failed');
-    if (!allDone) return;
-    if (pollingRef.current) clearInterval(pollingRef.current);
+    if (step !== 'processing' || !allDone) return;
     const t = setTimeout(async () => {
       await Promise.all([markOnboardingComplete(), refreshEvents()]);
       navigate('/dashboard');
     }, 1500);
     return () => clearTimeout(t);
-  }, [step, allCourses, createdCourseIds, navigate, markOnboardingComplete, refreshEvents]);
+  }, [step, allDone, navigate, markOnboardingComplete, refreshEvents]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -396,7 +392,7 @@ export function Onboarding() {
               variant="outline"
               className="w-full rounded-lg mt-2"
               onClick={async () => {
-                if (pollingRef.current) clearInterval(pollingRef.current);
+                // Navigating away unmounts this page, which stops the poll.
                 await Promise.all([markOnboardingComplete(), refreshEvents()]);
                 navigate('/dashboard');
               }}

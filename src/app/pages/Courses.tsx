@@ -1,11 +1,9 @@
 import { useNavigate, useLocation } from 'react-router';
-import { useAuth } from '../context/AuthProvider';
 import { useData } from '../context/DataProvider';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import {
-  ArrowLeft,
   BookOpen,
   Calendar,
   Upload,
@@ -36,15 +34,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../components/ui/select';
-import { Avatar, AvatarFallback } from '../components/ui/avatar';
-import { LogOut } from 'lucide-react';
 import { useState } from 'react';
+import { AppHeader } from '../components/AppHeader';
 import { AddCourseModal } from '../components/AddCourseModal';
 import { BulkUploadModal } from '../components/BulkUploadModal';
 import { EditSemesterModal } from '../components/EditSemesterModal';
 
 export function Courses() {
-  const { user, signOut } = useAuth();
   const { semesters, courses, events, deleteCourse } = useData();
   const navigate = useNavigate();
   const location = useLocation();
@@ -70,45 +66,11 @@ export function Courses() {
 
   return (
     <div className="min-h-screen bg-white">
-      {/* Header */}
-      <header className="border-b border-gray-200 px-6 py-4">
-        <div className="flex items-center justify-between max-w-7xl mx-auto">
-          <div className="flex items-center gap-4">
-            <Button
-              variant="ghost"
-              onClick={() => navigate('/dashboard')}
-              className="rounded-lg"
-            >
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back
-            </Button>
-            <h1 className="text-xl font-bold text-indigo-600">Syllabi</h1>
-          </div>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="rounded-full p-0 h-10 w-10">
-                <Avatar>
-                  <AvatarFallback className="bg-indigo-100 text-indigo-600">
-                    {user?.avatar}
-                  </AvatarFallback>
-                </Avatar>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="rounded-lg">
-              <div className="px-2 py-1.5 text-sm font-medium">
-                {user?.displayName}
-              </div>
-              <div className="px-2 py-1.5 text-xs text-gray-500">
-                {user?.email}
-              </div>
-              <DropdownMenuItem onClick={signOut}>
-                <LogOut className="mr-2 h-4 w-4" />
-                Sign Out
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </header>
+      <AppHeader
+        onBack={() => navigate('/dashboard')}
+        contentClassName="max-w-7xl mx-auto"
+      />
+
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-6 py-8">
