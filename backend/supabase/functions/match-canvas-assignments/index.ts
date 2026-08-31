@@ -7,12 +7,7 @@ import { isoToDate } from "../_shared/iso-date.ts";
 import { stripHtml } from "../_shared/strip-html.ts";
 import { stripJsonFences } from "../_shared/strip-json-fences.ts";
 import { enforceAiQuota } from "../_shared/ai-quota.ts";
-
-const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+import { CORS_HEADERS } from "../_shared/cors.ts";
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {

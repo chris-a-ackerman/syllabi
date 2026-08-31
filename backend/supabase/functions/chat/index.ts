@@ -3,16 +3,11 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.24.3";
 import { buildCourseContext, detectQueryType, extractDateRange } from "./query.ts";
 import { enforceAiQuota } from "../_shared/ai-quota.ts";
+import { CORS_HEADERS } from "../_shared/cors.ts";
 
 const anthropic = new Anthropic({
   apiKey: Deno.env.get("ANTHROPIC_API_KEY")!,
 });
-
-const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
 
 // Service-role client for reading app_settings (not user-scoped)
 const supabaseAdmin = createClient(
@@ -139,9 +134,6 @@ serve(async (req) => {
         dateRange = { start: today, end: thirtyDaysOut };
       }
 
-      console.log("[chat] effectiveCourseIds:", effectiveCourseIds);
-      console.log("[chat] dateRange:", dateRange);
-
       const { data: eventsData, error: eventsError } = await supabaseUser
         .from("course_events")
         .select("date, time, title, type, category, confidence, courses(name, code)")
@@ -152,7 +144,6 @@ serve(async (req) => {
         .order("time");
 
       if (eventsError) console.error("[chat] events query error:", eventsError);
-      console.log("[chat] eventsData count:", eventsData?.length ?? 0);
 
       events = eventsData || [];
     }
@@ -214,8 +205,9 @@ serve(async (req) => {
       { status: 200, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
     );
   } catch (err) {
+    // Detail stays server-side (SYL-31); clients get a generic message.
     console.error("chat error:", err);
-    return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ error: "Internal server error" }), { status: 500, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } });
   }
 });
 

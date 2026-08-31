@@ -4,12 +4,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.24.3";
 import { assertSafeCanvasUrl, UnsafeCanvasUrlError } from "../_shared/canvas-url.ts";
 import { enforceAiQuota } from "../_shared/ai-quota.ts";
-
-const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+import { CORS_HEADERS } from "../_shared/cors.ts";
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
@@ -230,7 +225,6 @@ async function executeTools(
                     console.log(`[tool:get_course_modules] file item "${item.title}" fetch status: ${fileRes.status}`);
                     if (fileRes.ok) {
                       const fileData = await fileRes.json() as Record<string, unknown>;
-                      console.log(`[tool:get_course_modules] file item "${item.title}" download_url: ${fileData.url ?? "null"}`);
                       return { ...base, download_url: fileData.url ?? null };
                     }
                     return { ...base, download_url: null, download_url_unavailable: true };
@@ -264,7 +258,7 @@ async function executeTools(
           if (!res.ok) throw new Error(`Canvas API error: ${res.status}`);
           const page = await res.json() as Record<string, unknown>;
           const bodyStr = typeof page.body === "string" ? page.body : "";
-          console.log(`[tool:get_page_content] title="${page.title}" body_length=${bodyStr.length} body_preview=${JSON.stringify(bodyStr.slice(0, 300))}`);
+          console.log(`[tool:get_page_content] title="${page.title}" body_length=${bodyStr.length}`);
           result = { title: page.title, body: page.body };
         } else if (block.name === "report_syllabus_found") {
           const foundInput = block.input as Record<string, string | null | undefined>;
@@ -552,7 +546,8 @@ serve(async (req) => {
     if (err instanceof CanvasTokenExpiredError) {
       return json({ error: "Canvas token expired. Please reconnect Canvas." }, 400);
     }
+    // Detail stays server-side (SYL-31); clients get a generic message.
     console.error("find-canvas-syllabus unexpected error:", err);
-    return json({ error: err instanceof Error ? err.message : "Unexpected error." }, 500);
+    return json({ error: "Internal server error" }, 500);
   }
 });

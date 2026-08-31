@@ -199,3 +199,116 @@ BEGIN
   RAISE NOTICE 'SYL-29 quota assertions passed.';
 END;
 $$;
+
+-- ── SYL-31: RLS hardening (WITH CHECK, token ciphertext, chat_courses) ──────
+DO $$
+DECLARE
+  v_a          UUID;
+  v_b          UUID;
+  v_sem_a      UUID;
+  v_sem_b      UUID;
+  v_course_a   UUID;
+  v_course_b   UUID;
+  v_chat_a     UUID;
+  v_blocked    BOOLEAN;
+  v_missing    TEXT;
+  v_rows       INTEGER;
+  v_connected  BOOLEAN;
+BEGIN
+  SELECT id INTO v_a FROM auth.users WHERE email = 'a@test.local';
+  SELECT id INTO v_b FROM auth.users WHERE email = 'b@test.local';
+
+  -- Every ownership policy carries an explicit WITH CHECK.
+  SELECT string_agg(tablename || '.' || policyname, ', ') INTO v_missing
+  FROM pg_policies
+  WHERE schemaname = 'public'
+    AND policyname IN (
+      'Users can CRUD own semesters',
+      'Users can CRUD own courses',
+      'Users can CRUD own notes',
+      'Users can CRUD own chats',
+      'Users can CRUD own chat messages',
+      'Users can CRUD own chat courses'
+    )
+    AND with_check IS NULL;
+  IF v_missing IS NOT NULL THEN
+    RAISE EXCEPTION 'SYL-31: ownership policies missing WITH CHECK: %', v_missing;
+  END IF;
+
+  -- The canvas token ciphertext is not client-readable...
+  v_blocked := false;
+  BEGIN
+    SET LOCAL ROLE authenticated;
+    PERFORM set_config('request.jwt.claims', json_build_object('sub', v_b)::text, true);
+    PERFORM canvas_token_encrypted FROM public.profiles WHERE id = v_b;
+  EXCEPTION WHEN insufficient_privilege THEN
+    v_blocked := true;
+  END;
+  RESET ROLE;
+  IF NOT v_blocked THEN
+    RAISE EXCEPTION 'SYL-31: authenticated can still SELECT canvas_token_encrypted';
+  END IF;
+
+  -- ...while ordinary profile columns remain readable...
+  BEGIN
+    SET LOCAL ROLE authenticated;
+    PERFORM set_config('request.jwt.claims', json_build_object('sub', v_b)::text, true);
+    SELECT count(*) INTO v_rows FROM public.profiles WHERE id = v_b;
+  END;
+  RESET ROLE;
+  IF v_rows <> 1 THEN
+    RAISE EXCEPTION 'SYL-31: owner can no longer read their own profile row (regression)';
+  END IF;
+
+  -- ...and profiles_safe still answers has_canvas_connected.
+  PERFORM public.store_canvas_token(v_b, 'tok_local_syl31', 'https://canvas.mit.edu', 'test_key');
+  BEGIN
+    SET LOCAL ROLE authenticated;
+    PERFORM set_config('request.jwt.claims', json_build_object('sub', v_b)::text, true);
+    SELECT has_canvas_connected INTO v_connected FROM public.profiles_safe;
+  END;
+  RESET ROLE;
+  PERFORM public.delete_canvas_token(v_b);
+  IF v_connected IS DISTINCT FROM true THEN
+    RAISE EXCEPTION 'SYL-31: profiles_safe.has_canvas_connected broke (got %)', v_connected;
+  END IF;
+
+  -- chat_courses: a chat you own may not reference a course you do not own.
+  INSERT INTO public.semesters (user_id, name, start_date, end_date)
+    VALUES (v_a, 'Verify S31 A', '2026-08-24', '2026-12-18') RETURNING id INTO v_sem_a;
+  INSERT INTO public.semesters (user_id, name, start_date, end_date)
+    VALUES (v_b, 'Verify S31 B', '2026-08-24', '2026-12-18') RETURNING id INTO v_sem_b;
+  INSERT INTO public.courses (user_id, semester_id, name)
+    VALUES (v_a, v_sem_a, 'Course A') RETURNING id INTO v_course_a;
+  INSERT INTO public.courses (user_id, semester_id, name)
+    VALUES (v_b, v_sem_b, 'Course B') RETURNING id INTO v_course_b;
+  INSERT INTO public.chats (user_id, semester_id, title)
+    VALUES (v_a, v_sem_a, 'Chat A') RETURNING id INTO v_chat_a;
+
+  v_blocked := false;
+  BEGIN
+    SET LOCAL ROLE authenticated;
+    PERFORM set_config('request.jwt.claims', json_build_object('sub', v_a)::text, true);
+    INSERT INTO public.chat_courses (chat_id, course_id) VALUES (v_chat_a, v_course_b);
+  EXCEPTION WHEN insufficient_privilege THEN
+    v_blocked := true;
+  END;
+  RESET ROLE;
+  IF NOT v_blocked THEN
+    RAISE EXCEPTION 'SYL-31: chat_courses INSERT accepted a course the caller does not own';
+  END IF;
+
+  BEGIN
+    SET LOCAL ROLE authenticated;
+    PERFORM set_config('request.jwt.claims', json_build_object('sub', v_a)::text, true);
+    INSERT INTO public.chat_courses (chat_id, course_id) VALUES (v_chat_a, v_course_a);
+    GET DIAGNOSTICS v_rows = ROW_COUNT;
+  END;
+  RESET ROLE;
+  IF v_rows <> 1 THEN
+    RAISE EXCEPTION 'SYL-31: owner can no longer link their own course to their chat (regression)';
+  END IF;
+
+  RAISE NOTICE 'SYL-31 hardening assertions passed.';
+END;
+$$;

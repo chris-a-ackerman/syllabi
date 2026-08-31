@@ -1,6 +1,7 @@
 // supabase/functions/admin-get-users/index.ts
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { CORS_HEADERS } from "../_shared/cors.ts";
 
 const supabaseAdmin = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -10,7 +11,7 @@ const supabaseAdmin = createClient(
 serve(async (req) => {
   // Verify caller is an admin via their JWT
   const authHeader = req.headers.get("Authorization");
-  if (!authHeader) return new Response("Unauthorized", { status: 401 });
+  if (!authHeader) return new Response("Unauthorized", { status: 401, headers: CORS_HEADERS });
 
   const supabaseUser = createClient(
     Deno.env.get("SUPABASE_URL")!,
@@ -19,7 +20,7 @@ serve(async (req) => {
   );
 
   const { data: { user } } = await supabaseUser.auth.getUser();
-  if (!user) return new Response("Unauthorized", { status: 401 });
+  if (!user) return new Response("Unauthorized", { status: 401, headers: CORS_HEADERS });
 
   const { data: profile } = await supabaseAdmin
     .from("profiles")
@@ -27,7 +28,7 @@ serve(async (req) => {
     .eq("id", user.id)
     .single();
 
-  if (!profile?.is_admin) return new Response("Forbidden", { status: 403 });
+  if (!profile?.is_admin) return new Response("Forbidden", { status: 403, headers: CORS_HEADERS });
 
   // Safe to use admin client now
   const url = new URL(req.url);
@@ -46,10 +47,17 @@ serve(async (req) => {
   }
 
   const { data: users, count, error } = await query;
-  if (error) return new Response(JSON.stringify({ error: error.message }), { status: 500 });
+  if (error) {
+    // Detail stays server-side (SYL-31); clients get a generic message.
+    console.error("admin-get-users query error:", error);
+    return new Response(JSON.stringify({ error: "Internal server error" }), {
+      status: 500,
+      headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+    });
+  }
 
   return new Response(JSON.stringify({ users, total: count, page, pageSize }), {
     status: 200,
-    headers: { "Content-Type": "application/json" },
+    headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
   });
 });

@@ -3,12 +3,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { assertSafeCanvasUrl, UnsafeCanvasUrlError } from "../_shared/canvas-url.ts";
 import { isoToDate } from "../_shared/iso-date.ts";
-
-const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+import { CORS_HEADERS } from "../_shared/cors.ts";
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
@@ -42,8 +37,6 @@ serve(async (req) => {
 
     // 3. Parse body
     const rawBody = await req.text();
-    console.log("find-canvas-courses raw body:", JSON.stringify(rawBody));
-    console.log("find-canvas-courses content-type:", req.headers.get("content-type"));
     let body: Record<string, unknown>;
     try {
       body = JSON.parse(rawBody);
@@ -78,13 +71,12 @@ serve(async (req) => {
         .single(),
     ]);
 
-    console.log("find-canvas-courses tokenResult:", { data: tokenResult.data, error: tokenResult.error });
-    console.log("find-canvas-courses profileResult:", { data: profileResult.data, error: profileResult.error });
+    // Never log the token result — it contains the decrypted Canvas token (SYL-31).
+    if (tokenResult.error) console.error("get_canvas_token RPC error:", tokenResult.error.message);
+    if (profileResult.error) console.error("profiles query error:", profileResult.error.message);
 
     const decryptedToken: string | null = tokenResult.data ?? null;
     const canvasBaseUrl: string | null = profileResult.data?.canvas_base_url ?? null;
-
-    console.log("find-canvas-courses resolved:", { hasToken: !!decryptedToken, canvasBaseUrl });
 
     if (!decryptedToken || !canvasBaseUrl) {
       return json({ error: "No Canvas token found. Please connect Canvas first." }, 400);
@@ -187,7 +179,8 @@ serve(async (req) => {
 
     return json({ courses, total_found: courses.length, needs_review_count });
   } catch (err) {
+    // Detail stays server-side (SYL-31); clients get a generic message.
     console.error("find-canvas-courses unexpected error:", err);
-    return json({ error: err instanceof Error ? err.message : "Unexpected error." }, 500);
+    return json({ error: "Internal server error" }, 500);
   }
 });

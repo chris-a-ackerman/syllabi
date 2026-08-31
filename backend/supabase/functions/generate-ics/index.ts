@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { escapeICS, formatICSDate } from "./ics.ts";
+import { CORS_HEADERS } from "../_shared/cors.ts";
 
 const supabaseAdmin = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -10,7 +11,7 @@ const supabaseAdmin = createClient(
 serve(async (req) => {
   const authHeader = req.headers.get("Authorization");
   if (!authHeader) {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
+    return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: CORS_HEADERS });
   }
 
   const supabaseUser = createClient(
@@ -25,7 +26,7 @@ serve(async (req) => {
     const courseId = url.searchParams.get("course_id"); // optional: filter to one course
 
     if (!semesterId) {
-      return new Response(JSON.stringify({ error: "semester_id required" }), { status: 400 });
+      return new Response(JSON.stringify({ error: "semester_id required" }), { status: 400, headers: CORS_HEADERS });
     }
 
     // Fetch events with course info
@@ -94,11 +95,14 @@ serve(async (req) => {
     return new Response(icsContent, {
       status: 200,
       headers: {
+        ...CORS_HEADERS,
         "Content-Type": "text/calendar; charset=utf-8",
         "Content-Disposition": `attachment; filename="schedule.ics"`,
       },
     });
   } catch (err) {
-    return new Response(JSON.stringify({ error: err.message }), { status: 500 });
+    // Detail stays server-side (SYL-31); clients get a generic message.
+    console.error("generate-ics error:", err);
+    return new Response(JSON.stringify({ error: "Internal server error" }), { status: 500, headers: CORS_HEADERS });
   }
 });
