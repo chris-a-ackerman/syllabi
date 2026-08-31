@@ -5,7 +5,7 @@ import {
   format,
   startOfWeek,
 } from 'date-fns';
-import type { Event, Course } from '@/app/context/AppContext';
+import type { Event, Course } from '@/lib/types';
 
 export interface EnrichedEvent {
   event: Event;

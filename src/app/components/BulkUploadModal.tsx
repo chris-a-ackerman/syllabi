@@ -1,5 +1,5 @@
 import { useEffect, useRef, useCallback } from 'react';
-import { useApp } from '../context/AppContext';
+import { useData } from '../context/DataProvider';
 import { useBulkUpload } from '../hooks/useBulkUpload';
 import {
   Dialog,
@@ -28,7 +28,7 @@ interface BulkUploadModalProps {
 }
 
 export function BulkUploadModal({ open, onClose }: BulkUploadModalProps) {
-  const { courses: allCourses, semesters, refreshCourses } = useApp();
+  const { courses: allCourses, semesters, refreshCourses } = useData();
   const {
     step, fileItems, detectedCourses, createdCourseIds, globalError,
     addFiles, removeFile, reset, analyze, updateDetectedCourse, confirm, retryProcessing,

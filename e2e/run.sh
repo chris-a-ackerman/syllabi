@@ -109,5 +109,23 @@ if [ "$ACTIVE_NAME" != "E2E Semester" ]; then
   exit 1
 fi
 echo "PASS  creating a semester made it the only active one (SYL-35 isActive fix)"
+
+echo ""
+echo "Checking the note written through the UI landed in course_notes..."
+NOTE_COUNT="$(psql "$DB_URL" -At -c "SELECT count(*) FROM course_notes WHERE user_id='$UID1' AND body='E2E note: midterm covers chapters 1-5'")"
+if [ "$NOTE_COUNT" != "1" ]; then
+  echo "FAIL  expected 1 UI-authored row in course_notes, found $NOTE_COUNT"
+  exit 1
+fi
+echo "PASS  the note added in the UI is a real course_notes row (SYL-37)"
+
+echo ""
+echo "Checking the admin AI toggle wrote app_settings..."
+AI_ROW="$(psql "$DB_URL" -At -c "SELECT ai_enabled || '|' || coalesce(updated_by::text,'') FROM app_settings WHERE id='global'")"
+if [ "$AI_ROW" != "false|$UID1" ]; then
+  echo "FAIL  expected app_settings to read 'false|$UID1' after the admin disabled AI, found '$AI_ROW'"
+  exit 1
+fi
+echo "PASS  the admin toggle disabled AI in app_settings, stamped with the admin's id (SYL-37)"
 echo ""
 echo "Authenticated E2E pass succeeded."

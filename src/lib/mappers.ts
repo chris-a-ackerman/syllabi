@@ -5,9 +5,10 @@ import type {
   CourseSchedule,
   Event,
   GradingRules,
+  Note,
   Policies,
   Semester,
-} from '@/app/context/AppContext';
+} from '@/lib/types';
 
 // ─── DB → App mappers ────────────────────────────────────────────────────────
 // These will be replaced by generated Supabase types once `supabase gen types` is run.
@@ -91,5 +92,15 @@ export function dbChatMessageToApp(row: any): ChatMessage {
     content: row.content,
     timestamp: row.created_at,
     sequence: row.sequence,
+  };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function dbNoteToApp(row: any): Note {
+  return {
+    id: row.id,
+    courseId: row.course_id,
+    text: row.body,
+    createdAt: row.created_at,
   };
 }

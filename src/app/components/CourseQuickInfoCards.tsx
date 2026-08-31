@@ -1,6 +1,6 @@
 import { parseISO, format } from 'date-fns';
 import { Card } from './ui/card';
-import type { Course, Event } from '../context/AppContext';
+import type { Course, Event } from '@/lib/types';
 import { toPercent } from '@/lib/gradeWeight';
 
 interface CourseQuickInfoCardsProps {

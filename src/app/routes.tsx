@@ -9,7 +9,7 @@ import { Onboarding } from './pages/Onboarding';
 import { CanvasSettings } from './pages/CanvasSettings';
 import { Agenda } from './pages/Agenda';
 import { ProtectedRoute } from './components/ProtectedRoute';
-import { useApp } from './context/AppContext';
+import { useAuth } from './context/AuthProvider';
 
 // Root layout: renders child routes
 function RootLayout() {
@@ -66,7 +66,7 @@ function ProtectedAgenda() {
 }
 
 function ProtectedOnboarding() {
-  const { user, loading } = useApp();
+  const { user, loading } = useAuth();
   if (loading) return null;
   if (!user) return <Navigate to="/" replace />;
   if (user.onboardingCompleted) return <Navigate to="/dashboard" replace />;
