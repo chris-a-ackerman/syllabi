@@ -6,7 +6,9 @@ import { useData } from '../context/DataProvider';
 import { Button } from '../components/ui/button';
 import { AppHeader } from '../components/AppHeader';
 import { AddSemesterModal } from '../components/AddSemesterModal';
-import { AddCourseModal } from '../components/AddCourseModal';
+import { UploadSyllabusModal } from '../components/UploadSyllabusModal';
+import { CourseFormModal } from '../components/CourseFormModal';
+import { BulkUploadModal } from '../components/BulkUploadModal';
 import { EditSemesterModal } from '../components/EditSemesterModal';
 import { DashboardSidebar } from '../components/DashboardSidebar';
 import { ChatPanel } from '../components/ChatPanel';
@@ -23,6 +25,8 @@ export function Dashboard() {
 
   const [showAddSemester, setShowAddSemester] = useState(false);
   const [showAddCourse, setShowAddCourse] = useState(false);
+  const [showCourseForm, setShowCourseForm] = useState(false);
+  const [showBulkUpload, setShowBulkUpload] = useState(false);
   const [showEditSemester, setShowEditSemester] = useState(false);
   const [selectedCourseForUpload, setSelectedCourseForUpload] = useState<UploadTarget | undefined>(
     undefined,
@@ -172,11 +176,33 @@ export function Dashboard() {
           semester={activeSemester}
         />
       )}
-      <AddCourseModal
+      <UploadSyllabusModal
         open={showAddCourse}
         onClose={closeAddCourse}
         existingCourse={selectedCourseForUpload}
+        onCreateManually={() => {
+          setShowAddCourse(false);
+          setShowCourseForm(true);
+        }}
+        onBulkUpload={() => {
+          setShowAddCourse(false);
+          setShowBulkUpload(true);
+        }}
       />
+      <CourseFormModal
+        open={showCourseForm}
+        onClose={() => setShowCourseForm(false)}
+        onBack={() => {
+          setShowCourseForm(false);
+          setShowAddCourse(true);
+        }}
+        onUploadSyllabus={(course) => {
+          setShowCourseForm(false);
+          setSelectedCourseForUpload(course);
+          setShowAddCourse(true);
+        }}
+      />
+      <BulkUploadModal open={showBulkUpload} onClose={() => setShowBulkUpload(false)} />
     </div>
   );
 }

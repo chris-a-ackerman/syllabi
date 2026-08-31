@@ -36,7 +36,8 @@ import {
 } from '../components/ui/select';
 import { useState } from 'react';
 import { AppHeader } from '../components/AppHeader';
-import { AddCourseModal } from '../components/AddCourseModal';
+import { UploadSyllabusModal } from '../components/UploadSyllabusModal';
+import { CourseFormModal } from '../components/CourseFormModal';
 import { BulkUploadModal } from '../components/BulkUploadModal';
 import { EditSemesterModal } from '../components/EditSemesterModal';
 
@@ -46,6 +47,7 @@ export function Courses() {
   const location = useLocation();
   const [showAddCourse, setShowAddCourse] = useState(false);
   const [showBulkUpload, setShowBulkUpload] = useState(false);
+  const [showCourseForm, setShowCourseForm] = useState(false);
   const [selectedCourseForUpload, setSelectedCourseForUpload] = useState<{
     id: string;
     name: string;
@@ -263,13 +265,35 @@ export function Courses() {
         )}
       </main>
 
-      <AddCourseModal
+      <UploadSyllabusModal
         open={showAddCourse}
         onClose={() => {
           setShowAddCourse(false);
           setSelectedCourseForUpload(undefined);
         }}
         existingCourse={selectedCourseForUpload}
+        onCreateManually={() => {
+          setShowAddCourse(false);
+          setShowCourseForm(true);
+        }}
+        onBulkUpload={() => {
+          setShowAddCourse(false);
+          setShowBulkUpload(true);
+        }}
+      />
+
+      <CourseFormModal
+        open={showCourseForm}
+        onClose={() => setShowCourseForm(false)}
+        onBack={() => {
+          setShowCourseForm(false);
+          setShowAddCourse(true);
+        }}
+        onUploadSyllabus={(course) => {
+          setShowCourseForm(false);
+          setSelectedCourseForUpload(course);
+          setShowAddCourse(true);
+        }}
       />
 
       <BulkUploadModal

@@ -34,7 +34,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '../components/ui/alert-dialog';
-import { AddCourseModal } from '../components/AddCourseModal';
+import { CourseFormModal } from '../components/CourseFormModal';
 import { CourseQuickInfoCards } from '../components/CourseQuickInfoCards';
 
 export function CourseDetail() {
@@ -168,10 +168,9 @@ export function CourseDetail() {
         </div>
 
         {/* Edit Course Details */}
-        <AddCourseModal
+        <CourseFormModal
           open={editModalOpen}
           onClose={() => setEditModalOpen(false)}
-          editMode
           existingCourse={{
             id: course.id,
             name: course.name,
@@ -812,10 +811,9 @@ export function CourseDetail() {
       </AlertDialog>
 
       {/* Edit Course Details */}
-      <AddCourseModal
+      <CourseFormModal
         open={editModalOpen}
         onClose={() => setEditModalOpen(false)}
-        editMode
         existingCourse={{
           id: course.id,
           name: course.name,
