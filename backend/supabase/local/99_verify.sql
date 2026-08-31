@@ -140,3 +140,62 @@ BEGIN
   RAISE NOTICE 'All security assertions passed.';
 END;
 $$;
+
+-- ── SYL-29: ai_usage quota counters ─────────────────────────────────────────
+DO $$
+DECLARE
+  v_a       UUID;
+  v_count   INTEGER;
+  v_blocked BOOLEAN;
+BEGIN
+  SELECT id INTO v_a FROM auth.users WHERE email = 'a@test.local';
+
+  -- The counter increments atomically and isolates endpoints from each other.
+  SELECT public.consume_ai_quota(v_a, 'chat', 1) INTO v_count;
+  IF v_count <> 1 THEN
+    RAISE EXCEPTION 'SYL-29: first consume returned %, expected 1', v_count;
+  END IF;
+  SELECT public.consume_ai_quota(v_a, 'chat', 1) INTO v_count;
+  IF v_count <> 2 THEN
+    RAISE EXCEPTION 'SYL-29: second consume returned %, expected 2', v_count;
+  END IF;
+  SELECT public.consume_ai_quota(v_a, 'detect-syllabi-info', 5) INTO v_count;
+  IF v_count <> 5 THEN
+    RAISE EXCEPTION 'SYL-29: batched consume returned %, expected 5', v_count;
+  END IF;
+  SELECT public.consume_ai_quota(v_a, 'chat', 1) INTO v_count;
+  IF v_count <> 3 THEN
+    RAISE EXCEPTION 'SYL-29: endpoints share a counter (chat returned %)', v_count;
+  END IF;
+
+  -- Clients can neither execute the counter function...
+  v_blocked := false;
+  BEGIN
+    SET LOCAL ROLE authenticated;
+    PERFORM set_config('request.jwt.claims', json_build_object('sub', v_a)::text, true);
+    PERFORM public.consume_ai_quota(v_a, 'chat', 1);
+  EXCEPTION WHEN insufficient_privilege THEN
+    v_blocked := true;
+  END;
+  RESET ROLE;
+  IF NOT v_blocked THEN
+    RAISE EXCEPTION 'SYL-29: authenticated can execute consume_ai_quota';
+  END IF;
+
+  -- ...nor read the counters directly.
+  v_blocked := false;
+  BEGIN
+    SET LOCAL ROLE authenticated;
+    PERFORM set_config('request.jwt.claims', json_build_object('sub', v_a)::text, true);
+    PERFORM count(*) FROM public.ai_usage;
+  EXCEPTION WHEN insufficient_privilege THEN
+    v_blocked := true;
+  END;
+  RESET ROLE;
+  IF NOT v_blocked THEN
+    RAISE EXCEPTION 'SYL-29: authenticated can SELECT from ai_usage';
+  END IF;
+
+  RAISE NOTICE 'SYL-29 quota assertions passed.';
+END;
+$$;
