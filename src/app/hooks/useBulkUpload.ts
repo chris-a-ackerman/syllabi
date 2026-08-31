@@ -1,15 +1,15 @@
 import { useState, useCallback } from 'react';
 import { useAuth } from '../context/AuthProvider';
 import { useData } from '../context/DataProvider';
-import { supabase } from '../../lib/supabase';
+import { COURSE_COLORS } from '@/lib/courseColors';
+import {
+  detectSyllabiInfo,
+  reprocessSyllabus,
+  uploadAndProcess,
+  uploadTempSyllabus,
+} from '@/lib/api/syllabus';
 
 export type BulkUploadStep = 'upload' | 'detecting' | 'review' | 'processing';
-
-export const COURSE_COLORS = [
-  '#6366f1', '#8b5cf6', '#ec4899', '#f43f5e',
-  '#f97316', '#eab308', '#22c55e', '#14b8a6',
-  '#0ea5e9', '#64748b',
-];
 
 export interface FileItem {
   id: string;
@@ -29,7 +29,16 @@ export interface DetectedCourse {
   error?: string;
 }
 
-export function useBulkUpload() {
+interface BulkUploadOptions {
+  /**
+   * When provided, every course is created in this semester and no semesters
+   * are created from the detected names (the add-to-existing-semester flow).
+   * An empty string means "no semester available" and confirm() is a no-op.
+   */
+  fixedSemesterId?: string;
+}
+
+export function useBulkUpload({ fixedSemesterId }: BulkUploadOptions = {}) {
   const { user } = useAuth();
   const { addSemester, addCourse } = useData();
   const [step, setStep] = useState<BulkUploadStep>('upload');
@@ -65,33 +74,13 @@ export function useBulkUpload() {
     setGlobalError(null);
     setStep('detecting');
 
-    // 1. Upload each file to temp storage in parallel.
-    //    Read each file into memory first so the upload never does disk I/O mid-stream
-    //    (prevents hangs when files are stored in iCloud/OneDrive/network drives).
+    // 1. Upload each file to temp storage in parallel
     const timestamp = Date.now();
     console.log('Starting uploads for', fileItems.length, 'files');
     const uploadResults = await Promise.all(
       fileItems.map(async (fileItem) => {
-        const tempFilePath = `${user.id}/temp/${timestamp}_${fileItem.file.name}`;
-
-        // Load into memory with a timeout — catches inaccessible/still-syncing files early
-        let buffer: ArrayBuffer;
-        try {
-          buffer = await Promise.race([
-            fileItem.file.arrayBuffer(),
-            new Promise<never>((_, reject) =>
-              setTimeout(() => reject(new Error('Could not read file — make sure it is stored locally and not still syncing')), 15_000)
-            ),
-          ]);
-        } catch (e: unknown) {
-          return { fileItem, tempFilePath, uploadError: (e as Error).message };
-        }
-
-        const { error } = await supabase.storage
-          .from('syllabi')
-          .upload(tempFilePath, buffer, { upsert: true, contentType: 'application/pdf' });
-
-        return { fileItem, tempFilePath, uploadError: error?.message };
+        const { data, error } = await uploadTempSyllabus(user.id, timestamp, fileItem.file);
+        return { fileItem, tempFilePath: data.path, uploadError: error?.message };
       })
     );
 
@@ -103,9 +92,7 @@ export function useBulkUpload() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let detectResults: any[] = [];
     if (successPaths.length > 0) {
-      const { data, error: fnError } = await supabase.functions.invoke('detect-syllabi-info', {
-        body: { file_paths: successPaths },
-      });
+      const { data, error: fnError } = await detectSyllabiInfo(successPaths);
       if (fnError || !data?.results) {
         setGlobalError('Failed to analyze syllabi. Please try again.');
         setStep('upload');
@@ -162,36 +149,41 @@ export function useBulkUpload() {
     setGlobalError(null);
     setStep('processing');
 
-    // 1. Create each unique semester (handle duplicates via conflict resolution in addSemester)
+    // 1. Create each unique semester (handle duplicates via conflict resolution
+    //    in addSemester) — skipped entirely when the caller fixed the semester.
     const semesterMap = new Map<string, string>(); // semesterName → semesterId
-    const uniqueSemesterNames = [...new Set(
-      detectedCourses.map(dc => dc.semesterName.trim()).filter(Boolean)
-    )];
+    if (fixedSemesterId === undefined) {
+      const uniqueSemesterNames = [...new Set(
+        detectedCourses.map(dc => dc.semesterName.trim()).filter(Boolean)
+      )];
 
-    for (const semName of uniqueSemesterNames) {
-      const semCourses = detectedCourses.filter(d => d.semesterName.trim() === semName);
-      const validStarts = semCourses.map(d => d.semesterStart).filter(Boolean);
-      const validEnds = semCourses.map(d => d.semesterEnd).filter(Boolean);
-      const startDate = validStarts.length > 0
-        ? validStarts.reduce((min, d) => d < min ? d : min)
-        : new Date().toISOString().split('T')[0];
-      const endDate = validEnds.length > 0
-        ? validEnds.reduce((max, d) => d > max ? d : max)
-        : new Date(Date.now() + 120 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-      const semId = await addSemester({
-        name: semName,
-        startDate,
-        endDate,
-        isActive: true,
-      });
-      if (semId) semesterMap.set(semName, semId);
+      for (const semName of uniqueSemesterNames) {
+        const semCourses = detectedCourses.filter(d => d.semesterName.trim() === semName);
+        const validStarts = semCourses.map(d => d.semesterStart).filter(Boolean);
+        const validEnds = semCourses.map(d => d.semesterEnd).filter(Boolean);
+        const startDate = validStarts.length > 0
+          ? validStarts.reduce((min, d) => d < min ? d : min)
+          : new Date().toISOString().split('T')[0];
+        const endDate = validEnds.length > 0
+          ? validEnds.reduce((max, d) => d > max ? d : max)
+          : new Date(Date.now() + 120 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+        const semId = await addSemester({
+          name: semName,
+          startDate,
+          endDate,
+          isActive: true,
+        });
+        if (semId) semesterMap.set(semName, semId);
+      }
     }
 
-    // 2. Create each course and re-upload syllabus to permanent path
+    // 2. Create each course and upload its syllabus to the permanent path
     const createdIds: string[] = [];
 
     for (const dc of detectedCourses) {
-      const semId = semesterMap.get(dc.semesterName.trim());
+      const semId = fixedSemesterId !== undefined
+        ? fixedSemesterId
+        : semesterMap.get(dc.semesterName.trim());
       if (!semId) continue;
 
       const color = COURSE_COLORS[createdIds.length % COURSE_COLORS.length];
@@ -206,43 +198,13 @@ export function useBulkUpload() {
       if (!courseId) continue;
       createdIds.push(courseId);
 
-      // Re-upload from in-memory buffer to permanent path
-      const finalPath = `${user.id}/${courseId}/${dc.fileItem.file.name}`;
-      let finalBuffer: ArrayBuffer;
-      try {
-        finalBuffer = await dc.fileItem.file.arrayBuffer();
-      } catch {
-        continue;
-      }
-      const { error: uploadError } = await supabase.storage
-        .from('syllabi')
-        .upload(finalPath, finalBuffer, { upsert: true, contentType: 'application/pdf' });
-
-      if (!uploadError) {
-        await supabase
-          .from('courses')
-          .update({ syllabus_file_path: finalPath })
-          .eq('id', courseId);
-
-        // Fire process-syllabus — do not await
-        supabase.functions.invoke('process-syllabus', { body: { course_id: courseId } });
-      }
+      // A failed upload leaves the course without a syllabus file; errors are
+      // not surfaced per-course here.
+      await uploadAndProcess(user.id, courseId, dc.fileItem.file);
     }
 
     setCreatedCourseIds(createdIds);
-  }, [user, detectedCourses, addSemester, addCourse]);
-
-  const retryProcessing = useCallback(async (courseId: string) => {
-    await supabase.functions.invoke('process-syllabus', { body: { course_id: courseId } });
-    const { data: course } = await supabase
-      .from('courses')
-      .select('canvas_course_id')
-      .eq('id', courseId)
-      .single();
-    if (course?.canvas_course_id) {
-      supabase.functions.invoke('match-canvas-assignments', { body: { course_id: courseId } });
-    }
-  }, []);
+  }, [user, fixedSemesterId, detectedCourses, addSemester, addCourse]);
 
   return {
     step,
@@ -256,6 +218,6 @@ export function useBulkUpload() {
     analyze,
     updateDetectedCourse,
     confirm,
-    retryProcessing,
+    retryProcessing: reprocessSyllabus,
   };
 }

@@ -1,8 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../context/AuthProvider';
 import { useData } from '../context/DataProvider';
-import { supabase } from '../../lib/supabase';
-import { deleteCourse } from '@/lib/api/courses';
+import { deleteCourse, fetchCourse } from '@/lib/api/courses';
+import {
+  matchCanvasAssignmentsIfLinked,
+  removeSyllabusFile,
+  uploadAndProcess,
+} from '@/lib/api/syllabus';
 import {
   Dialog,
   DialogContent,
@@ -17,7 +21,7 @@ import { Upload, Loader2, CheckCircle, AlertCircle, X, FileText, PenSquare, Chev
 import { Badge } from '../components/ui/badge';
 import { Alert, AlertDescription } from '../components/ui/alert';
 import { Card } from '../components/ui/card';
-import { useBulkCourseUpload } from '../hooks/useBulkCourseUpload';
+import { useBulkUpload } from '../hooks/useBulkUpload';
 
 interface AddCourseModalProps {
   open: boolean;
@@ -81,7 +85,7 @@ export function AddCourseModal({ open, onClose, existingCourse, editMode }: AddC
     analyze,
     updateDetectedCourse,
     confirm,
-  } = useBulkCourseUpload(activeSemester?.id ?? '');
+  } = useBulkUpload({ fixedSemesterId: activeSemester?.id ?? '' });
 
   const bulkFileInputRef = useRef<HTMLInputElement>(null);
   const [bulkDragActive, setBulkDragActive] = useState(false);
@@ -190,58 +194,44 @@ export function AddCourseModal({ open, onClose, existingCourse, editMode }: AddC
         setCreatedCourseId(newId);
       }
 
-      // 2. Upload file to Supabase Storage
-      setProcessingLog(prev => [...prev, 'Uploading syllabus file...']);
-      const filePath = `${user.id}/${courseId}/${selectedFile.name}`;
-      const { error: uploadError } = await supabase.storage
-        .from('syllabi')
-        .upload(filePath, selectedFile, { upsert: true });
+      // 2. Upload to Storage, record the path, and run process-syllabus
+      //    (synchronous — waits for Claude)
+      const { data: result, error: pipelineError } = await uploadAndProcess(
+        user.id,
+        courseId,
+        selectedFile,
+        {
+          awaitProcessing: true,
+          onStage: (stage) =>
+            setProcessingLog(prev => [
+              ...prev,
+              stage === 'uploading'
+                ? 'Uploading syllabus file...'
+                : 'Analyzing syllabus with AI (this takes ~30 seconds)...',
+            ]),
+        }
+      );
+      if (result.path) setUploadedFilePath(result.path);
+      if (pipelineError) throw new Error(pipelineError.message);
 
-      if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`);
-      setUploadedFilePath(filePath);
+      setProcessingLog(prev => [...prev, `Done! Extracted ${result.fnData?.events_created} events.`]);
 
-      // 3. Update course row with the file path
-      const { error: updateError } = await supabase
-        .from('courses')
-        .update({ syllabus_file_path: filePath, syllabus_file_name: selectedFile.name })
-        .eq('id', courseId);
-
-      if (updateError) throw new Error(`Failed to save file path: ${updateError.message}`);
-
-      // 4. Call the process-syllabus edge function (synchronous — waits for Claude)
-      setProcessingLog(prev => [...prev, 'Analyzing syllabus with AI (this takes ~30 seconds)...']);
-      const { data: fnData, error: fnError } = await supabase.functions.invoke('process-syllabus', {
-        body: { course_id: courseId },
-      });
-
-      if (fnError) throw new Error(`Processing failed: ${fnError.message}`);
-      if (!fnData?.success) throw new Error(fnData?.error || 'Processing failed');
-
-      setProcessingLog(prev => [...prev, `Done! Extracted ${fnData.events_created} events.`]);
-
-      // 5. Pull updated courses and events into context so all data is visible immediately
+      // 3. Pull updated courses and events into context so all data is visible immediately
       await Promise.all([refreshCourses(), refreshEvents()]);
 
-      // 6. Fetch the updated course to populate the review form
-      const { data: updatedCourse } = await supabase
-        .from('courses')
-        .select('*')
-        .eq('id', courseId)
-        .single();
+      // 4. Fetch the updated course to populate the review form
+      const { data: updatedCourse } = await fetchCourse(courseId);
 
       if (updatedCourse) {
         setCourseName(updatedCourse.name || '');
         setCourseCode(updatedCourse.code || '');
         setProfessor(updatedCourse.professor || '');
 
-        const completeness = fnData.completeness as 'complete' | 'partial' | 'minimal' | undefined;
-        setExtractionQuality(completeness ?? 'partial');
-        setExtractedCount(fnData.events_created ?? 0);
+        setExtractionQuality(result.fnData?.completeness ?? 'partial');
+        setExtractedCount(result.fnData?.events_created ?? 0);
 
         // Fire-and-forget Canvas matching for courses connected to Canvas
-        if (updatedCourse.canvas_course_id) {
-          supabase.functions.invoke('match-canvas-assignments', { body: { course_id: courseId } });
-        }
+        matchCanvasAssignmentsIfLinked(courseId);
       }
 
       setStep('review');
@@ -293,7 +283,7 @@ export function AddCourseModal({ open, onClose, existingCourse, editMode }: AddC
 
   const handleCancelAfterError = async () => {
     if (uploadedFilePath) {
-      await supabase.storage.from('syllabi').remove([uploadedFilePath]);
+      await removeSyllabusFile(uploadedFilePath);
     }
     if (createdCourseId) {
       await deleteCourse(createdCourseId);

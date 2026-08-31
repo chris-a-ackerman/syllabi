@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { useData } from '../context/DataProvider';
 import { supabase } from '../../lib/supabase';
+import { COURSE_COLORS } from '@/lib/courseColors';
 
 export type CanvasStep = 'dates' | 'detecting' | 'review' | 'processing' | 'syllabi' | 'downloading';
 export type SyllabusSearchStatus = 'searching' | 'found' | 'not_found' | 'error';
@@ -25,12 +26,6 @@ export interface CanvasDetectedCourse {
   editedName: string;
   editedCode: string;
 }
-
-const COURSE_COLORS = [
-  '#6366f1', '#8b5cf6', '#ec4899', '#f43f5e',
-  '#f97316', '#eab308', '#22c55e', '#14b8a6',
-  '#0ea5e9', '#64748b',
-];
 
 export function useCanvasFlow() {
   const { addSemester, addCourse } = useData();

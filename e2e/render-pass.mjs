@@ -49,7 +49,10 @@ const evaluate = async (expression) => {
     returnByValue: true,
     awaitPromise: true,
   });
-  if (msg.error) console.log(`        [cdp error] ${JSON.stringify(msg.error)}`);
+  if (msg.error) {
+    console.log(`        [cdp error] ${JSON.stringify(msg.error)}`);
+    return `cdp error: ${msg.error.message}`;
+  }
   const details = msg.result?.exceptionDetails;
   if (details)
     console.log(`        [page exception] ${details.exception?.description ?? details.text}`);
@@ -153,17 +156,23 @@ async function check(label, route, { expectText = [], viaClick = null } = {}) {
   }
   await wait(4000);
 
-  const info = JSON.parse(
-    await evaluate(`(() => {
-      const root = document.getElementById('root');
-      const text = (root?.innerText || '').replace(/\\s+/g, ' ').trim();
-      return JSON.stringify({
-        path: location.pathname,
-        nodes: root ? root.querySelectorAll('*').length : 0,
-        text,
-      });
-    })()`)
-  );
+  const raw = await evaluate(`(() => {
+    const root = document.getElementById('root');
+    const text = (root?.innerText || '').replace(/\\s+/g, ' ').trim();
+    return JSON.stringify({
+      path: location.pathname,
+      nodes: root ? root.querySelectorAll('*').length : 0,
+      text,
+    });
+  })()`);
+  let info;
+  try {
+    info = JSON.parse(raw);
+  } catch {
+    console.log(`FAIL  ${label} — could not read the page: ${raw}`);
+    failures++;
+    return;
+  }
 
   const errors = problems();
   const missing = expectText.filter((t) => !info.text.includes(t));
@@ -369,51 +378,97 @@ if (disabled !== 'ok') {
 }
 
 // ── Semester isActive behaviour (SYL-35 fixes) ──────────────────────────────
+// This used to be one 2.4s async evaluate; twice on CI (runs 33407187881 and
+// 33439130655) the page navigated within ~15ms of the form's requestSubmit()
+// while that promise was still pending, and Chrome answered "Promise was
+// collected" with no further detail. Node-driven steps keep every evaluate
+// near-instant so no promise spans a navigation, the pathname probe names an
+// unprevented native submit if that is what kills it next time, and one loud
+// retry keeps a lone reload from failing the whole pass.
 console.log('');
-await send('Page.navigate', { url: `${BASE}/dashboard` });
-await wait(4000);
-events = [];
-const created = await evaluate(`(async () => {
-  try {
-  ${SET_VALUE}
-  const click = (text) => {
-    const el = [...document.querySelectorAll('button, a')].find((x) => (x.innerText || '').trim().includes(text));
-    if (!el) return false;
+
+const clickByText = (text) =>
+  evaluate(`(() => {
+    const el = [...document.querySelectorAll('button, a')].find(
+      (x) => (x.innerText || '').trim().includes(${JSON.stringify(text)})
+    );
+    if (!el) return 'not found';
     el.click();
-    return true;
-  };
-  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-  if (!click('Add Semester')) return 'no Add Semester button';
-  await sleep(1200);
-  if (!click('Create Manually')) return 'no Create Manually option';
-  await sleep(1200);
-  const name = document.getElementById('semesterName');
-  const start = document.getElementById('startDate');
-  const end = document.getElementById('endDate');
-  if (!name || !start || !end) return 'manual semester form not found';
-  setValue(name, 'E2E Semester');
-  setValue(start, '2027-06-01');
-  setValue(end, '2027-08-15');
-  name.closest('form').requestSubmit();
+    return 'clicked';
+  })()`);
+
+const pollFor = async (expr, ms) => {
+  const deadline = Date.now() + ms;
+  do {
+    if ((await evaluate(`!!(${expr})`)) === true) return true;
+    await wait(250);
+  } while (Date.now() < deadline);
+  return false;
+};
+
+const hasControl = (text) =>
+  `[...document.querySelectorAll('button, a')].some((x) => (x.innerText || '').trim().includes(${JSON.stringify(text)}))`;
+
+async function attemptSemesterCreation() {
+  await send('Page.navigate', { url: `${BASE}/dashboard` });
+  await wait(4000);
+  events = [];
+  if (!(await pollFor(hasControl('Add Semester'), 8000))) return 'no Add Semester button';
+  const opened = await clickByText('Add Semester');
+  if (opened !== 'clicked') return `no Add Semester button (${opened})`;
+  if (!(await pollFor(hasControl('Create Manually'), 5000))) return 'no Create Manually option';
+  const manual = await clickByText('Create Manually');
+  if (manual !== 'clicked') return `no Create Manually option (${manual})`;
+  const formReady = await pollFor(
+    `document.getElementById('semesterName') && document.getElementById('startDate') && document.getElementById('endDate')`,
+    5000
+  );
+  if (!formReady) return 'manual semester form not found';
+  const submitted = await evaluate(`(() => {
+    ${SET_VALUE}
+    const name = document.getElementById('semesterName');
+    setValue(name, 'E2E Semester');
+    setValue(document.getElementById('startDate'), '2027-06-01');
+    setValue(document.getElementById('endDate'), '2027-08-15');
+    name.closest('form').requestSubmit();
+    return 'ok';
+  })()`);
+  if (submitted !== 'ok') return submitted;
+  await wait(1000);
+  const where = await evaluate('location.pathname + location.search');
+  if (typeof where === 'string' && where.includes('semesterName='))
+    return `native form submit was not prevented — landed on ${where}`;
+  await wait(5000);
+  if (problems().length) return 'console errors after submit';
   return 'ok';
-  } catch (e) {
-    return 'exception: ' + ((e && e.stack) || e);
+}
+
+/** The navigation/reload trail problems() ignores; printed when the block fails. */
+function navigationTrail() {
+  for (const e of events) {
+    if (e.method === 'Page.frameNavigated' && !e.params.frame?.parentId)
+      console.log(`        [navigated] ${e.params.frame.url}`);
+    if (e.method === 'Runtime.consoleAPICalled') {
+      const text = e.params.args.map((a) => a.value ?? a.description ?? '').join(' ');
+      if (text.includes('[vite]')) console.log(`        [vite] ${text.slice(0, 220)}`);
+    }
   }
-})()`);
-if (created !== 'ok') {
-  console.log(`FAIL  Creating a semester through the UI: ${created}`);
+}
+
+let semester = await attemptSemesterCreation();
+if (semester !== 'ok') {
+  console.log(`RETRY Creating a semester through the UI: ${semester}`);
+  navigationTrail();
+  problems().forEach((e) => console.log(`        ${e.slice(0, 220)}`));
+  semester = await attemptSemesterCreation();
+}
+if (semester !== 'ok') {
+  console.log(`FAIL  Creating a semester through the UI: ${semester}`);
+  navigationTrail();
   problems().forEach((e) => console.log(`        ${e.slice(0, 220)}`));
   failures++;
 } else {
-  await wait(5000);
-  const errors = problems();
-  if (errors.length) {
-    console.log('FAIL  Creating a semester produced console errors');
-    errors.forEach((e) => console.log(`        ${e.slice(0, 220)}`));
-    failures++;
-  } else {
-    console.log('PASS  Created a semester through the UI (DB assertion follows)');
-  }
+  console.log('PASS  Created a semester through the UI (DB assertion follows)');
 }
 
 // ── User 2: fresh account that has not completed onboarding ─────────────────
