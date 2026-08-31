@@ -125,7 +125,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         const aiSequence = userSequence + 1;
 
         const courseIds = context?.courseIds ?? chats.find(c => c.id === chatId)?.courseIds ?? [];
-        console.log('[chat] Calling edge function — semester_id:', semesterId, 'course_ids:', courseIds, 'history length:', conversationHistory.length);
 
         const { data: fnData, error: fnError } = await chatApi.sendChatQuery({
           message: message.content,
@@ -159,7 +158,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        console.log('[chat] Edge function response — query_type:', fnData?.query_type, 'reply length:', fnData?.reply?.length);
 
         const aiContent: string = fnData?.reply ?? '';
 

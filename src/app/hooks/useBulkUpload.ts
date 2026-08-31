@@ -76,7 +76,6 @@ export function useBulkUpload({ fixedSemesterId }: BulkUploadOptions = {}) {
 
     // 1. Upload each file to temp storage in parallel
     const timestamp = Date.now();
-    console.log('Starting uploads for', fileItems.length, 'files');
     const uploadResults = await Promise.all(
       fileItems.map(async (fileItem) => {
         const { data, error } = await uploadTempSyllabus(user.id, timestamp, fileItem.file);

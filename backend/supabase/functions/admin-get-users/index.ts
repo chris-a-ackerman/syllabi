@@ -9,6 +9,11 @@ const supabaseAdmin = createClient(
 );
 
 serve(async (req) => {
+  // verify_jwt is false so the CORS preflight passes; auth is enforced here.
+  if (req.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: CORS_HEADERS });
+  }
+
   // Verify caller is an admin via their JWT
   const authHeader = req.headers.get("Authorization");
   if (!authHeader) return new Response("Unauthorized", { status: 401, headers: CORS_HEADERS });

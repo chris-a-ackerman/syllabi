@@ -290,7 +290,8 @@ await check('Canvas settings renders', '/settings/canvas', { expectText: ['Canva
 // Direct URL load: ProtectedRoute holds until the profile fetch settles
 // instead of bouncing an admin to /dashboard (SYL-55).
 await check('Admin panel renders (direct load)', '/admin', {
-  expectText: ['Admin Panel'],
+  // 'Total Users' comes from the real admin-get-users fetch (SYL-42).
+  expectText: ['Admin Panel', 'Total Users'],
 });
 
 // ── The AI kill switch is a real app_settings write (SYL-37) ────────────────
