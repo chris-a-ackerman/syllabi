@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router';
 import { Calendar, Plus } from 'lucide-react';
-import type { Course } from '@/lib/types';
+import type { UploadTarget } from '@/lib/types';
 import { useData } from '../context/DataProvider';
 import { Button } from '../components/ui/button';
 import { AppHeader } from '../components/AppHeader';
@@ -14,8 +14,6 @@ import { DashboardSidebar } from '../components/DashboardSidebar';
 import { ChatPanel } from '../components/ChatPanel';
 import { useChatRename } from '../hooks/useChatRename';
 import { useProcessingPoll } from '../hooks/useProcessingPoll';
-
-type UploadTarget = Pick<Course, 'id' | 'name' | 'code' | 'color'>;
 
 export function Dashboard() {
   const { semesters, courses, setActiveSemester, refreshCourses, refreshEvents } = useData();

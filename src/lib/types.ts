@@ -79,6 +79,9 @@ export interface Course {
   schedule?: CourseSchedule;
 }
 
+/** The slice of a course the upload-syllabus flow needs to target it. */
+export type UploadTarget = Pick<Course, 'id' | 'name' | 'code' | 'color'>;
+
 export interface CanvasMetadata {
   points_possible: number | null;
   submission_types: string[] | null;

@@ -1,10 +1,5 @@
-import {
-  parseISO,
-  startOfDay,
-  differenceInCalendarDays,
-  format,
-  startOfWeek,
-} from 'date-fns';
+import { parseISO, format, startOfWeek } from 'date-fns';
+import { getUpcomingEvents } from '@/lib/eventHelpers';
 import type { Event, Course } from '@/lib/types';
 
 export interface EnrichedEvent {
@@ -26,11 +21,6 @@ export interface AgendaWeek {
   days: AgendaDay[];
 }
 
-// Same-day tiebreak order for the agenda timeline (SYL-13).
-export const EVENT_TYPE_PRIORITY: Record<string, number> = {
-  exam: 0, quiz: 1, presentation: 2, project_due: 3, deadline: 4, other: 5, no_class: 6,
-};
-
 /**
  * Filter to future events (date >= today) belonging to the given courses,
  * pair each with its course, and sort by date then type priority.
@@ -41,24 +31,15 @@ export function enrichAndSortEvents(
   activeCourses: Course[],
   today: Date,
 ): EnrichedEvent[] {
-  return events
-    .filter(e => {
-      if (!e.date) return false;
-      if (!activeCourses.some(c => c.id === e.courseId)) return false;
-      const eventDate = startOfDay(parseISO(e.date));
-      return differenceInCalendarDays(eventDate, today) >= 0;
-    })
-    .map(e => ({
-      event: e,
-      course: activeCourses.find(c => c.id === e.courseId),
-      dateKey: e.date!.slice(0, 10),
-    }))
-    .sort((a, b) => {
-      if (a.dateKey !== b.dateKey) return a.dateKey < b.dateKey ? -1 : 1;
-      return (
-        (EVENT_TYPE_PRIORITY[a.event.type] ?? 5) - (EVENT_TYPE_PRIORITY[b.event.type] ?? 5)
-      );
-    });
+  return getUpcomingEvents(events, {
+    today,
+    courseIds: activeCourses.map(c => c.id),
+    includeNoClass: true,
+  }).map(e => ({
+    event: e,
+    course: activeCourses.find(c => c.id === e.courseId),
+    dateKey: e.date!.slice(0, 10),
+  }));
 }
 
 /**

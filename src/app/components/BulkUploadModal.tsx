@@ -1,6 +1,7 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { useData } from '../context/DataProvider';
 import { useProcessingPoll } from '../hooks/useProcessingPoll';
+import { BulkReviewForm } from './BulkReviewForm';
 import { useBulkUpload } from '../hooks/useBulkUpload';
 import {
   Dialog,
@@ -11,16 +12,7 @@ import {
 } from '../components/ui/dialog';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
-import { Input } from '../components/ui/input';
-import { Label } from '../components/ui/label';
 import { Alert, AlertDescription } from '../components/ui/alert';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '../components/ui/select';
 import { Upload, Check, X, Loader2, AlertCircle, ChevronRight, FileText, RefreshCw } from 'lucide-react';
 
 interface BulkUploadModalProps {
@@ -72,31 +64,6 @@ export function BulkUploadModal({ open, onClose }: BulkUploadModalProps) {
   };
 
   // Group detected courses by semester for the review step
-  const semesterGroups = detectedCourses.reduce<Record<string, typeof detectedCourses>>(
-    (acc, dc) => {
-      const key = dc.semesterName.trim() || '__unknown__';
-      if (!acc[key]) acc[key] = [];
-      acc[key].push(dc);
-      return acc;
-    },
-    {}
-  );
-
-  // When user picks an existing semester from the dropdown, propagate name to all courses in group
-  const handleExistingSemesterSelect = (semKey: string, semesterId: string) => {
-    if (semesterId === '__new__') return;
-    const sem = semesters.find(s => s.id === semesterId);
-    if (!sem) return;
-    const groupCourses = semesterGroups[semKey] ?? [];
-    groupCourses.forEach(dc =>
-      updateDetectedCourse(dc.id, {
-        semesterName: sem.name,
-        semesterStart: sem.startDate,
-        semesterEnd: sem.endDate,
-      })
-    );
-  };
-
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
       <DialogContent className="rounded-2xl max-w-xl max-h-[90vh] overflow-y-auto">
@@ -196,125 +163,11 @@ export function BulkUploadModal({ open, onClose }: BulkUploadModalProps) {
         {/* ── Step 3: Review ── */}
         {step === 'review' && (
           <div className="space-y-4">
-            {Object.entries(semesterGroups).map(([semKey, groupCourses]) => {
-              const matchedSem = semesters.find(s => s.name === groupCourses[0].semesterName);
-              return (
-                <Card key={semKey} className="p-4 rounded-xl space-y-3">
-                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Semester</p>
-
-                  {/* Existing semester dropdown */}
-                  {semesters.length > 0 && (
-                    <div>
-                      <Label className="text-xs">Use existing semester</Label>
-                      <Select
-                        value={matchedSem?.id ?? '__new__'}
-                        onValueChange={(val) => handleExistingSemesterSelect(semKey, val)}
-                      >
-                        <SelectTrigger className="mt-1 rounded-lg h-8 text-sm">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent className="rounded-lg">
-                          <SelectItem value="__new__">Create new semester</SelectItem>
-                          {semesters.map(s => (
-                            <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  )}
-
-                  {/* Only show name/date fields when creating new */}
-                  {!matchedSem && (
-                    <div className="space-y-2">
-                      <div>
-                        <Label className="text-xs">Semester Name</Label>
-                        <Input
-                          value={groupCourses[0].semesterName}
-                          onChange={(e) => {
-                            const name = e.target.value;
-                            groupCourses.forEach(dc =>
-                              updateDetectedCourse(dc.id, { semesterName: name })
-                            );
-                          }}
-                          placeholder="e.g. Spring 2026"
-                          className="mt-1 rounded-lg h-8 text-sm"
-                        />
-                      </div>
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <Label className="text-xs">Start Date</Label>
-                          <Input
-                            type="date"
-                            value={groupCourses[0].semesterStart}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              groupCourses.forEach(dc =>
-                                updateDetectedCourse(dc.id, { semesterStart: val })
-                              );
-                            }}
-                            className="mt-1 rounded-lg h-8 text-sm"
-                          />
-                        </div>
-                        <div>
-                          <Label className="text-xs">End Date</Label>
-                          <Input
-                            type="date"
-                            value={groupCourses[0].semesterEnd}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              groupCourses.forEach(dc =>
-                                updateDetectedCourse(dc.id, { semesterEnd: val })
-                              );
-                            }}
-                            className="mt-1 rounded-lg h-8 text-sm"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="border-t border-gray-100 pt-3 space-y-3">
-                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Courses</p>
-                    {groupCourses.map((dc) => (
-                      <div key={dc.id} className="space-y-2">
-                        {dc.error && (
-                          <Alert className="py-1.5 bg-amber-50 border-amber-200">
-                            <AlertCircle className="h-3 w-3 text-amber-500" />
-                            <AlertDescription className="text-xs text-amber-800">
-                              Detection failed — fill in manually.
-                            </AlertDescription>
-                          </Alert>
-                        )}
-                        <div className="flex items-center gap-2 text-xs text-gray-400 min-w-0">
-                          <FileText className="w-3 h-3" />
-                          <span className="truncate">{dc.fileItem.file.name}</span>
-                        </div>
-                        <div className="grid grid-cols-2 gap-2">
-                          <div>
-                            <Label className="text-xs">Course Name</Label>
-                            <Input
-                              value={dc.courseName}
-                              onChange={(e) => updateDetectedCourse(dc.id, { courseName: e.target.value })}
-                              placeholder="e.g. Calculus II"
-                              className="mt-1 rounded-lg h-8 text-sm"
-                            />
-                          </div>
-                          <div>
-                            <Label className="text-xs">Course Code</Label>
-                            <Input
-                              value={dc.courseCode}
-                              onChange={(e) => updateDetectedCourse(dc.id, { courseCode: e.target.value })}
-                              placeholder="e.g. MATH 202"
-                              className="mt-1 rounded-lg h-8 text-sm"
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </Card>
-              );
-            })}
+            <BulkReviewForm
+              detectedCourses={detectedCourses}
+              updateDetectedCourse={updateDetectedCourse}
+              semesters={semesters}
+            />
 
             <div className="flex gap-3">
               <Button variant="outline" className="flex-1 rounded-lg" onClick={onClose}>
