@@ -1,5 +1,6 @@
-import { parseISO, format } from 'date-fns';
+import { parseISO, format, startOfDay } from 'date-fns';
 import { Card } from './ui/card';
+import { getUpcomingEvents } from '@/lib/eventHelpers';
 import type { Course, Event } from '@/lib/types';
 import { toPercent } from '@/lib/gradeWeight';
 
@@ -9,17 +10,8 @@ interface CourseQuickInfoCardsProps {
 }
 
 export function CourseQuickInfoCards({ course, events }: CourseQuickInfoCardsProps) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
   // Future events only (date >= today, date must be non-null, no_class excluded)
-  const futureEvents = events
-    .filter(e => {
-      if (!e.date) return false;
-      const d = parseISO(e.date);
-      return d >= today && e.type !== 'no_class';
-    })
-    .sort((a, b) => parseISO(a.date!).getTime() - parseISO(b.date!).getTime());
+  const futureEvents = getUpcomingEvents(events, { today: startOfDay(new Date()) });
 
   // Card 1: Next deadline — soonest future non-no_class event
   const nextDeadline = futureEvents.length > 0 ? futureEvents[0] : null;

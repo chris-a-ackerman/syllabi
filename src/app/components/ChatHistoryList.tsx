@@ -1,19 +1,10 @@
 import { useState } from 'react';
+import { ConfirmDeleteDialog } from './ConfirmDeleteDialog';
 import { format, parseISO } from 'date-fns';
 import { Plus, Trash2 } from 'lucide-react';
 import { useChat } from '../context/ChatProvider';
 import { EditableChatTitle } from './EditableChatTitle';
 import type { ChatRenameControls } from '../hooks/useChatRename';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '../components/ui/alert-dialog';
 
 interface ChatHistoryListProps {
   rename: ChatRenameControls;
@@ -88,36 +79,18 @@ export function ChatHistoryList({ rename, onChatOpened }: ChatHistoryListProps) 
         </button>
       </div>
 
-      <AlertDialog
+      <ConfirmDeleteDialog
         open={chatToDelete !== null}
         onOpenChange={(open) => {
           if (!open) setChatToDelete(null);
         }}
-      >
-        <AlertDialogContent className="rounded-2xl">
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete this chat?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This action cannot be undone. This chat will be permanently deleted from your chat
-              history forever.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel className="rounded-[10px]">Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              className="rounded-[10px] bg-[#e7000b] hover:bg-[#c50009] text-white"
-              onClick={() => {
-                if (chatToDelete) {
-                  deleteChat(chatToDelete);
-                  setChatToDelete(null);
-                }
-              }}
-            >
-              Delete Forever
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        title="Delete this chat?"
+        description="This action cannot be undone. This chat will be permanently deleted from your chat history forever."
+        confirmLabel="Delete Forever"
+        onConfirm={() => {
+          if (chatToDelete) deleteChat(chatToDelete);
+        }}
+      />
     </div>
   );
 }

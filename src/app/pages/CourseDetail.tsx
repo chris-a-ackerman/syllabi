@@ -24,17 +24,8 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '../components/ui/alert-dialog';
 import { CourseFormModal } from '../components/CourseFormModal';
+import { ConfirmDeleteDialog } from '../components/ConfirmDeleteDialog';
 import { CourseQuickInfoCards } from '../components/CourseQuickInfoCards';
 
 export function CourseDetail() {
@@ -765,50 +756,28 @@ export function CourseDetail() {
       </div>
 
       {/* Delete Course Confirmation */}
-      <AlertDialog open={showDeleteCourse} onOpenChange={setShowDeleteCourse}>
-        <AlertDialogContent className="rounded-2xl">
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete {course.name}?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will permanently delete the course and all its extracted events. This cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel className="rounded-lg">Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-red-600 hover:bg-red-700 rounded-lg"
-              onClick={async () => {
-                const semesterId = course.semesterId;
-                await deleteCourse(course.id);
-                navigate('/courses', { state: { semesterId } });
-              }}
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ConfirmDeleteDialog
+        open={showDeleteCourse}
+        onOpenChange={setShowDeleteCourse}
+        title={`Delete ${course.name}?`}
+        description="This will permanently delete the course and all its extracted events. This cannot be undone."
+        onConfirm={async () => {
+          const semesterId = course.semesterId;
+          await deleteCourse(course.id);
+          navigate('/courses', { state: { semesterId } });
+        }}
+      />
 
       {/* Delete Note Confirmation */}
-      <AlertDialog open={!!deleteNoteId} onOpenChange={() => setDeleteNoteId(null)}>
-        <AlertDialogContent className="rounded-2xl">
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete this note?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This action cannot be undone. The note will be permanently deleted.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel className="rounded-lg">Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDeleteNote}
-              className="bg-red-600 hover:bg-red-700 rounded-lg"
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ConfirmDeleteDialog
+        open={!!deleteNoteId}
+        onOpenChange={(open) => {
+          if (!open) setDeleteNoteId(null);
+        }}
+        title="Delete this note?"
+        description="This action cannot be undone. The note will be permanently deleted."
+        onConfirm={handleDeleteNote}
+      />
 
       {/* Edit Course Details */}
       <CourseFormModal

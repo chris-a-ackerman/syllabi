@@ -1,4 +1,5 @@
 import { useNavigate, useLocation } from 'react-router';
+import type { UploadTarget } from '@/lib/types';
 import { useData } from '../context/DataProvider';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
@@ -11,16 +12,6 @@ import {
   Trash2,
   Pencil,
 } from 'lucide-react';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '../components/ui/alert-dialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -38,6 +29,7 @@ import { useState } from 'react';
 import { AppHeader } from '../components/AppHeader';
 import { UploadSyllabusModal } from '../components/UploadSyllabusModal';
 import { CourseFormModal } from '../components/CourseFormModal';
+import { ConfirmDeleteDialog } from '../components/ConfirmDeleteDialog';
 import { BulkUploadModal } from '../components/BulkUploadModal';
 import { EditSemesterModal } from '../components/EditSemesterModal';
 
@@ -48,12 +40,7 @@ export function Courses() {
   const [showAddCourse, setShowAddCourse] = useState(false);
   const [showBulkUpload, setShowBulkUpload] = useState(false);
   const [showCourseForm, setShowCourseForm] = useState(false);
-  const [selectedCourseForUpload, setSelectedCourseForUpload] = useState<{
-    id: string;
-    name: string;
-    code: string;
-    color: string;
-  } | undefined>(undefined);
+  const [selectedCourseForUpload, setSelectedCourseForUpload] = useState<UploadTarget | undefined>(undefined);
   const [courseToDelete, setCourseToDelete] = useState<string | null>(null);
   const [showEditSemester, setShowEditSemester] = useState(false);
 
@@ -312,28 +299,17 @@ export function Courses() {
         ) : null;
       })()}
 
-      <AlertDialog open={!!courseToDelete} onOpenChange={() => setCourseToDelete(null)}>
-        <AlertDialogContent className="rounded-2xl">
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete this course?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will permanently delete the course and all its extracted events. This cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel className="rounded-lg">Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-red-600 hover:bg-red-700 rounded-lg"
-              onClick={async () => {
-                if (courseToDelete) await deleteCourse(courseToDelete);
-                setCourseToDelete(null);
-              }}
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ConfirmDeleteDialog
+        open={!!courseToDelete}
+        onOpenChange={(open) => {
+          if (!open) setCourseToDelete(null);
+        }}
+        title="Delete this course?"
+        description="This will permanently delete the course and all its extracted events. This cannot be undone."
+        onConfirm={async () => {
+          if (courseToDelete) await deleteCourse(courseToDelete);
+        }}
+      />
     </div>
   );
 }

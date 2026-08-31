@@ -2,12 +2,11 @@ import { useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router';
 import { useAuth } from '../context/AuthProvider';
 import { useData } from '../context/DataProvider';
+import { BulkReviewForm } from '../components/BulkReviewForm';
 import { useBulkUpload } from '../hooks/useBulkUpload';
 import { useProcessingPoll } from '../hooks/useProcessingPoll';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
-import { Input } from '../components/ui/input';
-import { Label } from '../components/ui/label';
 import { Alert, AlertDescription } from '../components/ui/alert';
 import { Upload, Check, X, Loader2, AlertCircle, ChevronRight, FileText, RefreshCw } from 'lucide-react';
 
@@ -70,16 +69,6 @@ export function Onboarding() {
   };
 
   // Group detected courses by semesterName for the review step
-  const semesterGroups = detectedCourses.reduce<Record<string, typeof detectedCourses>>(
-    (acc, dc) => {
-      const key = dc.semesterName.trim() || '__unknown__';
-      if (!acc[key]) acc[key] = [];
-      acc[key].push(dc);
-      return acc;
-    },
-    {}
-  );
-
   return (
     <div className="min-h-screen bg-gradient-to-b from-white to-indigo-50">
       <div className="max-w-2xl mx-auto px-4 py-12">
@@ -217,118 +206,12 @@ export function Onboarding() {
         {/* ── Step 3: Review ── */}
         {step === 'review' && (
           <div className="space-y-6">
-            {Object.entries(semesterGroups).map(([, groupCourses]) => {
-              const stableKey = groupCourses.map(dc => dc.id).sort().join('|');
-              return (
-              <Card key={stableKey} className="p-6 rounded-2xl space-y-4">
-                {/* Semester fields */}
-                <div>
-                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">
-                    Semester
-                  </p>
-                  <div className="space-y-3">
-                    <div>
-                      <Label>Semester Name</Label>
-                      <Input
-                        value={groupCourses[0].semesterName}
-                        onChange={(e) => {
-                          const name = e.target.value;
-                          groupCourses.forEach(dc =>
-                            updateDetectedCourse(dc.id, { semesterName: name })
-                          );
-                        }}
-                        placeholder="e.g. Spring 2026"
-                        className="mt-1 rounded-lg"
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <Label>Start Date</Label>
-                        <Input
-                          type="date"
-                          value={groupCourses[0].semesterStart}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            groupCourses.forEach(dc =>
-                              updateDetectedCourse(dc.id, { semesterStart: val })
-                            );
-                          }}
-                          className="mt-1 rounded-lg"
-                        />
-                      </div>
-                      <div>
-                        <Label>End Date</Label>
-                        <Input
-                          type="date"
-                          value={groupCourses[0].semesterEnd}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            groupCourses.forEach(dc =>
-                              updateDetectedCourse(dc.id, { semesterEnd: val })
-                            );
-                          }}
-                          className="mt-1 rounded-lg"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Course fields */}
-                <div className="border-t border-gray-100 pt-4">
-                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">
-                    Courses
-                  </p>
-                  <div className="space-y-4">
-                    {groupCourses.map((dc) => (
-                      <div key={dc.id} className="space-y-2">
-                        {dc.error && (
-                          <Alert className="py-2 bg-amber-50 border-amber-200">
-                            <AlertCircle className="h-3 w-3 text-amber-500" />
-                            <AlertDescription className="text-xs text-amber-800">
-                              Detection failed — please fill in the fields below manually.
-                            </AlertDescription>
-                          </Alert>
-                        )}
-                        <div className="flex items-center gap-2 text-xs text-gray-400">
-                          <FileText className="w-3 h-3" />
-                          <span className="truncate">{dc.fileItem.file.name}</span>
-                          {!dc.error && (
-                            <span className={`ml-auto shrink-0 ${
-                              dc.confidence === 'high' ? 'text-green-500' :
-                              dc.confidence === 'medium' ? 'text-amber-500' : 'text-gray-400'
-                            }`}>
-                              {dc.confidence} confidence
-                            </span>
-                          )}
-                        </div>
-                        <div className="grid grid-cols-2 gap-2">
-                          <div>
-                            <Label className="text-xs">Course Name</Label>
-                            <Input
-                              value={dc.courseName}
-                              onChange={(e) => updateDetectedCourse(dc.id, { courseName: e.target.value })}
-                              placeholder="e.g. Calculus II"
-                              className="mt-1 rounded-lg h-8 text-sm"
-                            />
-                          </div>
-                          <div>
-                            <Label className="text-xs">Course Code</Label>
-                            <Input
-                              value={dc.courseCode}
-                              onChange={(e) => updateDetectedCourse(dc.id, { courseCode: e.target.value })}
-                              placeholder="e.g. MATH 202"
-                              className="mt-1 rounded-lg h-8 text-sm"
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </Card>
-              );
-            })}
+            <BulkReviewForm
+              detectedCourses={detectedCourses}
+              updateDetectedCourse={updateDetectedCourse}
+              variant="page"
+              showConfidence
+            />
 
             <Button
               className="w-full bg-indigo-600 hover:bg-indigo-700 rounded-lg"
