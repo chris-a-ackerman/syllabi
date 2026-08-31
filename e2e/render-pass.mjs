@@ -287,12 +287,9 @@ await check('Agenda renders grouped by week', '/agenda', {
 });
 await check('Canvas settings renders', '/settings/canvas', { expectText: ['Canvas Integration'] });
 
-// Admin is reached in-app: a direct URL load races the profile fetch that sets
-// isAdmin, so ProtectedRoute bounces to /dashboard. Tracked as a separate bug.
-await send('Page.navigate', { url: `${BASE}/dashboard` });
-await wait(4000);
-await check('Admin panel renders (in-app navigation)', '/admin', {
-  viaClick: 'Admin',
+// Direct URL load: ProtectedRoute holds until the profile fetch settles
+// instead of bouncing an admin to /dashboard (SYL-55).
+await check('Admin panel renders (direct load)', '/admin', {
   expectText: ['Admin Panel'],
 });
 
@@ -335,9 +332,10 @@ if (disabled !== 'ok') {
   failures++;
 } else {
   await wait(3000);
-  // Full reload. /admin has to be reached in-app (see the note above), which
-  // also means the flag survives a fresh AuthProvider + SettingsProvider mount.
-  await send('Page.navigate', { url: `${BASE}/dashboard` });
+  // Full reload straight onto /admin — the flag has to survive a fresh
+  // AuthProvider + SettingsProvider mount, and the direct load itself is the
+  // SYL-55 fix under test.
+  await send('Page.navigate', { url: `${BASE}/admin` });
   await wait(4000);
   events = [];
   const stillOff = await evaluate(`(async () => {
@@ -346,12 +344,6 @@ if (disabled !== 'ok') {
       [...document.querySelectorAll('button, a')].find(
         (x) => (x.innerText || '').trim() === text
       );
-    const admin = [...document.querySelectorAll('button, a')].find(
-      (x) => (x.innerText || '').trim().includes('Admin')
-    );
-    if (!admin) return 'no Admin link after reload';
-    admin.click();
-    await sleep(3000);
     const tab = byText('Access Control');
     if (!tab) return 'no Access Control tab after reload';
     tab.click();
@@ -471,6 +463,18 @@ console.log(`\nSigned in as the fresh user -> ${await signIn(E2E_EMAIL_NEW)}`);
 await check('Onboarding renders for a new account', '/onboarding', {
   expectText: ['Upload your syllabi'],
 });
+
+// A non-admin loading /admin directly must still bounce to /dashboard — the
+// SYL-55 fix holds rendering for admins without letting non-admins through.
+await send('Page.navigate', { url: `${BASE}/admin` });
+await wait(4000);
+const nonAdminPath = await evaluate('location.pathname');
+if (nonAdminPath === '/dashboard') {
+  console.log('PASS  Non-admin direct /admin load bounces to /dashboard');
+} else {
+  console.log(`FAIL  Non-admin direct /admin load landed on ${nonAdminPath}, expected /dashboard`);
+  failures++;
+}
 
 ws.close();
 console.log(

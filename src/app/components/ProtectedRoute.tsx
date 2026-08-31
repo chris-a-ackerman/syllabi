@@ -8,7 +8,7 @@ interface ProtectedRouteProps {
 }
 
 export function ProtectedRoute({ children, adminOnly = false }: ProtectedRouteProps) {
-  const { user, loading } = useAuth();
+  const { user, loading, profileLoaded } = useAuth();
 
   if (loading) {
     return null;
@@ -18,8 +18,15 @@ export function ProtectedRoute({ children, adminOnly = false }: ProtectedRoutePr
     return <Navigate to="/" replace />;
   }
 
-  if (adminOnly && !user.isAdmin) {
-    return <Navigate to="/dashboard" replace />;
+  if (adminOnly) {
+    // isAdmin is a placeholder until the profile fetch settles — deciding on
+    // it early bounced admins off a directly-loaded /admin (SYL-55).
+    if (!profileLoaded) {
+      return null;
+    }
+    if (!user.isAdmin) {
+      return <Navigate to="/dashboard" replace />;
+    }
   }
 
   return <>{children}</>;
