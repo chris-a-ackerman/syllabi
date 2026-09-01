@@ -66,9 +66,12 @@ function ProtectedAgenda() {
 }
 
 function ProtectedOnboarding() {
-  const { user, loading } = useAuth();
+  const { user, loading, profileLoaded } = useAuth();
   if (loading) return null;
   if (!user) return <Navigate to="/" replace />;
+  // onboardingCompleted is a placeholder until the profile fetch settles;
+  // don't render (or skip) onboarding off the placeholder (SYL-55).
+  if (!profileLoaded) return null;
   if (user.onboardingCompleted) return <Navigate to="/dashboard" replace />;
   return <Onboarding />;
 }

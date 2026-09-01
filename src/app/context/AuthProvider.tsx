@@ -15,6 +15,12 @@ import type { User as SupabaseUser } from '@supabase/supabase-js';
 interface AuthState {
   user: User | null;
   loading: boolean;
+  /**
+   * True once the profiles row for the current user has been fetched (or
+   * confirmed absent). Until then user.isAdmin / user.onboardingCompleted are
+   * the authUserFromSession placeholders and must not drive routing (SYL-55).
+   */
+  profileLoaded: boolean;
   markOnboardingComplete: () => Promise<void>;
   signOut: () => Promise<void>;
 }
@@ -48,30 +54,39 @@ function authUserFromSession(supabaseUser: SupabaseUser): User {
 }
 
 // Fire-and-forget: fetch the profiles row and patch displayName + isAdmin.
-// Defined outside the component so it's a stable reference.
+// Defined outside the component so it's a stable reference. onSettled fires
+// once the fetch finishes either way, so routing can tell "profile not loaded
+// yet" apart from "user really isn't an admin / hasn't onboarded" (SYL-55).
 function enrichUserWithProfile(
   userId: string,
   setUser: React.Dispatch<React.SetStateAction<User | null>>,
+  onSettled: (userId: string) => void,
 ) {
-  authApi.fetchProfile(userId).then(({ data: profile }) => {
-    if (!profile) return;
-    setUser(prev => {
-      if (!prev || prev.id !== userId) return prev;
-      const displayName = profile.display_name || prev.displayName;
-      return {
-        ...prev,
-        displayName,
-        avatar: getInitials(displayName),
-        isAdmin: profile.is_admin ?? false,
-        onboardingCompleted: profile.onboarding_completed ?? false,
-      };
-    });
-  });
+  authApi
+    .fetchProfile(userId)
+    .then(({ data: profile }) => {
+      if (!profile) return;
+      setUser(prev => {
+        if (!prev || prev.id !== userId) return prev;
+        const displayName = profile.display_name || prev.displayName;
+        return {
+          ...prev,
+          displayName,
+          avatar: getInitials(displayName),
+          isAdmin: profile.is_admin ?? false,
+          onboardingCompleted: profile.onboarding_completed ?? false,
+        };
+      });
+    })
+    .finally(() => onSettled(userId));
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  // Which user's profile fetch has settled — compared against user.id so a
+  // sign-out/sign-in never carries a stale "loaded" flag across accounts.
+  const [profileLoadedFor, setProfileLoadedFor] = useState<string | null>(null);
 
   // Check for existing session on mount
   useEffect(() => {
@@ -82,7 +97,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (session?.user) {
             // Set user immediately — no awaiting the profile fetch so loading clears fast.
             setUser(authUserFromSession(session.user));
-            enrichUserWithProfile(session.user.id, setUser);
+            enrichUserWithProfile(session.user.id, setUser, setProfileLoadedFor);
           }
         } catch (error) {
           console.error('Error checking session:', error);
@@ -98,9 +113,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
         if (session?.user) {
           setUser(authUserFromSession(session.user));
-          enrichUserWithProfile(session.user.id, setUser);
+          enrichUserWithProfile(session.user.id, setUser, setProfileLoadedFor);
         } else {
           setUser(null);
+          setProfileLoadedFor(null);
         }
       });
 
@@ -119,11 +135,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await supabase.auth.signOut();
     }
     setUser(null);
+    setProfileLoadedFor(null);
   }, []);
 
+  const profileLoaded = user !== null && profileLoadedFor === user.id;
+
   const value = useMemo<AuthState>(
-    () => ({ user, loading, markOnboardingComplete, signOut }),
-    [user, loading, markOnboardingComplete, signOut],
+    () => ({ user, loading, profileLoaded, markOnboardingComplete, signOut }),
+    [user, loading, profileLoaded, markOnboardingComplete, signOut],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
