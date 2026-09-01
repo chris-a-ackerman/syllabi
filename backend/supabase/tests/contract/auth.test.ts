@@ -30,20 +30,15 @@ Deno.test("all functions: no Authorization header → 401", async (t) => {
   });
 });
 
-// BUG (characterization): see SYL-54 — save-canvas-token validates the request
-// BODY before verifying the bearer token, so a garbage token with an invalid
-// body returns 400, not 401. Worse, a garbage token with a valid body reaches
-// the outbound Canvas round-trip pre-auth. Update this expectation to 401 when
-// SYL-54 lands; don't "fix" the test alone. (chat had the same ordering bug
-// until SYL-29 moved auth ahead of everything.)
-const BODY_VALIDATED_FIRST = new Set(["save-canvas-token"]);
-
-Deno.test("all functions: garbage bearer token → 401 (or pinned 400 where body validation runs first)", async (t) => {
+// SYL-54 moved save-canvas-token's auth check ahead of body validation and the
+// outbound Canvas round-trip, so every function now rejects a garbage bearer
+// token with 401 before doing any other work. (chat had the same ordering bug
+// until SYL-29.)
+Deno.test("all functions: garbage bearer token → 401", async (t) => {
   for (const name of POST_FUNCTIONS) {
     await t.step(name, async () => {
       const res = await callFn(name, { token: "garbage-token", body: {} });
-      const expected = BODY_VALIDATED_FIRST.has(name) ? 400 : 401;
-      assertEquals(res.status, expected, `${name} returned ${res.status}: ${res.text.slice(0, 200)}`);
+      assertEquals(res.status, 401, `${name} returned ${res.status}: ${res.text.slice(0, 200)}`);
     });
   }
   await t.step("generate-ics", async () => {
