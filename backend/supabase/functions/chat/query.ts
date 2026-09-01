@@ -7,10 +7,16 @@ export function detectQueryType(message: string): string {
   const scheduleKeywords = ["class", "meet", "miss", "skip class", "office hours", "location", "room"];
   const gradingKeywords = ["worth", "grade", "points", "percent", "drop", "weight", "gpa", "final grade", "can i skip", "need on"];
   const policyKeywords = ["late", "policy", "ai", "artificial intelligence", "extra credit", "attendance", "absence", "extension", "integrity", "cheat"];
-  if (dateKeywords.some(k => lower.includes(k))) return "date";
-  if (policyKeywords.some(k => lower.includes(k))) return "policy";
-  if (gradingKeywords.some(k => lower.includes(k))) return "grading";
-  if (scheduleKeywords.some(k => lower.includes(k))) return "schedule";
+  // Whole-word/phrase matching (SYL-53): a bare includes() matched "ai" inside
+  // ordinary words like "email" and "available".
+  const matches = (keywords: string[]) =>
+    keywords.some((k) => new RegExp(`\\b${k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`).test(lower));
+  // Grading outranks date (SYL-53): dateKeywords contain "exam"/"quiz"/"due",
+  // which also appear in grading questions ("how much is the final exam worth?").
+  if (matches(gradingKeywords)) return "grading";
+  if (matches(dateKeywords)) return "date";
+  if (matches(policyKeywords)) return "policy";
+  if (matches(scheduleKeywords)) return "schedule";
   return "general";
 }
 
@@ -42,6 +48,12 @@ export function extractDateRange(message: string, today: Date = new Date()): { s
   return { start: todayStr, end: nextWeek.toISOString().split("T")[0], isSpecific: false };
 }
 
+// Mirrors src/lib/gradeWeight.ts (toPercent): the extraction prompt mandates
+// 0–1 decimal weights, but older analyses may already hold percents (SYL-51).
+function toPercent(w: number): number {
+  return w > 0 && w <= 1 ? Math.round(w * 100) : Math.round(w);
+}
+
 // deno-lint-ignore no-explicit-any
 export function buildCourseContext(courses: any[], events: any[], queryType: string): string {
   if (!courses.length) return "No courses found for this query.";
@@ -49,17 +61,19 @@ export function buildCourseContext(courses: any[], events: any[], queryType: str
   const courseSections = courses.map(c => {
     const header = `${c.name}${c.code ? ` (${c.code})` : ""}${c.professor ? ` — Prof. ${c.professor}` : ""}`;
 
-    // Schedule
+    // Schedule — process-syllabus writes meeting_times (SYL-50); the prompt
+    // sets start/end to null when the syllabus doesn't state them.
     const s = c.schedule || {};
     const days = (s.meeting_days || []).join(", ") || "TBD";
-    const time = s.meeting_time ? `${s.meeting_time.start || ""}–${s.meeting_time.end || ""}` : "TBD";
+    const mt = s.meeting_times || {};
+    const time = mt.start || mt.end ? `${mt.start || ""}–${mt.end || ""}` : "TBD";
     const schedule = `Meets: ${days} ${time} at ${s.location || "TBD"}`;
 
     // Grading
     const rules = c.grading_rules || {};
     // deno-lint-ignore no-explicit-any
     const components = (rules.components || []).map((comp: any) =>
-      `  - ${comp.name}: ${comp.weight}%${comp.drop_lowest ? ` (drop lowest ${comp.drop_lowest})` : ""}${comp.late_policy ? `, late: ${comp.late_policy}` : ""}`
+      `  - ${comp.name}: ${typeof comp.weight === "number" ? toPercent(comp.weight) : comp.weight}%${comp.drop_lowest ? ` (drop lowest ${comp.drop_lowest})` : ""}${comp.late_policy ? `, late: ${comp.late_policy}` : ""}`
     ).join("\n");
     const grading = components
       ? `${components}${rules.grading_scale ? `\n  Scale: ${rules.grading_scale}` : ""}`

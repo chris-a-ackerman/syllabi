@@ -15,19 +15,19 @@ Deno.test("detectQueryType: clear cases", () => {
   assertEquals(detectQueryType("Tell me something interesting"), "general");
 });
 
-// BUG (characterization): see SYL issue "detectQueryType keyword precedence
-// misclassifies" — dateKeywords contain "exam"/"quiz"/"due", and date has the
-// highest precedence, so grading questions about exams classify as "date".
-// Update this test when fixing; don't "fix" the test alone.
-Deno.test("detectQueryType: grading question mentioning an exam classifies as date (characterization)", () => {
-  assertEquals(detectQueryType("How much of my grade is the final exam worth?"), "date");
+// SYL-53: grading keywords outrank date keywords, so grading questions that
+// mention an exam/quiz/due date fetch the grading context slice.
+Deno.test("detectQueryType: grading question mentioning an exam classifies as grading", () => {
+  assertEquals(detectQueryType("How much of my grade is the final exam worth?"), "grading");
+  assertEquals(detectQueryType("What is quiz 3 worth?"), "grading");
 });
 
-// BUG (characterization): policyKeywords contain the bare substring "ai",
-// which matches inside ordinary words ("email", "available", "again").
-Deno.test("detectQueryType: 'email' triggers the policy branch via the 'ai' substring (characterization)", () => {
-  assertEquals(detectQueryType("Can you send the professor's contact via mail merge? Also his mailing address"), "policy");
-  assertEquals(detectQueryType("please check my mail"), "policy");
+// SYL-53: keywords match whole words only — "ai" no longer fires inside
+// ordinary words ("email", "available", "again").
+Deno.test("detectQueryType: 'ai' matches only as a standalone word", () => {
+  assertEquals(detectQueryType("Can you send the professor's contact via mail merge? Also his mailing address"), "general");
+  assertEquals(detectQueryType("please check my mail"), "general");
+  assertEquals(detectQueryType("Can I use AI on the homework?"), "policy");
 });
 
 // ── extractDateRange ─────────────────────────────────────────────────────────
@@ -116,20 +116,31 @@ Deno.test("buildCourseContext: renders header, grading, and policies", () => {
   assertStringIncludes(out, "Other: No food in lab");
 });
 
-// BUG (characterization): see SYL issue "buildCourseContext reads meeting_time
-// but writer stores meeting_times" — the schedule time always renders "TBD"
-// even when meeting_times is populated.
-Deno.test("buildCourseContext: meeting time renders TBD despite meeting_times being set (characterization)", () => {
+// SYL-50: the schedule reads meeting_times (what process-syllabus writes).
+Deno.test("buildCourseContext: renders the extracted meeting time", () => {
   const out = buildCourseContext([COURSE], [], "general");
+  assertStringIncludes(out, "Meets: Mon, Wed 10:00–11:15 at Hall 2");
+});
+
+Deno.test("buildCourseContext: null meeting_times start/end render TBD, not an empty dash", () => {
+  const course = { ...COURSE, schedule: { ...COURSE.schedule, meeting_times: { start: null, end: null } } };
+  const out = buildCourseContext([course], [], "general");
   assertStringIncludes(out, "Meets: Mon, Wed TBD at Hall 2");
 });
 
-// BUG (characterization): see SYL issue "decimal grade weights render as
-// 0.15%" — weights stored as 0–1 decimals are interpolated directly into "%".
-Deno.test("buildCourseContext: decimal weights render as sub-1 percentages (characterization)", () => {
+// SYL-51: 0–1 decimal weights normalize to percents (mirrors src/lib/gradeWeight.ts).
+Deno.test("buildCourseContext: decimal weights render as whole percentages", () => {
   const out = buildCourseContext([COURSE], [], "general");
-  assertStringIncludes(out, "- Exams: 0.4%");
-  assertStringIncludes(out, "- Homework: 0.6%");
+  assertStringIncludes(out, "- Exams: 40%");
+  assertStringIncludes(out, "- Homework: 60%");
+});
+
+Deno.test("buildCourseContext: already-percent weights pass through unchanged", () => {
+  const course = {
+    ...COURSE,
+    grading_rules: { components: [{ name: "Labs", weight: 15 }] },
+  };
+  assertStringIncludes(buildCourseContext([course], [], "general"), "- Labs: 15%");
 });
 
 Deno.test("buildCourseContext: event section label depends on queryType", () => {
