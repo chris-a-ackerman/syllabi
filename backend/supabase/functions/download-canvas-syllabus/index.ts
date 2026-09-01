@@ -1,7 +1,7 @@
 // supabase/functions/download-canvas-syllabus/index.ts
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { assertSafeCanvasUrl, UnsafeCanvasUrlError } from "../_shared/canvas-url.ts";
+import { assertSafeCanvasUrl, safeCanvasFetch, UnsafeCanvasUrlError } from "../_shared/canvas-url.ts";
 
 import { CORS_HEADERS } from "../_shared/cors.ts";
 
@@ -100,13 +100,14 @@ serve(async (req) => {
     // the user's Canvas token, so pin it to the host of their connected Canvas
     // instance before any request leaves the function. Checked here rather than
     // at the fetch so a rejection cannot leave canvas_sync_status on "running".
+    let allowedHost: string | null = null;
     if (source_type === "file" && file_url) {
       const canvasBaseUrl: string | null = profileResult.data?.canvas_base_url ?? null;
       if (!canvasBaseUrl) {
         return json({ error: "No Canvas instance connected. Please connect Canvas first." }, 400);
       }
       try {
-        const allowedHost = (await assertSafeCanvasUrl(canvasBaseUrl)).hostname;
+        allowedHost = (await assertSafeCanvasUrl(canvasBaseUrl)).hostname;
         await assertSafeCanvasUrl(file_url, allowedHost);
       } catch (err) {
         if (err instanceof UnsafeCanvasUrlError) {
@@ -136,9 +137,26 @@ serve(async (req) => {
 
     if (source_type === "file" && file_url) {
       console.log("[download] fetching Canvas file");
-      const fileRes = await fetch(file_url, {
-        headers: { Authorization: `Bearer ${canvasToken}` },
-      });
+      let fileRes: Response;
+      try {
+        fileRes = await safeCanvasFetch(file_url, {
+          headers: { Authorization: `Bearer ${canvasToken}` },
+        }, allowedHost);
+      } catch (err) {
+        if (err instanceof UnsafeCanvasUrlError) {
+          const errMsg = `Failed to download syllabus file: ${err.message}`;
+          console.error(`[download] ${errMsg}`);
+          await supabaseService
+            .from("courses")
+            .update({
+              canvas_sync_status: { ...currentStatus, process_syllabus: "failed" },
+              canvas_sync_error: { ...currentError, process_syllabus: errMsg },
+            })
+            .eq("id", course_id);
+          return json({ error: errMsg }, 502);
+        }
+        throw err;
+      }
       console.log(`[download] Canvas file fetch status: ${fileRes.status} content-type: ${fileRes.headers.get("content-type")} content-length: ${fileRes.headers.get("content-length")}`);
       if (!fileRes.ok) {
         const errMsg = `Failed to download syllabus file: ${fileRes.status}`;

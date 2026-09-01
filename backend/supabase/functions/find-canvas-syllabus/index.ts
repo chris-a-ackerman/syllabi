@@ -2,7 +2,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.24.3";
-import { assertSafeCanvasUrl, UnsafeCanvasUrlError } from "../_shared/canvas-url.ts";
+import { assertSafeCanvasUrl, safeCanvasFetch, UnsafeCanvasUrlError } from "../_shared/canvas-url.ts";
 import { enforceAiQuota } from "../_shared/ai-quota.ts";
 import { CORS_HEADERS } from "../_shared/cors.ts";
 
@@ -175,7 +175,7 @@ async function executeTools(
 
         if (block.name === "get_course_syllabus_body") {
           const url = `${canvasBaseUrl}/api/v1/courses/${input.course_id}?include[]=syllabus_body`;
-          const res = await fetch(url, { headers: { Authorization: `Bearer ${canvasToken}` } });
+          const res = await safeCanvasFetch(url, { headers: { Authorization: `Bearer ${canvasToken}` } });
           console.log(`[tool:get_course_syllabus_body] Canvas status: ${res.status}`);
           if (res.status === 401) throw new CanvasTokenExpiredError();
           if (!res.ok) throw new Error(`Canvas API error: ${res.status}`);
@@ -188,7 +188,7 @@ async function executeTools(
         } else if (block.name === "search_course_files") {
           const params = new URLSearchParams({ search_term: input.search_term, per_page: "10" });
           const url = `${canvasBaseUrl}/api/v1/courses/${input.course_id}/files?${params}`;
-          const res = await fetch(url, { headers: { Authorization: `Bearer ${canvasToken}` } });
+          const res = await safeCanvasFetch(url, { headers: { Authorization: `Bearer ${canvasToken}` } });
           console.log(`[tool:search_course_files] Canvas status: ${res.status}`);
           if (res.status === 401) throw new CanvasTokenExpiredError();
           if (!res.ok) throw new Error(`Canvas API error: ${res.status}`);
@@ -205,7 +205,7 @@ async function executeTools(
         } else if (block.name === "get_course_modules") {
           const url =
             `${canvasBaseUrl}/api/v1/courses/${input.course_id}/modules?include[]=items&per_page=5`;
-          const res = await fetch(url, { headers: { Authorization: `Bearer ${canvasToken}` } });
+          const res = await safeCanvasFetch(url, { headers: { Authorization: `Bearer ${canvasToken}` } });
           console.log(`[tool:get_course_modules] Canvas status: ${res.status}`);
           if (res.status === 401) throw new CanvasTokenExpiredError();
           if (!res.ok) throw new Error(`Canvas API error: ${res.status}`);
@@ -219,7 +219,7 @@ async function executeTools(
                 const base = { title: item.title, type: item.type, url: item.url };
                 if (item.type === "File" && item.url) {
                   try {
-                    const fileRes = await fetch(item.url as string, {
+                    const fileRes = await safeCanvasFetch(item.url as string, {
                       headers: { Authorization: `Bearer ${canvasToken}` },
                     });
                     console.log(`[tool:get_course_modules] file item "${item.title}" fetch status: ${fileRes.status}`);
@@ -241,7 +241,7 @@ async function executeTools(
         } else if (block.name === "get_course_pages") {
           const params = new URLSearchParams({ search_term: input.search_term, per_page: "10" });
           const url = `${canvasBaseUrl}/api/v1/courses/${input.course_id}/pages?${params}`;
-          const res = await fetch(url, { headers: { Authorization: `Bearer ${canvasToken}` } });
+          const res = await safeCanvasFetch(url, { headers: { Authorization: `Bearer ${canvasToken}` } });
           console.log(`[tool:get_course_pages] Canvas status: ${res.status}`);
           if (res.status === 401) throw new CanvasTokenExpiredError();
           if (!res.ok) throw new Error(`Canvas API error: ${res.status}`);
@@ -252,7 +252,7 @@ async function executeTools(
         } else if (block.name === "get_page_content") {
           const url =
             `${canvasBaseUrl}/api/v1/courses/${input.course_id}/pages/${encodeURIComponent(input.page_url)}`;
-          const res = await fetch(url, { headers: { Authorization: `Bearer ${canvasToken}` } });
+          const res = await safeCanvasFetch(url, { headers: { Authorization: `Bearer ${canvasToken}` } });
           console.log(`[tool:get_page_content] Canvas status: ${res.status}`);
           if (res.status === 401) throw new CanvasTokenExpiredError();
           if (!res.ok) throw new Error(`Canvas API error: ${res.status}`);

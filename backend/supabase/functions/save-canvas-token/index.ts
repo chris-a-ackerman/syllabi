@@ -2,7 +2,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { CORS_HEADERS } from "../_shared/cors.ts";
-import { assertSafeCanvasUrl, UnsafeCanvasUrlError } from "../_shared/canvas-url.ts";
+import { assertSafeCanvasUrl, safeCanvasFetch, UnsafeCanvasUrlError } from "../_shared/canvas-url.ts";
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
@@ -55,9 +55,20 @@ serve(async (req) => {
     }
 
     // 4. Validate token against Canvas API
-    const canvasRes = await fetch(`${canvas_base_url}/api/v1/users/self`, {
-      headers: { Authorization: `Bearer ${canvas_token}` },
-    });
+    let canvasRes: Response;
+    try {
+      canvasRes = await safeCanvasFetch(`${canvas_base_url}/api/v1/users/self`, {
+        headers: { Authorization: `Bearer ${canvas_token}` },
+      });
+    } catch (err) {
+      if (err instanceof UnsafeCanvasUrlError) {
+        return json(
+          { error: "Could not authenticate with Canvas. Check your token and institution URL." },
+          400
+        );
+      }
+      throw err;
+    }
     if (!canvasRes.ok) {
       return json(
         { error: "Could not authenticate with Canvas. Check your token and institution URL." },

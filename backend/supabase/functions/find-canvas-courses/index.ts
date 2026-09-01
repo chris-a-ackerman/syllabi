@@ -1,7 +1,7 @@
 // supabase/functions/find-canvas-courses/index.ts
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { assertSafeCanvasUrl, UnsafeCanvasUrlError } from "../_shared/canvas-url.ts";
+import { assertSafeCanvasUrl, safeCanvasFetch, UnsafeCanvasUrlError } from "../_shared/canvas-url.ts";
 import { isoToDate } from "../_shared/iso-date.ts";
 import { CORS_HEADERS } from "../_shared/cors.ts";
 
@@ -106,9 +106,18 @@ serve(async (req) => {
         `&per_page=50` +
         `&page=${page}`;
 
-      const canvasRes = await fetch(url, {
-        headers: { Authorization: `Bearer ${decryptedToken}` },
-      });
+      let canvasRes: Response;
+      try {
+        canvasRes = await safeCanvasFetch(url, {
+          headers: { Authorization: `Bearer ${decryptedToken}` },
+        });
+      } catch (err) {
+        if (err instanceof UnsafeCanvasUrlError) {
+          console.error("Canvas API error:", err.message);
+          return json({ error: "Could not reach Canvas. Please try again." }, 502);
+        }
+        throw err;
+      }
 
       if (canvasRes.status === 401) {
         return json(
