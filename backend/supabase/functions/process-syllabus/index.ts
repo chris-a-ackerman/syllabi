@@ -4,17 +4,12 @@ import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.24.3";
 import { mapAnalysisToCourseUpdate, mapEventsToRows, stripJsonFences } from "./parse.ts";
 import { enforceAiQuota } from "../_shared/ai-quota.ts";
 import { MAX_SYLLABUS_BYTES } from "../_shared/ai-limits.ts";
+import { CORS_HEADERS as corsHeaders } from "../_shared/cors.ts";
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
   Deno.env.get("SERVICE_ROLE_KEY")!
 );
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
 
 const anthropic = new Anthropic({
   apiKey: Deno.env.get("ANTHROPIC_API_KEY")!,
@@ -307,7 +302,6 @@ Return the complete JSON analysis as specified.`;
     // 7. Parse Claude's response
     const rawOutput = response.content[0].type === "text" ? response.content[0].text : "";
     console.log(`[process-syllabus][claude] response | model=${response.model} | input_tokens=${response.usage?.input_tokens} | output_tokens=${response.usage?.output_tokens} | stop_reason=${response.stop_reason}`);
-    console.log("RAW OUTPUT:", rawOutput);
 
     let analysisJson;
     try {
@@ -400,8 +394,9 @@ Return the complete JSON analysis as specified.`;
       { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
     );
   } catch (err) {
+    // Detail stays server-side (SYL-31); clients get a generic message.
     console.error("process-syllabus error:", err);
-    return new Response(JSON.stringify({ error: err.message }), {
+    return new Response(JSON.stringify({ error: "Internal server error" }), {
       status: 500,
       headers: { "Content-Type": "application/json", ...corsHeaders },
     });

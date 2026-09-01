@@ -4,17 +4,12 @@ import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.24.3";
 import { stripJsonFences } from "../_shared/strip-json-fences.ts";
 import { enforceAiQuota } from "../_shared/ai-quota.ts";
 import { MAX_SYLLABUS_BYTES } from "../_shared/ai-limits.ts";
+import { CORS_HEADERS as corsHeaders } from "../_shared/cors.ts";
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
   Deno.env.get("SERVICE_ROLE_KEY")!
 );
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
 
 const anthropic = new Anthropic({
   apiKey: Deno.env.get("ANTHROPIC_API_KEY")!,
@@ -182,7 +177,9 @@ serve(async (req) => {
 
     const results = settled.map((result, idx) => {
       if (result.status === "fulfilled") return result.value;
-      return { file_path: file_paths[idx], error: result.reason?.message ?? "Unknown error" };
+      // Detail stays server-side (SYL-31); clients get a generic per-file error.
+      console.error(`detect-syllabi-info failed for a file:`, result.reason);
+      return { file_path: file_paths[idx], error: "Could not analyze file" };
     });
 
     return new Response(
@@ -190,8 +187,9 @@ serve(async (req) => {
       { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
     );
   } catch (err) {
+    // Detail stays server-side (SYL-31); clients get a generic message.
     console.error("detect-syllabi-info error:", err);
-    return new Response(JSON.stringify({ error: err.message }), {
+    return new Response(JSON.stringify({ error: "Internal server error" }), {
       status: 500,
       headers: { "Content-Type": "application/json", ...corsHeaders },
     });
