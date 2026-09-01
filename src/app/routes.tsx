@@ -16,51 +16,12 @@ function RootLayout() {
   return <Outlet />;
 }
 
-// Wrapper components for protected routes
-function ProtectedDashboard() {
+// Single guard for every signed-in route (SYL-42); the /admin subtree adds
+// the admin check on top.
+function ProtectedLayout({ adminOnly = false }: { adminOnly?: boolean }) {
   return (
-    <ProtectedRoute>
-      <Dashboard />
-    </ProtectedRoute>
-  );
-}
-
-function ProtectedCourses() {
-  return (
-    <ProtectedRoute>
-      <Courses />
-    </ProtectedRoute>
-  );
-}
-
-function ProtectedCourseDetail() {
-  return (
-    <ProtectedRoute>
-      <CourseDetail />
-    </ProtectedRoute>
-  );
-}
-
-function ProtectedAdminPanel() {
-  return (
-    <ProtectedRoute adminOnly>
-      <AdminPanel />
-    </ProtectedRoute>
-  );
-}
-
-function ProtectedCanvasSettings() {
-  return (
-    <ProtectedRoute>
-      <CanvasSettings />
-    </ProtectedRoute>
-  );
-}
-
-function ProtectedAgenda() {
-  return (
-    <ProtectedRoute>
-      <Agenda />
+    <ProtectedRoute adminOnly={adminOnly}>
+      <Outlet />
     </ProtectedRoute>
   );
 }
@@ -97,28 +58,18 @@ export const router = createBrowserRouter([
         Component: ProtectedOnboarding,
       },
       {
-        path: '/dashboard',
-        Component: ProtectedDashboard,
+        Component: ProtectedLayout,
+        children: [
+          { path: '/dashboard', Component: Dashboard },
+          { path: '/courses', Component: Courses },
+          { path: '/course/:id', Component: CourseDetail },
+          { path: '/settings/canvas', Component: CanvasSettings },
+          { path: '/agenda', Component: Agenda },
+        ],
       },
       {
-        path: '/courses',
-        Component: ProtectedCourses,
-      },
-      {
-        path: '/course/:id',
-        Component: ProtectedCourseDetail,
-      },
-      {
-        path: '/admin',
-        Component: ProtectedAdminPanel,
-      },
-      {
-        path: '/settings/canvas',
-        Component: ProtectedCanvasSettings,
-      },
-      {
-        path: '/agenda',
-        Component: ProtectedAgenda,
+        element: <ProtectedLayout adminOnly />,
+        children: [{ path: '/admin', Component: AdminPanel }],
       },
       {
         path: '*',

@@ -9,6 +9,11 @@ const supabaseAdmin = createClient(
 );
 
 serve(async (req) => {
+  // verify_jwt is false so the CORS preflight passes; auth is enforced here.
+  if (req.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: CORS_HEADERS });
+  }
+
   const authHeader = req.headers.get("Authorization");
   if (!authHeader) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: CORS_HEADERS });
@@ -19,6 +24,11 @@ serve(async (req) => {
     Deno.env.get("SUPABASE_ANON_KEY")!,
     { global: { headers: { Authorization: authHeader } } }
   );
+
+  const { data: { user }, error: authError } = await supabaseUser.auth.getUser();
+  if (authError || !user) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: CORS_HEADERS });
+  }
 
   try {
     const url = new URL(req.url);
@@ -80,8 +90,7 @@ serve(async (req) => {
     const icsContent = icsLines.join("\r\n");
 
     // Store ICS in Supabase Storage
-    const { data: { user } } = await supabaseUser.auth.getUser();
-    const storagePath = `calendars/${user?.id}/${courseId ?? semesterId}.ics`;
+    const storagePath = `calendars/${user.id}/${courseId ?? semesterId}.ics`;
     const { error: storageError } = await supabaseAdmin.storage
       .from("syllabi")
       .upload(storagePath, new Blob([icsContent], { type: "text/calendar" }), {

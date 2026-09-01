@@ -1,6 +1,6 @@
-// Every function must reject unauthenticated calls. For generate-ics and
-// admin-get-users the platform enforces this (verify_jwt = true); the other
-// nine enforce it in the handler (paired with tests/unit/config-drift.test.ts).
+// Every function must reject unauthenticated calls. All eleven run with
+// verify_jwt = false (so CORS preflights pass the gateway) and enforce auth
+// in the handler (paired with tests/unit/config-drift.test.ts).
 import { assertEquals } from "@std/assert";
 import { callFn } from "./helpers.ts";
 

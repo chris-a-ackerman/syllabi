@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useSettings } from '../context/SettingsProvider';
+import { fetchAdminUsers, type AdminUsersPage } from '@/lib/api/admin';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
@@ -25,57 +26,10 @@ import {
   TableHeader,
   TableRow,
 } from '../components/ui/table';
-import { ArrowLeft, Users, BookOpen, MessageSquare, Shield, Search } from 'lucide-react';
+import { ArrowLeft, Users, Shield, Search } from 'lucide-react';
 import { format } from 'date-fns';
 
 type AdminTab = 'overview' | 'access' | 'users';
-
-// Mock data for stats
-const mockStats = {
-  totalUsers: 1247,
-  totalCourses: 3892,
-  totalMessages: 15634,
-  lastUpdated: new Date().toISOString(),
-};
-
-// Mock users data
-const mockUsers = [
-  {
-    id: '1',
-    displayName: 'Alex Chen',
-    email: 'alex.chen@university.edu',
-    joinedDate: '2025-08-15',
-    courseCount: 5,
-  },
-  {
-    id: '2',
-    displayName: 'Jordan Smith',
-    email: 'jordan.smith@university.edu',
-    joinedDate: '2025-08-20',
-    courseCount: 4,
-  },
-  {
-    id: '3',
-    displayName: 'Taylor Johnson',
-    email: 'taylor.j@university.edu',
-    joinedDate: '2025-09-01',
-    courseCount: 6,
-  },
-  {
-    id: '4',
-    displayName: 'Morgan Lee',
-    email: 'morgan.lee@university.edu',
-    joinedDate: '2025-09-10',
-    courseCount: 3,
-  },
-  {
-    id: '5',
-    displayName: 'Casey Brown',
-    email: 'casey.brown@university.edu',
-    joinedDate: '2025-09-15',
-    courseCount: 4,
-  },
-];
 
 export function AdminPanel() {
   const navigate = useNavigate();
@@ -83,6 +37,36 @@ export function AdminPanel() {
   const [activeTab, setActiveTab] = useState<AdminTab>('overview');
   const [showDisableConfirm, setShowDisableConfirm] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const [usersPage, setUsersPage] = useState<AdminUsersPage | null>(null);
+  const [usersError, setUsersError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const handle = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+      setPage(1);
+    }, 300);
+    return () => clearTimeout(handle);
+  }, [searchQuery]);
+
+  // Real data from admin-get-users (SYL-42) — also feeds the Overview count.
+  useEffect(() => {
+    let cancelled = false;
+    fetchAdminUsers(page, debouncedSearch)
+      .then(result => {
+        if (cancelled) return;
+        setUsersPage(result);
+        setUsersError(null);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setUsersError('Could not load users.');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [page, debouncedSearch]);
 
   const handleToggleAI = (enabled: boolean) => {
     if (!enabled) {
@@ -97,10 +81,7 @@ export function AdminPanel() {
     setShowDisableConfirm(false);
   };
 
-  const filteredUsers = mockUsers.filter(user =>
-    user.displayName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    user.email.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const totalPages = usersPage ? Math.max(1, Math.ceil(usersPage.total / usersPage.pageSize)) : 1;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -155,43 +136,19 @@ export function AdminPanel() {
         {/* Overview Tab */}
         {activeTab === 'overview' && (
           <div className="space-y-6">
-            <div className="grid md:grid-cols-3 gap-6">
-              <Card className="p-6 rounded-2xl shadow-sm">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-indigo-100 rounded-xl flex items-center justify-center">
-                    <Users className="w-6 h-6 text-indigo-600" />
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600 mb-1">Total Users</p>
-                    <p className="text-2xl font-bold text-gray-900">{mockStats.totalUsers}</p>
-                  </div>
+            <Card className="p-6 rounded-2xl shadow-sm max-w-sm">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-indigo-100 rounded-xl flex items-center justify-center">
+                  <Users className="w-6 h-6 text-indigo-600" />
                 </div>
-              </Card>
-
-              <Card className="p-6 rounded-2xl shadow-sm">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-violet-100 rounded-xl flex items-center justify-center">
-                    <BookOpen className="w-6 h-6 text-violet-600" />
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600 mb-1">Courses Processed</p>
-                    <p className="text-2xl font-bold text-gray-900">{mockStats.totalCourses}</p>
-                  </div>
+                <div>
+                  <p className="text-sm text-gray-600 mb-1">Total Users</p>
+                  <p className="text-2xl font-bold text-gray-900">
+                    {usersError ? '—' : usersPage?.total ?? '…'}
+                  </p>
                 </div>
-              </Card>
-
-              <Card className="p-6 rounded-2xl shadow-sm">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-pink-100 rounded-xl flex items-center justify-center">
-                    <MessageSquare className="w-6 h-6 text-pink-600" />
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600 mb-1">Chat Messages</p>
-                    <p className="text-2xl font-bold text-gray-900">{mockStats.totalMessages}</p>
-                  </div>
-                </div>
-              </Card>
-            </div>
+              </div>
+            </Card>
 
             <Card className="p-8 rounded-2xl shadow-sm">
               <div className="text-center">
@@ -246,12 +203,6 @@ export function AdminPanel() {
                   </p>
                 </div>
               )}
-
-              <div className="mt-6 pt-6 border-t border-gray-200">
-                <p className="text-xs text-gray-500">
-                  Last updated: {format(new Date(mockStats.lastUpdated), 'MMM d, yyyy h:mm a')}
-                </p>
-              </div>
             </Card>
 
             <Card className="p-8 rounded-2xl shadow-sm bg-gray-50">
@@ -283,47 +234,75 @@ export function AdminPanel() {
                     id="search"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search by name or email..."
+                    placeholder="Search by name..."
                     className="pl-10 rounded-lg"
                   />
                 </div>
               </div>
 
-              <div className="rounded-xl border border-gray-200 overflow-hidden">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Email</TableHead>
-                      <TableHead>Joined</TableHead>
-                      <TableHead>Courses</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredUsers.map(user => (
-                      <TableRow key={user.id}>
-                        <TableCell className="font-medium">{user.displayName}</TableCell>
-                        <TableCell className="text-gray-600">{user.email}</TableCell>
-                        <TableCell className="text-gray-600">
-                          {format(new Date(user.joinedDate), 'MMM d, yyyy')}
-                        </TableCell>
-                        <TableCell>{user.courseCount}</TableCell>
-                        <TableCell className="text-right">
-                          <Button variant="ghost" size="sm" className="rounded-lg">
-                            View
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-
-              {filteredUsers.length === 0 && (
+              {usersError ? (
                 <div className="text-center py-12">
-                  <p className="text-gray-600">No users found</p>
+                  <p className="text-red-600">{usersError}</p>
                 </div>
+              ) : (
+                <>
+                  <div className="rounded-xl border border-gray-200 overflow-hidden">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Name</TableHead>
+                          <TableHead>Joined</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {(usersPage?.users ?? []).map(user => (
+                          <TableRow key={user.id}>
+                            <TableCell className="font-medium">
+                              {user.display_name || 'Unnamed user'}
+                            </TableCell>
+                            <TableCell className="text-gray-600">
+                              {format(new Date(user.created_at), 'MMM d, yyyy')}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+
+                  {usersPage && usersPage.users.length === 0 && (
+                    <div className="text-center py-12">
+                      <p className="text-gray-600">No users found</p>
+                    </div>
+                  )}
+
+                  {usersPage && totalPages > 1 && (
+                    <div className="flex items-center justify-between mt-4">
+                      <p className="text-sm text-gray-600">
+                        Page {usersPage.page} of {totalPages}
+                      </p>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="rounded-lg"
+                          disabled={page <= 1}
+                          onClick={() => setPage(p => Math.max(1, p - 1))}
+                        >
+                          Previous
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="rounded-lg"
+                          disabled={page >= totalPages}
+                          onClick={() => setPage(p => p + 1)}
+                        >
+                          Next
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </Card>
           </div>

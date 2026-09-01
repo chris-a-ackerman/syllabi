@@ -32,7 +32,6 @@ export function AuthScreen() {
     
     try {
       if (isSignUp) {
-        console.log('[signUp] calling supabase.auth.signUp with email:', email);
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
@@ -42,9 +41,6 @@ export function AuthScreen() {
             },
           },
         });
-
-        console.log('[signUp] response data:', data);
-        console.log('[signUp] response error:', error);
 
         if (error) {
           throw error;
@@ -64,7 +60,6 @@ export function AuthScreen() {
         });
 
         if (error) {
-          console.log('Sign-in error:', error);
           throw error;
         }
 

@@ -39,7 +39,7 @@ type ModalStep = 'choose' | 'manual' | 'bulk-upload' | 'canvas';
 
 export function AddSemesterModal({ open, onClose }: AddSemesterModalProps) {
   const navigate = useNavigate();
-  const { addSemester } = useData();
+  const { addSemester, refreshCourses, refreshEvents } = useData();
   const [modalStep, setModalStep] = useState<ModalStep>('choose');
   const [name, setName] = useState('');
   const [startDate, setStartDate] = useState('');
@@ -755,8 +755,13 @@ export function AddSemesterModal({ open, onClose }: AddSemesterModalProps) {
                       <Button
                         variant="outline"
                         className="w-full rounded-lg"
-                        // onClick={onClose}
-                        onClick={() => { onClose(); navigate(0); }}
+                        // Pull the courses/events the Canvas downloads created
+                        // into state instead of reloading the whole page (SYL-42).
+                        onClick={() => {
+                          void refreshCourses();
+                          void refreshEvents();
+                          onClose();
+                        }}
                       >
                         Done
                       </Button>

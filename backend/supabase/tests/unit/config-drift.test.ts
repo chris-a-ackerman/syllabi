@@ -48,14 +48,17 @@ Deno.test("every verify_jwt=false function enforces auth in its handler source",
   );
 });
 
-Deno.test("the platform-verified functions are exactly the expected two", () => {
+Deno.test("no function relies on platform JWT verification", () => {
   const verified = Object.entries(fnConfigs)
     .filter(([, fn]) => fn.verify_jwt === true)
     .map(([name]) => name)
     .sort();
   // Deliberate allowlist: adding a function with verify_jwt=true (or flipping
-  // one) should be a conscious decision that updates this test.
-  assertEquals(verified, ["admin-get-users", "generate-ics"]);
+  // one) should be a conscious decision that updates this test. SYL-42 flipped
+  // the last two (generate-ics, admin-get-users) to verify_jwt=false so the
+  // browser's CORS preflight passes — every function now enforces auth
+  // in-handler, which the test above pins for all eleven.
+  assertEquals(verified, []);
 });
 
 Deno.test("sanity: eleven functions are configured", () => {

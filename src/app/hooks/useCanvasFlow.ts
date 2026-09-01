@@ -56,12 +56,10 @@ export function useCanvasFlow() {
     setError(null);
     setStep('detecting');
 
-    console.log('[useCanvasFlow] invoking find-canvas-courses', { semester_start: startDate, semester_end: endDate });
     const { data, error: fnError } = await supabase.functions.invoke(
       'find-canvas-courses',
       { body: { semester_start: startDate, semester_end: endDate } }
     );
-    console.log('[useCanvasFlow] find-canvas-courses response', { data, error: fnError });
 
     if (fnError || !data?.courses) {
       setError('Failed to fetch Canvas courses. Please check your connection and try again.');

@@ -414,7 +414,10 @@ entrypoint = "./functions/detect-syllabi-info/index.ts"
 
 [functions.generate-ics]
 enabled = true
-verify_jwt = true
+# SYL-42: false so the browser's CORS preflight (OPTIONS) isn't rejected at the
+# gateway — the frontend now calls this directly. Auth is enforced in-handler
+# (Authorization + auth.getUser), pinned by tests/unit/config-drift.test.ts.
+verify_jwt = false
 import_map = "./functions/generate-ics/deno.json"
 # Uncomment to specify a custom file path to the entrypoint.
 # Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
@@ -436,7 +439,10 @@ entrypoint = "./functions/chat/index.ts"
 
 [functions.admin-get-users]
 enabled = true
-verify_jwt = true
+# SYL-42: false so the browser's CORS preflight (OPTIONS) isn't rejected at the
+# gateway — the AdminPanel now calls this directly. Auth + the is_admin gate
+# were always enforced in-handler, pinned by tests/unit/config-drift.test.ts.
+verify_jwt = false
 import_map = "./functions/admin-get-users/deno.json"
 # Uncomment to specify a custom file path to the entrypoint.
 # Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx

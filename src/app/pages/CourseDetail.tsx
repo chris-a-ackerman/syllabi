@@ -24,9 +24,12 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
+import { toast } from 'sonner';
+import { downloadCalendar } from '@/lib/api/calendar';
 import { CourseFormModal } from '../components/CourseFormModal';
 import { ConfirmDeleteDialog } from '../components/ConfirmDeleteDialog';
 import { CourseQuickInfoCards } from '../components/CourseQuickInfoCards';
+import { UploadSyllabusModal } from '../components/UploadSyllabusModal';
 
 export function CourseDetail() {
   const { id } = useParams();
@@ -55,6 +58,8 @@ export function CourseDetail() {
   const [deleteNoteId, setDeleteNoteId] = useState<string | null>(null);
   const [showDeleteCourse, setShowDeleteCourse] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
+  const [showReupload, setShowReupload] = useState(false);
+  const [downloadingIcs, setDownloadingIcs] = useState(false);
   const [expandedEventId, setExpandedEventId] = useState<string | null>(null);
 
   const course = courses.find(c => c.id === id);
@@ -98,6 +103,17 @@ export function CourseDetail() {
   }
 
   const hasSyllabus = course.status === 'ready';
+
+  const handleDownloadCalendar = async () => {
+    setDownloadingIcs(true);
+    try {
+      await downloadCalendar(course.semesterId, course.id, `${course.code || course.name}.ics`);
+    } catch {
+      toast.error('Could not generate the calendar file. Please try again.');
+    } finally {
+      setDownloadingIcs(false);
+    }
+  };
 
   // Empty state for courses without syllabus
   if (!hasSyllabus) {
@@ -261,11 +277,20 @@ export function CourseDetail() {
             <MessageSquare className="mr-2 h-4 w-4" />
             Chat About This Course
           </Button>
-          <Button variant="outline" className="rounded-lg justify-start">
+          <Button
+            variant="outline"
+            className="rounded-lg justify-start"
+            onClick={handleDownloadCalendar}
+            disabled={downloadingIcs}
+          >
             <Download className="mr-2 h-4 w-4" />
-            Download Calendar
+            {downloadingIcs ? 'Preparing…' : 'Download Calendar'}
           </Button>
-          <Button variant="outline" className="rounded-lg justify-start">
+          <Button
+            variant="outline"
+            className="rounded-lg justify-start"
+            onClick={() => setShowReupload(true)}
+          >
             <Upload className="mr-2 h-4 w-4" />
             Re-upload Syllabus
           </Button>
@@ -783,6 +808,19 @@ export function CourseDetail() {
       <CourseFormModal
         open={editModalOpen}
         onClose={() => setEditModalOpen(false)}
+        existingCourse={{
+          id: course.id,
+          name: course.name,
+          code: course.code,
+          professor: course.professor,
+          color: course.color,
+        }}
+      />
+
+      {/* Re-upload Syllabus (SYL-42) — targets this course, skipping the chooser */}
+      <UploadSyllabusModal
+        open={showReupload}
+        onClose={() => setShowReupload(false)}
         existingCourse={{
           id: course.id,
           name: course.name,
