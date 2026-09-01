@@ -5,8 +5,7 @@
 // module load) so this layer can be unit-tested in isolation — same pattern
 // as chat/query.ts, process-syllabus/parse.ts, generate-ics/ics.ts.
 import type Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.24.3";
-import { safeCanvasFetch } from "../_shared/canvas-url.ts";
-import { UnsafeCanvasUrlError } from "../_shared/canvas-url.ts";
+import { safeCanvasFetch, UnsafeCanvasUrlError } from "../_shared/canvas-url.ts";
 
 export const SYSTEM_PROMPT =
   `You are searching for the course syllabus on Canvas for a student.
@@ -222,12 +221,12 @@ export async function executeTools(
                       return { ...base, download_url: fileData.url ?? null };
                     }
                     return { ...base, download_url: null, download_url_unavailable: true };
-                  } catch (e) {
-                    if (e instanceof UnsafeCanvasUrlError) {
+                  } catch (err) {
+                    if (err instanceof UnsafeCanvasUrlError) {
                       // Message text alone is enough context to debug — never log the URL itself.
-                      console.log(`[tool:get_course_modules] file item "${item.title}" skipped as off-host/unsafe: ${e.message}`);
+                      console.log(`[tool:get_course_modules] file item "${item.title}" skipped (unsafe URL or redirect): ${err.message}`);
                     } else {
-                      console.log(`[tool:get_course_modules] file item "${item.title}" fetch threw: ${e}`);
+                      console.log(`[tool:get_course_modules] file item "${item.title}" fetch threw: ${err}`);
                     }
                     return { ...base, download_url: null, download_url_unavailable: true };
                   }
