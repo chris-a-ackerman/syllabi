@@ -2,7 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.24.3";
 import { mapAnalysisToCourseUpdate, mapEventsToRows, stripJsonFences } from "./parse.ts";
-import { type CourseEventsClient, replaceCourseEvents } from "./events.ts";
+import { type CourseEventsClient, type ReplaceCourseEventsResult, replaceCourseEvents } from "./events.ts";
 import { enforceAiQuota } from "../_shared/ai-quota.ts";
 import { MAX_SYLLABUS_BYTES } from "../_shared/ai-limits.ts";
 import { CORS_HEADERS as corsHeaders } from "../_shared/cors.ts";
@@ -321,52 +321,39 @@ Return the complete JSON analysis as specified.`;
       return new Response(JSON.stringify({ error: "Failed to parse Claude response" }), { status: 500, headers: corsHeaders });
     }
 
-    // 8. Store full analysis on course, update basic fields + extracted columns
-    const {
-      name: courseName,
-      code: courseCode,
-      professor: courseProfessor,
-      schedule: scheduleData,
-    } = mapAnalysisToCourseUpdate(analysisJson, course);
-
-    await supabase
-      .from("courses")
-      .update({
-        syllabus_analysis: analysisJson,
-        policies: analysisJson.policies ?? null,
-        grading_rules: analysisJson.grading_rules ?? null,
-        schedule: scheduleData,
-        analysis_status: "complete",
-        name: courseName,
-        code: courseCode,
-        professor: courseProfessor,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", course_id);
-
-    console.log(`[process-syllabus][db] course updated | name="${courseName}" | code="${courseCode}" | professor="${courseProfessor}"`);
-
-    // 9. Populate course_events — insert the new rows first, delete the
-    // stale ones only once that succeeds (SYL-60). The old delete-then-insert
-    // order let one rejected row (e.g. an unnormalised time) fail the insert
-    // *after* the prior events were already gone, leaving the course with
-    // zero events while the response still reported success.
+    // 8. Replace course_events — insert the new rows first, delete the stale
+    // ones only once that succeeds (SYL-60). The old delete-then-insert order
+    // let one rejected row (e.g. an unnormalised time) fail the insert *after*
+    // the prior events were already gone, leaving the course with zero events
+    // while the response still reported success. The course row (analysis
+    // blob + analysis_status = "complete") is written only after this step
+    // succeeds, so a failed rewrite never pairs a new grading_rules blob with
+    // old events or leaves a course reporting "complete" with events it never
+    // received.
     const events = analysisJson.events || [];
-    const eventRows = mapEventsToRows(events, course_id, course.user_id);
+    let replaceResult: ReplaceCourseEventsResult;
+    try {
+      const eventRows = mapEventsToRows(events, course_id, course.user_id);
 
-    const nullDateCount = eventRows.filter((e: any) => !e.date).length;
-    console.log(`[process-syllabus][events] mapped ${eventRows.length} rows | null_dates=${nullDateCount}`);
-    if (eventRows.length > 0) {
-      console.log(`[process-syllabus][events] first_3=${JSON.stringify(eventRows.slice(0, 3).map((e: any) => ({ title: e.title, date: e.date, type: e.type })))}`);
+      const nullDateCount = eventRows.filter((e: any) => !e.date).length;
+      console.log(`[process-syllabus][events] mapped ${eventRows.length} rows | null_dates=${nullDateCount}`);
+      if (eventRows.length > 0) {
+        console.log(`[process-syllabus][events] first_3=${JSON.stringify(eventRows.slice(0, 3).map((e: any) => ({ title: e.title, date: e.date, type: e.type })))}`);
+      }
+
+      const replaceStart = Date.now();
+      // Cast: structurally checking the real (deeply generic) SupabaseClient
+      // type against the minimal CourseEventsClient interface blows up
+      // TypeScript's instantiation depth (TS2589). The real client already
+      // satisfies the few methods this module calls.
+      replaceResult = await replaceCourseEvents(supabase as unknown as CourseEventsClient, course_id, eventRows);
+      console.log(`[process-syllabus][events] replaceCourseEvents ok=${replaceResult.ok} inserted=${replaceResult.inserted} deleted=${replaceResult.deleted ?? "n/a"} stage=${replaceResult.stage ?? "n/a"} | ${Date.now() - replaceStart}ms`);
+    } catch (err) {
+      // e.g. a null entry in analysisJson.events. Anything thrown here must
+      // surface as a failed analysis, not fall through to the generic 500
+      // with the course left on "processing".
+      replaceResult = { ok: false, stage: "map", inserted: 0, error: err };
     }
-
-    const replaceStart = Date.now();
-    // Cast: structurally checking the real (deeply generic) SupabaseClient
-    // type against the minimal CourseEventsClient interface blows up
-    // TypeScript's instantiation depth (TS2589). The real client already
-    // satisfies the few methods this module calls.
-    const replaceResult = await replaceCourseEvents(supabase as unknown as CourseEventsClient, course_id, eventRows);
-    console.log(`[process-syllabus][events] replaceCourseEvents ok=${replaceResult.ok} inserted=${replaceResult.inserted} deleted=${replaceResult.deleted ?? "n/a"} stage=${replaceResult.stage ?? "n/a"} | ${Date.now() - replaceStart}ms`);
 
     if (!replaceResult.ok) {
       const errObj = replaceResult.error as { message?: string } | null | undefined;
@@ -392,7 +379,7 @@ Return the complete JSON analysis as specified.`;
         output_tokens: response.usage?.output_tokens ?? null,
       });
       if (logError) {
-        console.error("Log insert error:", logError);
+        console.error("[process-syllabus][db] Log insert error:", logError);
       }
 
       return new Response(
@@ -400,6 +387,32 @@ Return the complete JSON analysis as specified.`;
         { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } },
       );
     }
+
+    // 9. Store full analysis on course, update basic fields + extracted
+    // columns, and mark the analysis complete — only now that the events are in.
+    const {
+      name: courseName,
+      code: courseCode,
+      professor: courseProfessor,
+      schedule: scheduleData,
+    } = mapAnalysisToCourseUpdate(analysisJson, course);
+
+    await supabase
+      .from("courses")
+      .update({
+        syllabus_analysis: analysisJson,
+        policies: analysisJson.policies ?? null,
+        grading_rules: analysisJson.grading_rules ?? null,
+        schedule: scheduleData,
+        analysis_status: "complete",
+        name: courseName,
+        code: courseCode,
+        professor: courseProfessor,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", course_id);
+
+    console.log(`[process-syllabus][db] course updated | name="${courseName}" | code="${courseCode}" | professor="${courseProfessor}"`);
 
     // 10. Log the Claude API call
     const { error: logError } = await supabase.from("claude_api_logs").insert({

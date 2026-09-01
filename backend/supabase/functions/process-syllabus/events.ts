@@ -44,7 +44,8 @@ const DELETE_CHUNK_SIZE = 100;
 export interface ReplaceCourseEventsResult {
   ok: boolean;
   /** Present only when ok is false. */
-  stage?: "select" | "insert" | "delete";
+  /** "map" is set by the caller when building the rows itself throws. */
+  stage?: "select" | "insert" | "delete" | "map";
   /** Rows actually inserted — reported even on a later delete failure. */
   inserted: number;
   /** Rows removed from the prior snapshot. Present on success. */
