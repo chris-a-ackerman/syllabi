@@ -6,6 +6,7 @@ import { assertSafeCanvasUrl, UnsafeCanvasUrlError } from "../_shared/canvas-url
 import { isoToDate } from "../_shared/iso-date.ts";
 import { stripHtml } from "../_shared/strip-html.ts";
 import { stripJsonFences } from "../_shared/strip-json-fences.ts";
+import { enforceAiQuota } from "../_shared/ai-quota.ts";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -94,6 +95,9 @@ serve(async (req) => {
     }
     const { course_id } = body;
     if (!course_id) return json({ error: "course_id is required." }, 400);
+
+    const quotaResponse = await enforceAiQuota(supabaseService, user.id, "match-canvas-assignments", CORS_HEADERS);
+    if (quotaResponse) return quotaResponse;
 
     console.log(`[match-canvas] start course_id=${course_id} user_id=${user.id}`);
 

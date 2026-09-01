@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.24.3";
 import { buildCourseContext, detectQueryType, extractDateRange } from "./query.ts";
+import { enforceAiQuota } from "../_shared/ai-quota.ts";
 
 const anthropic = new Anthropic({
   apiKey: Deno.env.get("ANTHROPIC_API_KEY")!,
@@ -41,6 +42,15 @@ serve(async (req) => {
     return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } });
   }
 
+  // ── 0. Resolve the caller before any other work (SYL-29) ────────────────
+  // A garbage bearer token used to sail through to the Anthropic call; now it
+  // stops here with a 401 and Claude is never invoked.
+  const token = authHeader.replace("Bearer ", "");
+  const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
+  if (authError || !user) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } });
+  }
+
   // ── 1. Kill switch check (server-side enforcement) ──────────────────────
   const { data: settings } = await supabaseAdmin
     .from("app_settings")
@@ -77,6 +87,9 @@ serve(async (req) => {
         { status: 400, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
       );
     }
+
+    const quotaResponse = await enforceAiQuota(supabaseAdmin, user.id, "chat", CORS_HEADERS);
+    if (quotaResponse) return quotaResponse;
 
     const queryType = detectQueryType(message);
     const hasCourseFilter = course_ids.length > 0;
@@ -167,8 +180,6 @@ serve(async (req) => {
       },
     ];
 
-    const { data: { user } } = await supabaseUser.auth.getUser();
-
     const response = await anthropic.messages.create({
       //model: "claude-haiku-4-5-20251001",
       model: "claude-sonnet-4-6",
@@ -182,7 +193,7 @@ serve(async (req) => {
 
     // Log the API call (mirrors process-syllabus pattern)
     const { error: logError } = await supabaseAdmin.from("claude_api_logs").insert({
-      user_id: user?.id ?? null,
+      user_id: user.id,
       course_id: null,
       model: response.model,
       status: "success",

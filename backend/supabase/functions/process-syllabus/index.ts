@@ -2,6 +2,8 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.24.3";
 import { mapAnalysisToCourseUpdate, mapEventsToRows, stripJsonFences } from "./parse.ts";
+import { enforceAiQuota } from "../_shared/ai-quota.ts";
+import { MAX_SYLLABUS_BYTES } from "../_shared/ai-limits.ts";
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -184,6 +186,9 @@ serve(async (req) => {
       });
     }
 
+    const quotaResponse = await enforceAiQuota(supabase, user.id, "process-syllabus", corsHeaders);
+    if (quotaResponse) return quotaResponse;
+
     // 1. Fetch course + semester data.
     // Scoped to the caller: this is a service-role client, so without the
     // user_id filter any authenticated user could reprocess anyone's course.
@@ -226,6 +231,22 @@ serve(async (req) => {
 
     // 4. Convert file for Claude
     const fileBuffer = await fileData.arrayBuffer();
+
+    // Cost cap (SYL-29): refuse oversized files before any base64 work or model call.
+    if (fileBuffer.byteLength > MAX_SYLLABUS_BYTES) {
+      await supabase
+        .from("courses")
+        .update({
+          analysis_status: "failed",
+          analysis_error: "Syllabus file exceeds the maximum size for analysis",
+        })
+        .eq("id", course_id);
+      return new Response(JSON.stringify({ error: "Syllabus file is too large to analyze" }), {
+        status: 413,
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      });
+    }
+
     const uint8Array = new Uint8Array(fileBuffer);
     const fileNameForCheck = course.syllabus_file_name ?? course.syllabus_file_path ?? "";
     const isPDF = fileNameForCheck.toLowerCase().endsWith(".pdf") || fileData.type === "application/pdf";

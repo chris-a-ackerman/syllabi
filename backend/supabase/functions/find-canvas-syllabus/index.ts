@@ -3,6 +3,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.24.3";
 import { assertSafeCanvasUrl, UnsafeCanvasUrlError } from "../_shared/canvas-url.ts";
+import { enforceAiQuota } from "../_shared/ai-quota.ts";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -348,6 +349,9 @@ serve(async (req) => {
     if (!course_id || !canvas_course_id) {
       return json({ error: "course_id and canvas_course_id are required." }, 400);
     }
+
+    const quotaResponse = await enforceAiQuota(supabaseService, user.id, "find-canvas-syllabus", CORS_HEADERS);
+    if (quotaResponse) return quotaResponse;
 
     // 3. Fetch Canvas token + base URL in parallel
     const encryptionKey = Deno.env.get("CANVAS_ENCRYPTION_KEY");

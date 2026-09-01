@@ -2,6 +2,8 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.24.3";
 import { stripJsonFences } from "../_shared/strip-json-fences.ts";
+import { enforceAiQuota } from "../_shared/ai-quota.ts";
+import { MAX_SYLLABUS_BYTES } from "../_shared/ai-limits.ts";
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -85,6 +87,16 @@ serve(async (req) => {
       );
     }
 
+    // One quota unit per file — each path costs a Storage download and a Haiku call.
+    const quotaResponse = await enforceAiQuota(
+      supabase,
+      user.id,
+      "detect-syllabi-info",
+      corsHeaders,
+      file_paths.length,
+    );
+    if (quotaResponse) return quotaResponse;
+
     // Process all files in parallel; partial failures are OK
     const settled = await Promise.allSettled(
       // deno-lint-ignore no-explicit-any
@@ -100,6 +112,12 @@ serve(async (req) => {
 
         // Base64 encode — same chunked approach as process-syllabus to avoid stack overflow
         const fileBuffer = await fileData.arrayBuffer();
+
+        // Cost cap (SYL-29): skip oversized files before any base64 work or model call.
+        if (fileBuffer.byteLength > MAX_SYLLABUS_BYTES) {
+          return { file_path: filePath, error: "File is too large to analyze" };
+        }
+
         const uint8Array = new Uint8Array(fileBuffer);
         let base64File = "";
         const chunkSize = 8192;

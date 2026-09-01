@@ -30,14 +30,13 @@ Deno.test("all functions: no Authorization header → 401", async (t) => {
   });
 });
 
-// BUG (characterization): chat and save-canvas-token validate the request BODY
-// before verifying the bearer token, so a garbage token with an invalid body
-// returns 400, not 401. For chat this is exactly SYL-29 ("reject invalid JWTs
-// before calling Claude"); for save-canvas-token the ordering gap goes further —
-// a garbage token with a valid body reaches the outbound Canvas round-trip
-// pre-auth (see the SSRF/ordering Linear issue). Update these expectations to
-// 401 when those fixes land; don't "fix" the test alone.
-const BODY_VALIDATED_FIRST = new Set(["chat", "save-canvas-token"]);
+// BUG (characterization): see SYL-54 — save-canvas-token validates the request
+// BODY before verifying the bearer token, so a garbage token with an invalid
+// body returns 400, not 401. Worse, a garbage token with a valid body reaches
+// the outbound Canvas round-trip pre-auth. Update this expectation to 401 when
+// SYL-54 lands; don't "fix" the test alone. (chat had the same ordering bug
+// until SYL-29 moved auth ahead of everything.)
+const BODY_VALIDATED_FIRST = new Set(["save-canvas-token"]);
 
 Deno.test("all functions: garbage bearer token → 401 (or pinned 400 where body validation runs first)", async (t) => {
   for (const name of POST_FUNCTIONS) {
