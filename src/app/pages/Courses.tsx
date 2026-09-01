@@ -286,6 +286,7 @@ export function Courses() {
       <BulkUploadModal
         open={showBulkUpload}
         onClose={() => setShowBulkUpload(false)}
+        fixedSemesterId={activeSemester?.id ?? ''}
       />
 
       {showEditSemester && effectiveSemesterId && (() => {

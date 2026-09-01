@@ -29,6 +29,14 @@ interface BulkReviewFormProps {
   semesters?: Semester[];
   /** Show the per-file detection-confidence chip (Onboarding). */
   showConfidence?: boolean;
+  /**
+   * When provided, every detected course is rendered under a single card for
+   * this semester — no grouping by detected `semesterName`, no "use existing
+   * semester" dropdown, and no manual Semester Name / Start Date / End Date
+   * fields (the Add Course → Upload Multiple Syllabi flow, SYL-61: every
+   * course goes into the active semester and no semesters are detected).
+   */
+  fixedSemester?: Semester;
 }
 
 /**
@@ -44,18 +52,23 @@ export function BulkReviewForm({
   variant = 'compact',
   semesters,
   showConfidence = false,
+  fixedSemester,
 }: BulkReviewFormProps) {
   const compact = variant === 'compact';
 
-  const semesterGroups = detectedCourses.reduce<Record<string, DetectedCourse[]>>(
-    (acc, dc) => {
-      const key = dc.semesterName.trim() || '__unknown__';
-      if (!acc[key]) acc[key] = [];
-      acc[key].push(dc);
-      return acc;
-    },
-    {}
-  );
+  // With a fixed semester, every detected course lands in one card regardless
+  // of what semester the syllabus itself claimed — detection is ignored.
+  const semesterGroups = fixedSemester
+    ? (detectedCourses.length > 0 ? { __fixed__: detectedCourses } : {})
+    : detectedCourses.reduce<Record<string, DetectedCourse[]>>(
+        (acc, dc) => {
+          const key = dc.semesterName.trim() || '__unknown__';
+          if (!acc[key]) acc[key] = [];
+          acc[key].push(dc);
+          return acc;
+        },
+        {}
+      );
 
   const propagate = (
     groupCourses: DetectedCourse[],
@@ -70,7 +83,9 @@ export function BulkReviewForm({
   return (
     <>
       {Object.values(semesterGroups).map((groupCourses) => {
-        const matchedSem = semesters?.find(s => s.name === groupCourses[0].semesterName);
+        const matchedSem = !fixedSemester
+          ? semesters?.find(s => s.name === groupCourses[0].semesterName)
+          : undefined;
         return (
           <Card
             key={groupCourses[0].id}
@@ -78,7 +93,13 @@ export function BulkReviewForm({
           >
             <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Semester</p>
 
-            {semesters && semesters.length > 0 && (
+            {fixedSemester && (
+              <p className={compact ? 'text-sm font-medium text-gray-900' : 'text-base font-medium text-gray-900'}>
+                {fixedSemester.name}
+              </p>
+            )}
+
+            {!fixedSemester && semesters && semesters.length > 0 && (
               <div>
                 <Label className={semLabelCls}>Use existing semester</Label>
                 <Select
@@ -107,8 +128,8 @@ export function BulkReviewForm({
               </div>
             )}
 
-            {/* Manual fields only when not mapped onto an existing semester */}
-            {!matchedSem && (
+            {/* Manual fields only when not mapped onto an existing semester and not fixed */}
+            {!fixedSemester && !matchedSem && (
               <div className={compact ? 'space-y-2' : 'space-y-3'}>
                 <div>
                   <Label className={semLabelCls}>Semester Name</Label>

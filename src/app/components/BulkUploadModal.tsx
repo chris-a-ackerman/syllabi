@@ -18,14 +18,25 @@ import { Upload, Check, X, Loader2, AlertCircle, ChevronRight, FileText, Refresh
 interface BulkUploadModalProps {
   open: boolean;
   onClose: () => void;
+  /**
+   * When provided, every uploaded syllabus is assigned to this semester and
+   * no semester detection/creation happens (the Add Course entry point,
+   * SYL-61). Omit to keep the detect-and-group behaviour (Onboarding, Add
+   * Semester).
+   */
+  fixedSemesterId?: string;
 }
 
-export function BulkUploadModal({ open, onClose }: BulkUploadModalProps) {
+export function BulkUploadModal({ open, onClose, fixedSemesterId }: BulkUploadModalProps) {
   const { courses: allCourses, semesters, refreshCourses } = useData();
   const {
     step, fileItems, detectedCourses, createdCourseIds, globalError,
     addFiles, removeFile, reset, analyze, updateDetectedCourse, confirm, retryProcessing,
-  } = useBulkUpload();
+  } = useBulkUpload({ fixedSemesterId });
+
+  const fixedSemester = fixedSemesterId !== undefined
+    ? semesters.find(s => s.id === fixedSemesterId)
+    : undefined;
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dropRef = useRef<HTMLDivElement>(null);
@@ -72,7 +83,8 @@ export function BulkUploadModal({ open, onClose }: BulkUploadModalProps) {
           <DialogDescription>
             {step === 'upload' && 'Drop your syllabi and we\'ll detect course info automatically.'}
             {step === 'detecting' && 'Analyzing your syllabi…'}
-            {step === 'review' && 'Review detected info and confirm.'}
+            {step === 'review' && fixedSemester && `Review detected info and confirm. Courses will be added to ${fixedSemester.name}.`}
+            {step === 'review' && !fixedSemester && 'Review detected info and confirm.'}
             {step === 'processing' && 'Creating your courses and processing syllabi.'}
           </DialogDescription>
         </DialogHeader>
@@ -166,7 +178,8 @@ export function BulkUploadModal({ open, onClose }: BulkUploadModalProps) {
             <BulkReviewForm
               detectedCourses={detectedCourses}
               updateDetectedCourse={updateDetectedCourse}
-              semesters={semesters}
+              semesters={fixedSemester ? undefined : semesters}
+              fixedSemester={fixedSemester}
             />
 
             <div className="flex gap-3">
