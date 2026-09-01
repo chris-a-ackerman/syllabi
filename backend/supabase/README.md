@@ -2,9 +2,12 @@
 
 ## Prerequisites
 
-- [Supabase CLI](https://supabase.com/docs/guides/cli/getting-started)
+- [Supabase CLI](https://supabase.com/docs/guides/cli/getting-started) **≥ 2.116** (older versions reject the local stack's ES256 JWTs)
 - Docker (required for local Supabase stack)
-- `jq` (used by test scripts — `brew install jq`)
+- Deno 2.x (unit + contract tests)
+- `jq` (used by `test-chat.sh` — `brew install jq`)
+
+All commands below run from `backend/` (or add `--workdir backend` from the repo root). The repo root is `Syllabi - Prototype/`; `backend/` lives inside it. The top-level [`README.md`](../../README.md) has the test tiers, CI and release checklist.
 
 ---
 
@@ -36,15 +39,15 @@ Prints local API URL and two keys:
 
 ## 3. Set up `.env.local`
 
-Create `supabase/.env.local` (already gitignored):
+Create `backend/supabase/.env.local` (already gitignored):
 
 ```
 ANTHROPIC_API_KEY=sk-ant-...
-SERVICE_ROLE_KEY=sb_secret_...
-ANON_KEY=sb_publishable_...
+SERVICE_ROLE_KEY=<SERVICE_ROLE_KEY from supabase status>
+CANVAS_ENCRYPTION_KEY=<any string locally; the five Canvas functions refuse to run without it>
 ```
 
-`SERVICE_ROLE_KEY` and `ANON_KEY` come from `supabase status`.
+`SERVICE_ROLE_KEY` (unprefixed) is read by `process-syllabus`, `generate-ics` and `detect-syllabi-info`; the other eight functions use the platform-injected `SUPABASE_SERVICE_ROLE_KEY`. `functions serve` refuses to load `SUPABASE_`-prefixed names from an env file, which is why the unprefixed name exists. No function reads an unprefixed `ANON_KEY`.
 
 ---
 
@@ -60,8 +63,16 @@ supabase migration new <name>   # Create a new migration file
 
 ## 5. Create a test user
 
+Email confirmation is on locally (SYL-32), so create users through the GoTrue admin API rather than the signup form:
+
 ```bash
-supabase auth user create --email test@test.com --password password123
+eval "$(supabase status -o env | sed 's/"//g' | grep -E '^(API_URL|DB_URL|SERVICE_ROLE_KEY)=' | sed 's/^/export /')"
+curl -s -X POST "$API_URL/auth/v1/admin/users" \
+  -H "apikey: $SERVICE_ROLE_KEY" -H "Authorization: Bearer $SERVICE_ROLE_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"email":"test@test.com","password":"password123","email_confirm":true}'
+# optional: make the user an admin (clients cannot set this column — SYL-25)
+psql "$DB_URL" -c "UPDATE public.profiles SET is_admin = true WHERE id = '<id from the response>'"
 ```
 
 ---
@@ -69,13 +80,13 @@ supabase auth user create --email test@test.com --password password123
 ## 6. Run Edge Functions locally
 
 ```bash
-supabase functions serve process-syllabus --env-file .env.local
-supabase functions serve chat --env-file .env.local
-supabase functions serve generate-ics --env-file .env.local
-supabase functions serve admin-get-users --env-file .env.local
+supabase functions serve --env-file supabase/.env.local                   # all eleven, hot reload
+supabase functions serve process-syllabus --env-file supabase/.env.local  # or just one
 ```
 
-Add `--no-verify-jwt` to skip auth during local testing.
+`supabase start` already serves every function with only the platform-injected `SUPABASE_*` variables; `functions serve --env-file` is how they get the Anthropic key and the other secrets.
+
+`--no-verify-jwt` does nothing useful here: every function is configured `verify_jwt = false` and verifies the caller's JWT inside the handler (see `tests/unit/config-drift.test.ts`), so requests always need a real user token.
 
 ---
 
@@ -92,13 +103,16 @@ The script signs in as `test@test.com`, fetches the active semester ID, then cal
 ## 8. Deploy to production
 
 ```bash
-supabase functions deploy process-syllabus
-supabase functions deploy chat
-supabase functions deploy generate-ics
-supabase functions deploy admin-get-users
+supabase migration list        # what the hosted DB is missing
+supabase db push --dry-run
+supabase db push               # migrations only
 
-supabase secrets set ANTHROPIC_API_KEY=sk-ant-...
+supabase functions deploy      # all eleven; or name one: supabase functions deploy chat
+
+supabase secrets set ANTHROPIC_API_KEY=sk-ant-... CANVAS_ENCRYPTION_KEY=... SERVICE_ROLE_KEY=...   # only when introducing a secret
 ```
+
+Run `npm run db:test` from the repo root first — it rebuilds the schema from `migrations/` on a plain Postgres and runs the security assertions in `local/99_verify.sql`. Auth settings (`config.toml [auth]`) only govern local stacks; on the hosted project set them in the dashboard.
 
 ---
 
@@ -146,7 +160,7 @@ Auto-created for every auth user via trigger on `auth.users`.
 | `created_at` | TIMESTAMPTZ | |
 | `updated_at` | TIMESTAMPTZ | |
 
-RLS: users can SELECT and UPDATE their own row only.
+RLS: users can SELECT and UPDATE their own row only. Column grants narrow that further: clients cannot UPDATE `is_admin`, `canvas_base_url` or the token columns (SYL-25) and cannot SELECT `canvas_token_encrypted` / `canvas_base_url` at all (SYL-31).
 
 View `profiles_safe` exposes `has_canvas_connected` (boolean) without leaking the encrypted bytes.
 
@@ -340,6 +354,20 @@ RLS: users can SELECT their own logs.
 
 ---
 
+### `ai_usage`
+Per-user daily counters behind the SYL-29 quotas. Written only by `public.consume_ai_quota(p_user_id, p_endpoint, p_amount)` — one atomic `INSERT … ON CONFLICT … RETURNING`, executable by `service_role` only.
+
+| Column | Type | Notes |
+|---|---|---|
+| `user_id` | UUID FK | → `profiles(id)` ON DELETE CASCADE |
+| `day` | DATE | UTC day |
+| `endpoint` | TEXT | `chat`, `process-syllabus`, `detect-syllabi-info`, `find-canvas-syllabus`, `match-canvas-assignments` |
+| `count` | INTEGER | units consumed today |
+
+Primary key `(user_id, day, endpoint)`. RLS on with no policies; `anon`/`authenticated` have no grants. Limits live in `functions/_shared/ai-limits.ts`.
+
+---
+
 ## Storage
 
 **Bucket:** `syllabi` (private)
@@ -365,7 +393,7 @@ File size limit: 50 MiB. RLS policies enforce that users can only access files w
 | `save-canvas-token` | JWT required | — | Encrypt Canvas API token with pgcrypto and store on profile |
 | `delete-canvas-token` | JWT required | — | Revoke stored Canvas credentials |
 | `find-canvas-courses` | JWT required | — | Fetch courses from user's Canvas instance within a date range |
-| `find-canvas-syllabus` | JWT required | — | Search Canvas course modules for syllabus documents |
+| `find-canvas-syllabus` | JWT required | `claude-sonnet-4-6` | Search Canvas course modules for syllabus documents |
 | `download-canvas-syllabus` | JWT required | — | Download syllabus from Canvas and trigger `process-syllabus` |
 | `match-canvas-assignments` | JWT required | `claude-sonnet-4-6` | Match Canvas LMS assignments to extracted `course_events`; populates `canvas_assignment_id` and related metadata |
 
@@ -389,5 +417,9 @@ The function classifies each incoming message as one of: `date`, `grading`, `pol
 |---|---|---|
 | `SUPABASE_URL` | All functions | Injected automatically |
 | `SUPABASE_ANON_KEY` | All functions | Injected automatically |
-| `SUPABASE_SERVICE_ROLE_KEY` | All functions | Injected automatically |
-| `ANTHROPIC_API_KEY` | `process-syllabus`, `chat`, `detect-syllabi-info`, `match-canvas-assignments` | Must be set via `supabase secrets set` |
+| `SUPABASE_SERVICE_ROLE_KEY` | eight functions | Injected automatically |
+| `SERVICE_ROLE_KEY` | `process-syllabus`, `generate-ics`, `detect-syllabi-info` | Same value, unprefixed; set via `supabase secrets set` and in `.env.local` |
+| `ANTHROPIC_API_KEY` | `process-syllabus`, `chat`, `detect-syllabi-info`, `find-canvas-syllabus`, `match-canvas-assignments` | Must be set via `supabase secrets set` |
+| `CANVAS_ENCRYPTION_KEY` | the five Canvas functions | pgcrypto key for the stored Canvas token; must be set via `supabase secrets set` |
+| `AI_DAILY_LIMIT_CHAT`, `AI_DAILY_LIMIT_PROCESS_SYLLABUS`, `AI_DAILY_LIMIT_DETECT_SYLLABI_INFO`, `AI_DAILY_LIMIT_FIND_CANVAS_SYLLABUS`, `AI_DAILY_LIMIT_MATCH_CANVAS_ASSIGNMENTS` | AI functions | Optional per-user daily overrides (defaults 100 / 25 / 50 files / 25 / 25) |
+| `MAX_SYLLABUS_BYTES` | `process-syllabus`, `detect-syllabi-info` | Optional upload cap override (default 20 MiB) |

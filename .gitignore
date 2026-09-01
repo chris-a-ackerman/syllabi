@@ -9,3 +9,6 @@ backend/supabase/.env.local
 backend/supabase/.temp/
 backend/supabase/.branches/
 backend/supabase/Outputs/
+
+# local-only notes (machine-specific testing guide)
+LOCAL_TESTING.md
