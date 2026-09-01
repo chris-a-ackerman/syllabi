@@ -60,7 +60,9 @@ export function mapEventsToRows(
     user_id,
     date: event.date || null,
     date_unresolved: event.date_unresolved || null,
-    time: event.time || null,
+    // The live prompt emits time_start/time_end (SYL-52); the single `time`
+    // column takes the start. time_end has no column and is dropped.
+    time: event.time || event.time_start || null,
     title: event.title || "Untitled Event",
     type: event.type || "other",
     category: event.category || null,

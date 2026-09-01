@@ -102,16 +102,31 @@ Deno.test("passes through date, category, is_recurring_instance with null/false 
   assertEquals(bare.is_recurring_instance, false);
 });
 
-// BUG (characterization): see SYL issue "event time always NULL" — the mapper
-// reads event.time and event.date_unresolved, but the extraction prompt emits
-// time_start/time_end and no date_unresolved, so these columns never populate.
-// Update this test when fixing; don't "fix" the test alone.
-Deno.test("time_start/time_end from the prompt are ignored — time stays null (characterization)", () => {
+// SYL-52: the prompt emits time_start/time_end; `time` takes time_start.
+// time_end has no course_events column and is dropped. date_unresolved is
+// never emitted by the live prompt (it requires resolved dates), so that
+// column staying null is by design.
+Deno.test("time_start from the prompt maps to time; time_end is dropped", () => {
   const [row] = mapEventsToRows(
     [{ title: "Quiz", type: "quiz", date: "2026-09-08", time_start: "09:00", time_end: "09:50" }],
     "c1",
     "u1",
   );
-  assertEquals(row.time, null);
+  assertEquals(row.time, "09:00");
+  assertEquals(row.time_end, undefined);
   assertEquals(row.date_unresolved, null);
+});
+
+Deno.test("a legacy event.time field still wins over time_start", () => {
+  const [row] = mapEventsToRows(
+    [{ title: "Quiz", type: "quiz", time: "10:00", time_start: "09:00" }],
+    "c1",
+    "u1",
+  );
+  assertEquals(row.time, "10:00");
+});
+
+Deno.test("no time fields at all → time is null", () => {
+  const [row] = mapEventsToRows([{ title: "Essay", type: "deadline" }], "c1", "u1");
+  assertEquals(row.time, null);
 });
