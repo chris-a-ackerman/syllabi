@@ -177,7 +177,11 @@ export function AuthScreen() {
               placeholder="••••••••"
               className="mt-1 rounded-lg"
               required
+              minLength={isSignUp ? 8 : undefined}
             />
+            {isSignUp && (
+              <p className="mt-1 text-xs text-gray-500">At least 8 characters.</p>
+            )}
           </div>
 
           <Button type="submit" disabled={loading} className="w-full bg-indigo-600 hover:bg-indigo-700 rounded-lg">

@@ -146,10 +146,19 @@ max_indexes = 5
 [auth]
 enabled = true
 # The base URL of your website. Used as an allow-list for redirects and for constructing URLs used
-# in emails.
-site_url = "http://127.0.0.1:3000"
+# in emails. SYL-32: points at production — mirror this in the hosted project's
+# Auth settings (Dashboard → Authentication → URL Configuration).
+site_url = "https://syllabi-one.vercel.app"
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
-additional_redirect_urls = ["https://127.0.0.1:3000"]
+# Production + local Vite dev server (the app redirects OAuth to <origin>/auth/callback).
+additional_redirect_urls = [
+  "https://syllabi-one.vercel.app",
+  "https://syllabi-one.vercel.app/auth/callback",
+  "http://localhost:5173",
+  "http://localhost:5173/auth/callback",
+  "http://127.0.0.1:5173",
+  "http://127.0.0.1:5173/auth/callback",
+]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week).
 jwt_expiry = 3600
 # JWT issuer URL. If not set, defaults to the local API URL (http://127.0.0.1:<port>/auth/v1).
@@ -168,7 +177,8 @@ enable_anonymous_sign_ins = false
 # Allow/disallow testing manual linking of accounts
 enable_manual_linking = false
 # Passwords shorter than this value will be rejected as weak. Minimum 6, recommended 8 or more.
-minimum_password_length = 6
+# SYL-32: raised to 8 for the classmate launch — the app holds other people's schedules.
+minimum_password_length = 8
 # Passwords that do not meet the following requirements will be rejected as weak. Supported values
 # are: `letters_digits`, `lower_upper_letters_digits`, `lower_upper_letters_digits_symbols`
 password_requirements = ""
@@ -202,7 +212,9 @@ enable_signup = true
 # addresses. If disabled, only the new email is required to confirm.
 double_confirm_changes = true
 # If enabled, users need to confirm their email address before signing in.
-enable_confirmations = false
+# SYL-32: on, so nobody can register (and accumulate data under) an address
+# they don't control. AuthScreen already renders the "check your email" path.
+enable_confirmations = true
 # If enabled, users will need to reauthenticate or have logged in recently to change their password.
 secure_password_change = false
 # Controls the minimum amount of time that must pass before sending another signup confirmation or password reset email.
