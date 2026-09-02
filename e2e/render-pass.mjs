@@ -307,9 +307,11 @@ async function attemptBulkFromAddCourse() {
     return 'no Upload Multiple Syllabi option';
   if ((await clickByText('Upload Multiple Syllabi')) !== 'clicked')
     return 'could not click Upload Multiple Syllabi';
+  // Dialog content is rendered via a Radix Portal to document.body, not
+  // inside #root, so these checks read the whole document's text.
   if (
     !(await pollFor(
-      `(document.getElementById('root')?.innerText || '').includes('Drop PDF syllabi here')`,
+      `(document.body.innerText || '').includes('Drop PDF syllabi here')`,
       5000
     ))
   )
@@ -330,7 +332,7 @@ async function attemptBulkFromAddCourse() {
 
   if (
     !(await pollFor(
-      `(document.getElementById('root')?.innerText || '').includes('e2e-bulk.pdf')`,
+      `(document.body.innerText || '').includes('e2e-bulk.pdf')`,
       5000
     ))
   )
@@ -340,7 +342,7 @@ async function attemptBulkFromAddCourse() {
 
   // Fixed-semester rendering: shows the active semester by name, no
   // detection UI (Semester Name input / "Create new semester" option).
-  const reviewText = await evaluate(`(document.getElementById('root')?.innerText || '')`);
+  const reviewText = await evaluate(`(document.body.innerText || '')`);
   if (!reviewText.includes('Fall 2026')) return 'review step does not show the active semester name';
   const hasSpringPlaceholder = await evaluate(
     `!!document.querySelector('input[placeholder="e.g. Spring 2026"]')`
