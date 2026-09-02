@@ -2,7 +2,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.24.3";
-import { assertSafeCanvasUrl, UnsafeCanvasUrlError } from "../_shared/canvas-url.ts";
+import { assertSafeCanvasUrl, safeCanvasFetch, UnsafeCanvasUrlError } from "../_shared/canvas-url.ts";
 import { isoToDate } from "../_shared/iso-date.ts";
 import { stripHtml } from "../_shared/strip-html.ts";
 import { stripJsonFences } from "../_shared/strip-json-fences.ts";
@@ -141,10 +141,19 @@ serve(async (req) => {
     }
 
     // 5. Fetch Canvas assignments
-    const assignmentsRes = await fetch(
-      `${canvasBaseUrl}/api/v1/courses/${course.canvas_course_id}/assignments?per_page=100&include[]=assignment_group`,
-      { headers: { Authorization: `Bearer ${canvasToken}` } }
-    );
+    let assignmentsRes: Response;
+    try {
+      assignmentsRes = await safeCanvasFetch(
+        `${canvasBaseUrl}/api/v1/courses/${course.canvas_course_id}/assignments?per_page=100&include[]=assignment_group`,
+        { headers: { Authorization: `Bearer ${canvasToken}` } }
+      );
+    } catch (err) {
+      if (err instanceof UnsafeCanvasUrlError) {
+        console.error(`[match-canvas] Canvas API error: ${err.message}`);
+        return json({ error: "Could not reach Canvas. Please try again." }, 502);
+      }
+      throw err;
+    }
     if (assignmentsRes.status === 401) {
       return json({ error: "Canvas token invalid or expired. Please reconnect Canvas." }, 400);
     }

@@ -139,3 +139,38 @@ export async function assertSafeCanvasUrl(
 
   return url;
 }
+
+// SYL-57: assertSafeCanvasUrl only validates the URL a fetch *starts* with —
+// Deno's fetch follows redirects by default, so a Canvas host under attacker
+// control can 3xx the request to a blocked address (e.g. cloud metadata) and
+// have the response body read and stored. Canvas API endpoints do not redirect
+// in normal use, so any 3xx is treated as an error rather than followed.
+export class CanvasRedirectError extends UnsafeCanvasUrlError {
+  constructor(message: string) {
+    super(message);
+    this.name = "CanvasRedirectError";
+  }
+}
+
+/**
+ * Validates `rawUrl` with assertSafeCanvasUrl, then fetches it with
+ * `redirect: "manual"` so a 3xx response is surfaced (not followed). Any
+ * 3xx status throws CanvasRedirectError without the body being read.
+ */
+export async function safeCanvasFetch(
+  rawUrl: string,
+  init: RequestInit = {},
+  allowedHost?: string | null,
+): Promise<Response> {
+  const url = await assertSafeCanvasUrl(rawUrl, allowedHost);
+  const res = await fetch(url, { ...init, redirect: "manual" });
+
+  if (res.status >= 300 && res.status < 400) {
+    await res.body?.cancel();
+    throw new CanvasRedirectError(
+      `Canvas host returned a redirect (${res.status}); redirects are not followed.`,
+    );
+  }
+
+  return res;
+}
