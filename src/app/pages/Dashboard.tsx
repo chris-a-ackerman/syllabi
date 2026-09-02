@@ -200,7 +200,11 @@ export function Dashboard() {
           setShowAddCourse(true);
         }}
       />
-      <BulkUploadModal open={showBulkUpload} onClose={() => setShowBulkUpload(false)} />
+      <BulkUploadModal
+        open={showBulkUpload}
+        onClose={() => setShowBulkUpload(false)}
+        fixedSemesterId={activeSemester?.id ?? ''}
+      />
     </div>
   );
 }

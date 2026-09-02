@@ -72,7 +72,7 @@ export function AddCourseChooser({ onUpload, onCreateManually, onBulkUpload, onC
                 Upload Multiple Syllabi
               </h3>
               <p className="text-sm text-gray-600">
-                Upload several PDFs at once — we'll detect course names, codes, and semesters automatically.
+                Upload several PDFs at once — we'll detect course names and codes automatically. All courses go into your current semester.
               </p>
             </div>
           </div>

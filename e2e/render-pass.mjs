@@ -31,6 +31,11 @@ ws.onmessage = (m) => {
   if (msg.id && pending.has(msg.id)) {
     pending.get(msg.id)(msg);
     pending.delete(msg.id);
+  } else if (msg.method === 'Fetch.requestPaused') {
+    // Routed instead of pushed onto `events` — only active while a step has
+    // called Fetch.enable (SYL-61's bulk-from-Add-Course step), and handled
+    // separately so it never shows up in problems().
+    handleRequestPaused(msg.params);
   } else if (msg.method) {
     events.push(msg);
   }
@@ -58,6 +63,89 @@ const evaluate = async (expression) => {
     console.log(`        [page exception] ${details.exception?.description ?? details.text}`);
   return msg.result?.result?.value;
 };
+
+const clickByText = (text) =>
+  evaluate(`(() => {
+    const el = [...document.querySelectorAll('button, a')].find(
+      (x) => (x.innerText || '').trim().includes(${JSON.stringify(text)})
+    );
+    if (!el) return 'not found';
+    el.click();
+    return 'clicked';
+  })()`);
+
+const pollFor = async (expr, ms) => {
+  const deadline = Date.now() + ms;
+  do {
+    if ((await evaluate(`!!(${expr})`)) === true) return true;
+    await wait(250);
+  } while (Date.now() < deadline);
+  return false;
+};
+
+const hasControl = (text) =>
+  `[...document.querySelectorAll('button, a')].some((x) => (x.innerText || '').trim().includes(${JSON.stringify(text)}))`;
+
+/**
+ * Fulfils the two Claude-backed Edge Functions at the network layer (CDP
+ * Fetch domain) so the SYL-61 bulk-from-Add-Course step can run against a
+ * local stack with no real Anthropic key. Only invoked while a step has
+ * called Fetch.enable with a matching pattern — see that step for the
+ * enable/disable bracket.
+ */
+async function handleRequestPaused(params) {
+  const { requestId, request } = params;
+  const corsHeaders = [
+    { name: 'Access-Control-Allow-Origin', value: '*' },
+    { name: 'Access-Control-Allow-Headers', value: 'authorization, x-client-info, apikey, content-type' },
+    { name: 'Access-Control-Allow-Methods', value: 'POST, OPTIONS' },
+  ];
+
+  if (request.method === 'OPTIONS') {
+    await send('Fetch.fulfillRequest', { requestId, responseCode: 204, responseHeaders: corsHeaders });
+    return;
+  }
+
+  if (request.method === 'POST' && request.url.includes('/functions/v1/detect-syllabi-info')) {
+    let filePaths = [];
+    try {
+      filePaths = JSON.parse(request.postData ?? '{}').file_paths ?? [];
+    } catch {
+      filePaths = [];
+    }
+    const body = JSON.stringify({
+      results: filePaths.map((file_path) => ({
+        file_path,
+        course_name: 'E2E Bulk Course',
+        course_code: 'E2E 101',
+        semester_name: 'Autumn 2099',
+        semester_start: '2099-09-01',
+        semester_end: '2099-12-15',
+        confidence: 'high',
+      })),
+    });
+    await send('Fetch.fulfillRequest', {
+      requestId,
+      responseCode: 200,
+      responseHeaders: [...corsHeaders, { name: 'Content-Type', value: 'application/json' }],
+      body: Buffer.from(body).toString('base64'),
+    });
+    return;
+  }
+
+  if (request.method === 'POST' && request.url.includes('/functions/v1/process-syllabus')) {
+    const body = JSON.stringify({ success: true, events_created: 0 });
+    await send('Fetch.fulfillRequest', {
+      requestId,
+      responseCode: 200,
+      responseHeaders: [...corsHeaders, { name: 'Content-Type', value: 'application/json' }],
+      body: Buffer.from(body).toString('base64'),
+    });
+    return;
+  }
+
+  await send('Fetch.continueRequest', { requestId });
+}
 
 await send('Runtime.enable');
 await send('Log.enable');
@@ -189,6 +277,97 @@ await check('Dashboard renders with chat history', '/dashboard', {
 await check('Courses grid renders', '/courses', {
   expectText: ['Introduction to Algorithms', 'Organic Chemistry I'],
 });
+
+// ── Bulk upload from Add Course must target the active semester (SYL-61) ───
+// useBulkUpload({ fixedSemesterId }) had no callers: Upload Multiple Syllabi
+// launched from Add Course still detected a semester from the PDF and could
+// flip is_active to a brand-new one. "Fall 2026" (seeded, still active) must
+// still be active — and be the only semester the course lands in — after
+// this runs. DashboardSidebar's "Add Course" button is unconditional (the
+// Courses page's own Add Course card only renders once its semester is
+// empty, which the seeded fixture is not), so this drives the identical
+// Add Course -> Upload Multiple Syllabi journey the issue describes from
+// /dashboard. detect-syllabi-info / process-syllabus are stubbed at the
+// network layer since there is no real Anthropic key locally.
+console.log('');
+await send('Fetch.enable', {
+  patterns: [
+    { urlPattern: '*/functions/v1/detect-syllabi-info*', requestStage: 'Request' },
+    { urlPattern: '*/functions/v1/process-syllabus*', requestStage: 'Request' },
+  ],
+});
+
+async function attemptBulkFromAddCourse() {
+  await send('Page.navigate', { url: `${BASE}/dashboard` });
+  await wait(3000);
+  events = [];
+  if (!(await pollFor(hasControl('Add Course'), 8000))) return 'no Add Course control';
+  if ((await clickByText('Add Course')) !== 'clicked') return 'could not click Add Course';
+  if (!(await pollFor(hasControl('Upload Multiple Syllabi'), 5000)))
+    return 'no Upload Multiple Syllabi option';
+  if ((await clickByText('Upload Multiple Syllabi')) !== 'clicked')
+    return 'could not click Upload Multiple Syllabi';
+  // Dialog content is rendered via a Radix Portal to document.body, not
+  // inside #root, so these checks read the whole document's text.
+  if (
+    !(await pollFor(
+      `(document.body.innerText || '').includes('Drop PDF syllabi here')`,
+      5000
+    ))
+  )
+    return 'bulk upload modal did not open';
+
+  const dropped = await evaluate(`(() => {
+    const p = [...document.querySelectorAll('p')].find(
+      (el) => (el.textContent || '').includes('Drop PDF syllabi here')
+    );
+    const zone = p ? p.parentElement : null;
+    if (!zone) return 'no drop zone';
+    const dt = new DataTransfer();
+    dt.items.add(new File([new TextEncoder().encode('%PDF-1.4\\n%e2e\\n')], 'e2e-bulk.pdf', { type: 'application/pdf' }));
+    zone.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt }));
+    return 'ok';
+  })()`);
+  if (dropped !== 'ok') return dropped;
+
+  if (
+    !(await pollFor(
+      `(document.body.innerText || '').includes('e2e-bulk.pdf')`,
+      5000
+    ))
+  )
+    return 'file did not appear in the upload list';
+  if ((await clickByText('Analyze')) !== 'clicked') return 'could not click Analyze';
+  if (!(await pollFor(hasControl('Confirm & Set Up'), 10000))) return 'review step never reached';
+
+  // Fixed-semester rendering: shows the active semester by name, no
+  // detection UI (Semester Name input / "Create new semester" option).
+  const reviewText = await evaluate(`(document.body.innerText || '')`);
+  if (!reviewText.includes('Fall 2026')) return 'review step does not show the active semester name';
+  const hasSpringPlaceholder = await evaluate(
+    `!!document.querySelector('input[placeholder="e.g. Spring 2026"]')`
+  );
+  if (hasSpringPlaceholder) return 'review step still shows a Semester Name input';
+  if (reviewText.includes('Create new semester'))
+    return 'review step still shows a "Create new semester" option';
+
+  if ((await clickByText('Confirm & Set Up')) !== 'clicked')
+    return 'could not click Confirm & Set Up';
+  await wait(4000);
+  if (problems().length) return 'console errors after confirm';
+  return 'ok';
+}
+
+const bulkFromAddCourse = await attemptBulkFromAddCourse();
+await send('Fetch.disable');
+if (bulkFromAddCourse === 'ok') {
+  console.log('PASS  Bulk upload from Add Course targets the active semester (SYL-61)');
+} else {
+  console.log(`FAIL  Bulk upload from Add Course targets the active semester (SYL-61): ${bulkFromAddCourse}`);
+  problems().forEach((e) => console.log(`        ${e.slice(0, 220)}`));
+  failures++;
+}
+
 await check(
   'Course Detail renders, undated event lands in "Date TBD"',
   '/course/aaaaaaaa-0000-0000-0000-000000000001',
@@ -424,27 +603,8 @@ if (disabled !== 'ok') {
 // retry keeps a lone reload from failing the whole pass.
 console.log('');
 
-const clickByText = (text) =>
-  evaluate(`(() => {
-    const el = [...document.querySelectorAll('button, a')].find(
-      (x) => (x.innerText || '').trim().includes(${JSON.stringify(text)})
-    );
-    if (!el) return 'not found';
-    el.click();
-    return 'clicked';
-  })()`);
-
-const pollFor = async (expr, ms) => {
-  const deadline = Date.now() + ms;
-  do {
-    if ((await evaluate(`!!(${expr})`)) === true) return true;
-    await wait(250);
-  } while (Date.now() < deadline);
-  return false;
-};
-
-const hasControl = (text) =>
-  `[...document.querySelectorAll('button, a')].some((x) => (x.innerText || '').trim().includes(${JSON.stringify(text)}))`;
+// clickByText / pollFor / hasControl are defined near the top of the file —
+// the SYL-61 bulk-from-Add-Course step above also needs them.
 
 async function attemptSemesterCreation() {
   await send('Page.navigate', { url: `${BASE}/dashboard` });
