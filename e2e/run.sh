@@ -127,5 +127,30 @@ if [ "$AI_ROW" != "false|$UID1" ]; then
   exit 1
 fi
 echo "PASS  the admin toggle disabled AI in app_settings, stamped with the admin's id (SYL-37)"
+
+echo ""
+echo "Checking bulk upload from Add Course targeted the active semester (SYL-61)..."
+BULK_COURSE_COUNT="$(psql "$DB_URL" -At -c "SELECT count(*) FROM courses WHERE user_id='$UID1' AND name='E2E Bulk Course'")"
+BULK_COURSE_SEMESTER="$(psql "$DB_URL" -At -c "SELECT semester_id FROM courses WHERE user_id='$UID1' AND name='E2E Bulk Course'")"
+DETECTED_SEMESTER_COUNT="$(psql "$DB_URL" -At -c "SELECT count(*) FROM semesters WHERE user_id='$UID1' AND name='Autumn 2099'")"
+TOTAL_SEMESTER_COUNT="$(psql "$DB_URL" -At -c "SELECT count(*) FROM semesters WHERE user_id='$UID1'")"
+
+if [ "$BULK_COURSE_COUNT" != "1" ]; then
+  echo "FAIL  expected exactly 1 course named 'E2E Bulk Course', found $BULK_COURSE_COUNT"
+  exit 1
+fi
+if [ "$BULK_COURSE_SEMESTER" != "11111111-1111-1111-1111-111111111111" ]; then
+  echo "FAIL  expected E2E Bulk Course's semester_id to be the seeded Fall 2026 (11111111-1111-1111-1111-111111111111), found '$BULK_COURSE_SEMESTER'"
+  exit 1
+fi
+if [ "$DETECTED_SEMESTER_COUNT" != "0" ]; then
+  echo "FAIL  expected 0 semesters named 'Autumn 2099' (the detected name the bug would have created), found $DETECTED_SEMESTER_COUNT"
+  exit 1
+fi
+if [ "$TOTAL_SEMESTER_COUNT" != "3" ]; then
+  echo "FAIL  expected 3 semesters total for the seeded user (2 seeded + 1 from the later UI semester creation), found $TOTAL_SEMESTER_COUNT"
+  exit 1
+fi
+echo "PASS  bulk upload from Add Course created the course in the active semester and no new semester (SYL-61)"
 echo ""
 echo "Authenticated E2E pass succeeded."
