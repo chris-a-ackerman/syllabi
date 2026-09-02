@@ -294,6 +294,55 @@ await check('Admin panel renders (direct load)', '/admin', {
   expectText: ['Admin Panel', 'Total Users'],
 });
 
+// ── A token refresh must not bounce an admin off /admin (SYL-59) ───────────
+// AuthProvider's onAuthStateChange listener used to rebuild `user` with
+// isAdmin: false on every session event carrying a session, including
+// auth-js's own automatic TOKEN_REFRESHED — bouncing an admin sitting on
+// /admin to /dashboard an hour into their session. Drive a real
+// refreshSession() call through the app's own Supabase client instance
+// (dynamic-imported off the same module URL Vite serves the app, so the
+// browser's module map hands back the singleton, not a second client) and
+// confirm we're still here afterwards. We are already on /admin from the
+// check above.
+events = [];
+const refreshed = await evaluate(`(async () => {
+  try {
+    const { supabase } = await import('/src/lib/supabase.ts');
+    const before = await supabase.auth.getSession();
+    if (before.data.session?.user?.email !== ${JSON.stringify(E2E_EMAIL)})
+      return 'unexpected session before refresh: ' + JSON.stringify(before.data.session?.user?.email);
+    const { error } = await supabase.auth.refreshSession();
+    if (error) return 'refreshSession error: ' + error.message;
+    return 'ok';
+  } catch (e) {
+    return 'exception: ' + ((e && e.stack) || e);
+  }
+})()`);
+
+if (refreshed !== 'ok') {
+  console.log(`FAIL  Admin stays on /admin across a token refresh (SYL-59): ${refreshed}`);
+  failures++;
+} else {
+  await wait(2000);
+  const pathAfterRefresh = await evaluate('location.pathname');
+  const textAfterRefresh = await evaluate(`(document.getElementById('root')?.innerText || '')`);
+  const refreshErrors = problems();
+  const ok =
+    pathAfterRefresh === '/admin' &&
+    textAfterRefresh.includes('Admin Panel') &&
+    refreshErrors.length === 0;
+  if (ok) {
+    console.log('PASS  Admin stays on /admin across a token refresh (SYL-59)');
+  } else {
+    console.log('FAIL  Admin stays on /admin across a token refresh (SYL-59)');
+    if (pathAfterRefresh !== '/admin') console.log(`        redirected to ${pathAfterRefresh}`);
+    if (!textAfterRefresh.includes('Admin Panel'))
+      console.log('        "Admin Panel" text missing after refresh');
+    refreshErrors.forEach((e) => console.log(`        ${e.slice(0, 220)}`));
+    failures++;
+  }
+}
+
 // ── The AI kill switch is a real app_settings write (SYL-37) ────────────────
 // It used to be client-local: the toggle moved a boolean that reset on reload.
 // We are already on /admin from the check above.
