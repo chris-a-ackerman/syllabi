@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.24.3";
 import { mapAnalysisToCourseUpdate, mapEventsToRows, stripJsonFences } from "./parse.ts";
+import { type CourseEventsClient, type ReplaceCourseEventsResult, replaceCourseEvents } from "./events.ts";
 import { enforceAiQuota } from "../_shared/ai-quota.ts";
 import { MAX_SYLLABUS_BYTES } from "../_shared/ai-limits.ts";
 import { CORS_HEADERS as corsHeaders } from "../_shared/cors.ts";
@@ -320,7 +321,75 @@ Return the complete JSON analysis as specified.`;
       return new Response(JSON.stringify({ error: "Failed to parse Claude response" }), { status: 500, headers: corsHeaders });
     }
 
-    // 8. Store full analysis on course, update basic fields + extracted columns
+    // 8. Replace course_events — insert the new rows first, delete the stale
+    // ones only once that succeeds (SYL-60). The old delete-then-insert order
+    // let one rejected row (e.g. an unnormalised time) fail the insert *after*
+    // the prior events were already gone, leaving the course with zero events
+    // while the response still reported success. The course row (analysis
+    // blob + analysis_status = "complete") is written only after this step
+    // succeeds, so a failed rewrite never pairs a new grading_rules blob with
+    // old events or leaves a course reporting "complete" with events it never
+    // received.
+    const events = analysisJson.events || [];
+    let replaceResult: ReplaceCourseEventsResult;
+    try {
+      const eventRows = mapEventsToRows(events, course_id, course.user_id);
+
+      const nullDateCount = eventRows.filter((e: any) => !e.date).length;
+      console.log(`[process-syllabus][events] mapped ${eventRows.length} rows | null_dates=${nullDateCount}`);
+      if (eventRows.length > 0) {
+        console.log(`[process-syllabus][events] first_3=${JSON.stringify(eventRows.slice(0, 3).map((e: any) => ({ title: e.title, date: e.date, type: e.type })))}`);
+      }
+
+      const replaceStart = Date.now();
+      // Cast: structurally checking the real (deeply generic) SupabaseClient
+      // type against the minimal CourseEventsClient interface blows up
+      // TypeScript's instantiation depth (TS2589). The real client already
+      // satisfies the few methods this module calls.
+      replaceResult = await replaceCourseEvents(supabase as unknown as CourseEventsClient, course_id, eventRows);
+      console.log(`[process-syllabus][events] replaceCourseEvents ok=${replaceResult.ok} inserted=${replaceResult.inserted} deleted=${replaceResult.deleted ?? "n/a"} stage=${replaceResult.stage ?? "n/a"} | ${Date.now() - replaceStart}ms`);
+    } catch (err) {
+      // e.g. a null entry in analysisJson.events. Anything thrown here must
+      // surface as a failed analysis, not fall through to the generic 500
+      // with the course left on "processing".
+      replaceResult = { ok: false, stage: "map", inserted: 0, error: err };
+    }
+
+    if (!replaceResult.ok) {
+      const errObj = replaceResult.error as { message?: string } | null | undefined;
+      const errorMessage = errObj?.message ?? JSON.stringify(replaceResult.error);
+      console.error(`[process-syllabus][events] course_events ${replaceResult.stage} failed:`, replaceResult.error);
+
+      await supabase
+        .from("courses")
+        .update({
+          analysis_status: "failed",
+          analysis_error: `course_events ${replaceResult.stage} failed: ${errorMessage}`,
+        })
+        .eq("id", course_id);
+
+      const { error: logError } = await supabase.from("claude_api_logs").insert({
+        user_id: course.user_id,
+        course_id,
+        model: response.model,
+        status: "error",
+        output: rawOutput,
+        error_message: `course_events ${replaceResult.stage} failed: ${errorMessage}`,
+        input_tokens: response.usage?.input_tokens ?? null,
+        output_tokens: response.usage?.output_tokens ?? null,
+      });
+      if (logError) {
+        console.error("[process-syllabus][db] Log insert error:", logError);
+      }
+
+      return new Response(
+        JSON.stringify({ success: false, error: "Failed to save course events" }),
+        { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } },
+      );
+    }
+
+    // 9. Store full analysis on course, update basic fields + extracted
+    // columns, and mark the analysis complete — only now that the events are in.
     const {
       name: courseName,
       code: courseCode,
@@ -345,37 +414,14 @@ Return the complete JSON analysis as specified.`;
 
     console.log(`[process-syllabus][db] course updated | name="${courseName}" | code="${courseCode}" | professor="${courseProfessor}"`);
 
-    // 9. Populate course_events — delete existing, insert fresh
-    await supabase.from("course_events").delete().eq("course_id", course_id);
-
-    const events = analysisJson.events || [];
-    let insertError = null;
-    if (events.length > 0) {
-      const eventRows = mapEventsToRows(events, course_id, course.user_id);
-
-      const nullDateCount = eventRows.filter((e: any) => !e.date).length;
-      console.log(`[process-syllabus][events] mapped ${eventRows.length} rows | null_dates=${nullDateCount}`);
-      if (eventRows.length > 0) {
-        console.log(`[process-syllabus][events] first_3=${JSON.stringify(eventRows.slice(0, 3).map((e: any) => ({ title: e.title, date: e.date, type: e.type })))}`);
-      }
-
-      const { error } = await supabase.from("course_events").insert(eventRows);
-      insertError = error;
-      if (insertError) {
-        console.error("Insert error:", insertError);
-      }
-    }
-
-    console.log(`[process-syllabus][db] events inserted=${events.length} | insert_error=${insertError ? JSON.stringify(insertError) : "none"}`);
-
-    // 10. Log the Claude API call and event insert result
+    // 10. Log the Claude API call
     const { error: logError } = await supabase.from("claude_api_logs").insert({
       user_id: course.user_id,
       course_id,
       model: response.model,
-      status: insertError ? "error" : "success",
+      status: "success",
       output: rawOutput,
-      error_message: insertError ? JSON.stringify(insertError) : null,
+      error_message: null,
       input_tokens: response.usage?.input_tokens ?? null,
       output_tokens: response.usage?.output_tokens ?? null,
     });
@@ -387,7 +433,7 @@ Return the complete JSON analysis as specified.`;
       JSON.stringify({
         success: true,
         course_id,
-        events_created: events.length,
+        events_created: replaceResult.inserted,
         parse_successful: analysisJson.parse_successful,
         completeness: analysisJson.extraction_quality?.completeness,
       }),
