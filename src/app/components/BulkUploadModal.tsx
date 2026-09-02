@@ -37,6 +37,11 @@ export function BulkUploadModal({ open, onClose, fixedSemesterId }: BulkUploadMo
   const fixedSemester = fixedSemesterId !== undefined
     ? semesters.find(s => s.id === fixedSemesterId)
     : undefined;
+  // The Add Course entry points pass '' when there is no active semester
+  // (useBulkUpload treats '' as "no semester available" and confirm() then
+  // creates nothing). Block the flow up front instead of showing the
+  // detect-a-semester form and silently discarding the upload (SYL-61 review).
+  const noSemesterAvailable = fixedSemesterId === '';
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dropRef = useRef<HTMLDivElement>(null);
@@ -81,7 +86,8 @@ export function BulkUploadModal({ open, onClose, fixedSemesterId }: BulkUploadMo
         <DialogHeader>
           <DialogTitle>Upload Multiple Courses</DialogTitle>
           <DialogDescription>
-            {step === 'upload' && 'Drop your syllabi and we\'ll detect course info automatically.'}
+            {noSemesterAvailable && 'Create a semester before uploading courses.'}
+            {!noSemesterAvailable && step === 'upload' && 'Drop your syllabi and we\'ll detect course info automatically.'}
             {step === 'detecting' && 'Analyzing your syllabi…'}
             {step === 'review' && fixedSemester && `Review detected info and confirm. Courses will be added to ${fixedSemester.name}.`}
             {step === 'review' && !fixedSemester && 'Review detected info and confirm.'}
@@ -96,8 +102,22 @@ export function BulkUploadModal({ open, onClose, fixedSemesterId }: BulkUploadMo
           </Alert>
         )}
 
+        {noSemesterAvailable && (
+          <div className="space-y-3">
+            <Alert className="bg-amber-50 border-amber-200">
+              <AlertCircle className="h-4 w-4 text-amber-600" />
+              <AlertDescription className="text-amber-800">
+                There is no active semester to add these courses to. Create a semester first, then upload your syllabi.
+              </AlertDescription>
+            </Alert>
+            <Button variant="outline" className="w-full rounded-lg" onClick={onClose}>
+              Close
+            </Button>
+          </div>
+        )}
+
         {/* ── Step 1: Upload ── */}
-        {step === 'upload' && (
+        {!noSemesterAvailable && step === 'upload' && (
           <div className="space-y-3">
             <div
               ref={dropRef}
@@ -161,7 +181,7 @@ export function BulkUploadModal({ open, onClose, fixedSemesterId }: BulkUploadMo
         )}
 
         {/* ── Step 2: Detecting ── */}
-        {step === 'detecting' && (
+        {!noSemesterAvailable && step === 'detecting' && (
           <div className="space-y-3 py-2">
             {fileItems.map((fi) => (
               <div key={fi.id} className="flex items-center gap-3">
@@ -173,12 +193,12 @@ export function BulkUploadModal({ open, onClose, fixedSemesterId }: BulkUploadMo
         )}
 
         {/* ── Step 3: Review ── */}
-        {step === 'review' && (
+        {!noSemesterAvailable && step === 'review' && (
           <div className="space-y-4">
             <BulkReviewForm
               detectedCourses={detectedCourses}
               updateDetectedCourse={updateDetectedCourse}
-              semesters={fixedSemester ? undefined : semesters}
+              semesters={semesters}
               fixedSemester={fixedSemester}
             />
 
@@ -198,7 +218,7 @@ export function BulkUploadModal({ open, onClose, fixedSemesterId }: BulkUploadMo
         )}
 
         {/* ── Step 4: Processing ── */}
-        {step === 'processing' && (
+        {!noSemesterAvailable && step === 'processing' && (
           <div className="space-y-3">
             {createdCourseIds.map((courseId) => {
               const course = allCourses.find(c => c.id === courseId);

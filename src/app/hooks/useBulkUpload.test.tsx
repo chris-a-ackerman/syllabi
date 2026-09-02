@@ -124,4 +124,23 @@ describe('useBulkUpload', () => {
     expect(semesterIdsUsed).toContain('sem-id-Fall 2026');
     expect(semesterIdsUsed).toContain('sem-id-Autumn 2099');
   });
+  it("fixedSemesterId '': no semester available — confirm creates no semesters and no courses", async () => {
+    // The Add Course entry points pass '' when there is no active semester;
+    // the hook must not fall back to detection and must not create anything.
+    const { result } = renderHook(() => useBulkUpload({ fixedSemesterId: '' }));
+
+    act(() => {
+      result.current.addFiles([makeFile('a.pdf')]);
+    });
+    await act(async () => {
+      await result.current.analyze();
+    });
+    await act(async () => {
+      await result.current.confirm();
+    });
+
+    expect(addSemester).not.toHaveBeenCalled();
+    expect(addCourse).not.toHaveBeenCalled();
+    expect(result.current.createdCourseIds).toEqual([]);
+  });
 });
