@@ -5,7 +5,7 @@
 -- exceeds the endpoint's limit. Limits themselves live in
 -- functions/_shared/ai-limits.ts — this table only counts.
 
-CREATE TABLE public.ai_usage (
+CREATE TABLE IF NOT EXISTS public.ai_usage (
   user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   day DATE NOT NULL,
   endpoint TEXT NOT NULL,
