@@ -1,7 +1,7 @@
 // supabase/functions/download-canvas-syllabus/index.ts
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { assertSafeCanvasUrl, safeCanvasFetch, UnsafeCanvasUrlError } from "../_shared/canvas-url.ts";
+import { assertSafeCanvasUrl, redactUrl, safeCanvasFetch, UnsafeCanvasUrlError } from "../_shared/canvas-url.ts";
 
 import { CORS_HEADERS } from "../_shared/cors.ts";
 
@@ -111,7 +111,7 @@ serve(async (req) => {
         await assertSafeCanvasUrl(file_url, allowedHost);
       } catch (err) {
         if (err instanceof UnsafeCanvasUrlError) {
-          console.error(`[download] REJECTED file_url ${file_url}: ${err.message}`);
+          console.error(`[download] REJECTED file_url (host=${redactUrl(file_url)}): ${err.message}`);
           return json({ error: `file_url is not an allowed Canvas URL: ${err.message}` }, 400);
         }
         throw err;

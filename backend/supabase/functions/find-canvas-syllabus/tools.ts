@@ -5,7 +5,7 @@
 // module load) so this layer can be unit-tested in isolation — same pattern
 // as chat/query.ts, process-syllabus/parse.ts, generate-ics/ics.ts.
 import type Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.24.3";
-import { safeCanvasFetch, UnsafeCanvasUrlError } from "../_shared/canvas-url.ts";
+import { redactUrl, safeCanvasFetch, UnsafeCanvasUrlError } from "../_shared/canvas-url.ts";
 
 export const SYSTEM_PROMPT =
   `You are searching for the course syllabus on Canvas for a student.
@@ -158,7 +158,7 @@ export async function executeTools(
       try {
         let result: unknown;
 
-        console.log(`[tool:${block.name}] input: ${JSON.stringify(block.input)}`);
+        console.log(`[tool:${block.name}] called`);
 
         if (block.name === "get_course_syllabus_body") {
           const url = `${canvasBaseUrl}/api/v1/courses/${input.course_id}?include[]=syllabus_body`;
@@ -169,7 +169,7 @@ export async function executeTools(
           const data = await res.json() as Record<string, unknown>;
           const body = data.syllabus_body ?? null;
           console.log(
-            `[tool:get_course_syllabus_body] syllabus_body type=${typeof body} length=${typeof body === "string" ? body.length : "n/a"} value=${JSON.stringify(typeof body === "string" ? body.slice(0, 300) : body)}`,
+            `[tool:get_course_syllabus_body] type=${typeof body} length=${typeof body === "string" ? body.length : 0}`,
           );
           result = { syllabus_body: body };
         } else if (block.name === "search_course_files") {
@@ -235,7 +235,9 @@ export async function executeTools(
               })
             ),
           })));
-          console.log(`[tool:get_course_modules] result: ${JSON.stringify(result)}`);
+          const moduleResult = result as Array<{ items: unknown[] }>;
+          const itemCount = moduleResult.reduce((n, m) => n + m.items.length, 0);
+          console.log(`[tool:get_course_modules] result: ${moduleResult.length} modules, ${itemCount} items`);
         } else if (block.name === "get_course_pages") {
           const params = new URLSearchParams({ search_term: input.search_term, per_page: "10" });
           const url = `${canvasBaseUrl}/api/v1/courses/${input.course_id}/pages?${params}`;
@@ -260,8 +262,7 @@ export async function executeTools(
           result = { title: page.title, body: page.body };
         } else if (block.name === "report_syllabus_found") {
           const foundInput = block.input as Record<string, string | null | undefined>;
-          console.log(`[tool:report_syllabus_found] FULL INPUT: ${JSON.stringify(foundInput)}`);
-          console.log(`[tool:report_syllabus_found] source_type=${foundInput.source_type} file_url=${foundInput.file_url ?? "MISSING"} html_content_length=${foundInput.html_content?.length ?? "MISSING"} confidence=${foundInput.confidence}`);
+          console.log(`[tool:report_syllabus_found] source_type=${foundInput.source_type} has_file_url=${!!foundInput.file_url} html_content_length=${foundInput.html_content?.length ?? 0} confidence=${foundInput.confidence}`);
           if (foundInput.source_type === "file" && !foundInput.file_url) {
             console.log(`[tool:report_syllabus_found] REJECTED: source_type=file but file_url missing`);
             return {
@@ -300,7 +301,7 @@ export async function executeTools(
         };
       } catch (err) {
         if (err instanceof CanvasTokenExpiredError) throw err;
-        console.error(`Tool ${block.name} error:`, err);
+        console.error(`Tool ${block.name} error (host=${redactUrl(canvasBaseUrl)}):`, err);
         return {
           type: "tool_result",
           tool_use_id: block.id,
