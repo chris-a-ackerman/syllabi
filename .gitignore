@@ -9,3 +9,4 @@ backend/supabase/.env.local
 backend/supabase/.temp/
 backend/supabase/.branches/
 backend/supabase/Outputs/
+/Claude outputs/
