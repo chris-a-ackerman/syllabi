@@ -2,7 +2,13 @@
 // drift tripwire in the config-drift.test.ts spirit: every enforceAiQuota call
 // site in the functions must name an endpoint that has a configured limit.
 import { assert, assertEquals } from "@std/assert";
-import { AI_DAILY_LIMITS, intFromEnv, MAX_SYLLABUS_BYTES } from "../../functions/_shared/ai-limits.ts";
+import {
+  AI_DAILY_LIMIT_GLOBAL,
+  AI_DAILY_LIMITS,
+  intFromEnv,
+  MAX_SYLLABUS_BYTES,
+  MAX_SYLLABUS_PAGES,
+} from "../../functions/_shared/ai-limits.ts";
 
 Deno.test("intFromEnv falls back when the variable is unset", () => {
   Deno.env.delete("AI_LIMITS_TEST_SENTINEL");
@@ -36,6 +42,30 @@ Deno.test("every configured limit is a positive integer", () => {
     assert(Number.isInteger(limit) && limit > 0, `${endpoint} limit is ${limit}`);
   }
   assert(Number.isInteger(MAX_SYLLABUS_BYTES) && MAX_SYLLABUS_BYTES > 0);
+  assert(Number.isInteger(MAX_SYLLABUS_PAGES) && MAX_SYLLABUS_PAGES > 0);
+  assert(Number.isInteger(AI_DAILY_LIMIT_GLOBAL) && AI_DAILY_LIMIT_GLOBAL > 0);
+});
+
+// SYL-67: the global cap is a module-load-time constant (like every other
+// limit here), so this only proves intFromEnv is wired to the right env var
+// name — re-importing the module to see a live override takes a subprocess,
+// which the per-endpoint limits above don't bother with either.
+Deno.test("AI_DAILY_LIMIT_GLOBAL reads AI_DAILY_LIMIT_GLOBAL from the environment", () => {
+  Deno.env.set("AI_DAILY_LIMIT_GLOBAL", "3");
+  try {
+    assertEquals(intFromEnv("AI_DAILY_LIMIT_GLOBAL", 2000), 3);
+  } finally {
+    Deno.env.delete("AI_DAILY_LIMIT_GLOBAL");
+  }
+});
+
+// SYL-67: AI_DAILY_LIMIT_GLOBAL is intentionally NOT a per-endpoint limit —
+// it is consumed inside every consume_ai_quota call, not via a separate
+// enforceAiQuota("global") call site, so it must stay out of AI_DAILY_LIMITS
+// or the drift tripwire below would demand a matching call site that can't
+// exist.
+Deno.test("AI_DAILY_LIMIT_GLOBAL is not itself a per-endpoint limit", () => {
+  assert(!("global" in AI_DAILY_LIMITS));
 });
 
 Deno.test("every enforceAiQuota call site names a configured endpoint, and vice versa", async () => {

@@ -141,31 +141,71 @@ BEGIN
 END;
 $$;
 
--- ── SYL-29: ai_usage quota counters ─────────────────────────────────────────
+-- ── SYL-29/SYL-67: ai_usage quota counters ──────────────────────────────────
 DO $$
 DECLARE
   v_a       UUID;
   v_count   INTEGER;
+  v_global  BOOLEAN;
   v_blocked BOOLEAN;
 BEGIN
   SELECT id INTO v_a FROM auth.users WHERE email = 'a@test.local';
 
   -- The counter increments atomically and isolates endpoints from each other.
-  SELECT public.consume_ai_quota(v_a, 'chat', 1) INTO v_count;
+  -- p_limit/p_global_limit are set far above anything consumed in this block
+  -- except where a test deliberately sizes them to force a rejection.
+  SELECT count INTO v_count FROM public.consume_ai_quota(v_a, 'chat', 100, 100000, 1);
   IF v_count <> 1 THEN
     RAISE EXCEPTION 'SYL-29: first consume returned %, expected 1', v_count;
   END IF;
-  SELECT public.consume_ai_quota(v_a, 'chat', 1) INTO v_count;
+  SELECT count INTO v_count FROM public.consume_ai_quota(v_a, 'chat', 100, 100000, 1);
   IF v_count <> 2 THEN
     RAISE EXCEPTION 'SYL-29: second consume returned %, expected 2', v_count;
   END IF;
-  SELECT public.consume_ai_quota(v_a, 'detect-syllabi-info', 5) INTO v_count;
+  SELECT count INTO v_count FROM public.consume_ai_quota(v_a, 'detect-syllabi-info', 100, 100000, 5);
   IF v_count <> 5 THEN
     RAISE EXCEPTION 'SYL-29: batched consume returned %, expected 5', v_count;
   END IF;
-  SELECT public.consume_ai_quota(v_a, 'chat', 1) INTO v_count;
+  SELECT count INTO v_count FROM public.consume_ai_quota(v_a, 'chat', 100, 100000, 1);
   IF v_count <> 3 THEN
     RAISE EXCEPTION 'SYL-29: endpoints share a counter (chat returned %)', v_count;
+  END IF;
+
+  -- SYL-67: a request that would push the per-user count over p_limit is
+  -- rejected (count IS NULL, global_exceeded FALSE) and does NOT increment —
+  -- the 'chat' counter is 3; asking for 1 more against a limit of 3 must fail.
+  SELECT count, global_exceeded INTO v_count, v_global
+  FROM public.consume_ai_quota(v_a, 'chat', 3, 100000, 1);
+  IF v_count IS NOT NULL THEN
+    RAISE EXCEPTION 'SYL-67: over-user-limit consume returned %, expected NULL (rejected)', v_count;
+  END IF;
+  IF v_global IS DISTINCT FROM false THEN
+    RAISE EXCEPTION 'SYL-67: over-user-limit rejection reported as global, not per-user';
+  END IF;
+  -- Prove the rejection above left the counter at 3, not 4: raising the
+  -- limit to 4 and consuming 1 more must land on exactly 4.
+  SELECT count INTO v_count FROM public.consume_ai_quota(v_a, 'chat', 4, 100000, 1);
+  IF v_count IS DISTINCT FROM 4 THEN
+    RAISE EXCEPTION 'SYL-67: rejected consume was not a no-op — counter is % instead of 4', v_count;
+  END IF;
+
+  -- SYL-67: a request that would push the GLOBAL count over p_global_limit is
+  -- rejected the same way (global_exceeded TRUE this time) and also leaves no
+  -- trace in ai_usage — the per-user row for this endpoint must not exist.
+  SELECT count, global_exceeded INTO v_count, v_global
+  FROM public.consume_ai_quota(v_a, 'process-syllabus', 100, 1, 5);
+  IF v_count IS NOT NULL THEN
+    RAISE EXCEPTION 'SYL-67: over-global-limit consume returned %, expected NULL (rejected)', v_count;
+  END IF;
+  IF v_global IS DISTINCT FROM true THEN
+    RAISE EXCEPTION 'SYL-67: over-global-limit rejection not reported as global';
+  END IF;
+  SELECT count INTO v_count FROM public.ai_usage
+  WHERE user_id = v_a AND endpoint = 'process-syllabus' AND day = (now() AT TIME ZONE 'utc')::date;
+  -- No row, or a 0-row placeholder from row-locking, is fine (not "usage");
+  -- a nonzero count would mean the rejected request was charged anyway.
+  IF COALESCE(v_count, 0) <> 0 THEN
+    RAISE EXCEPTION 'SYL-67: rejected-by-global consume incremented the per-user row (count=%)', v_count;
   END IF;
 
   -- Clients can neither execute the counter function...
@@ -173,7 +213,7 @@ BEGIN
   BEGIN
     SET LOCAL ROLE authenticated;
     PERFORM set_config('request.jwt.claims', json_build_object('sub', v_a)::text, true);
-    PERFORM public.consume_ai_quota(v_a, 'chat', 1);
+    PERFORM public.consume_ai_quota(v_a, 'chat', 100, 100000, 1);
   EXCEPTION WHEN insufficient_privilege THEN
     v_blocked := true;
   END;
@@ -196,7 +236,21 @@ BEGIN
     RAISE EXCEPTION 'SYL-29: authenticated can SELECT from ai_usage';
   END IF;
 
-  RAISE NOTICE 'SYL-29 quota assertions passed.';
+  -- ...nor the global counter.
+  v_blocked := false;
+  BEGIN
+    SET LOCAL ROLE authenticated;
+    PERFORM set_config('request.jwt.claims', json_build_object('sub', v_a)::text, true);
+    PERFORM count(*) FROM public.ai_usage_global;
+  EXCEPTION WHEN insufficient_privilege THEN
+    v_blocked := true;
+  END;
+  RESET ROLE;
+  IF NOT v_blocked THEN
+    RAISE EXCEPTION 'SYL-67: authenticated can SELECT from ai_usage_global';
+  END IF;
+
+  RAISE NOTICE 'SYL-29/SYL-67 quota assertions passed.';
 END;
 $$;
 

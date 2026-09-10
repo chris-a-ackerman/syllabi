@@ -29,3 +29,22 @@ export const AI_DAILY_LIMITS: Record<string, number> = {
  * tests/contract/.env.contract shrinks this to 1024 for the size-cap tests.
  */
 export const MAX_SYLLABUS_BYTES = intFromEnv("MAX_SYLLABUS_BYTES", 20 * 1024 * 1024);
+
+/**
+ * Longest PDF forwarded to Claude, in pages (Claude rejects long documents
+ * outright). Checked with a cheap heuristic page count before the model call
+ * — see process-syllabus/parse.ts#countPdfPagesHeuristic for why it's a
+ * heuristic, not an exact count.
+ */
+export const MAX_SYLLABUS_PAGES = intFromEnv("MAX_SYLLABUS_PAGES", 100);
+
+/**
+ * SYL-67: cross-user daily cap on ALL AI endpoint calls combined (every
+ * endpoint, every user, summed). The per-endpoint limits above only bound one
+ * user at a time — this is the backstop against total spend growing
+ * unboundedly with the user base (or a bug/compromised token hitting many
+ * accounts). Consumed atomically alongside the per-user unit in the same
+ * consume_ai_quota call, not as a separate enforceAiQuota endpoint — there is
+ * no [endpoint] named "global" to configure per-call.
+ */
+export const AI_DAILY_LIMIT_GLOBAL = intFromEnv("AI_DAILY_LIMIT_GLOBAL", 2000);

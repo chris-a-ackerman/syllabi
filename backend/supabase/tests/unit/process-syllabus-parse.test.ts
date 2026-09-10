@@ -1,5 +1,6 @@
 import { assertEquals } from "@std/assert";
 import {
+  countPdfPagesHeuristic,
   mapAnalysisToCourseUpdate,
   mapEventsToRows,
   normalizeEventTime,
@@ -201,4 +202,28 @@ Deno.test("mapEventsToRows: an unparseable time and time_start both drop to null
   );
   assertEquals(row.time, null);
   assertEquals(row.title, "Quiz");
+});
+
+// ── countPdfPagesHeuristic ────────────────────────────────────────────────────
+
+function pdfBytes(text: string): Uint8Array {
+  return new TextEncoder().encode(text);
+}
+
+Deno.test("countPdfPagesHeuristic: counts /Type /Page object markers", () => {
+  const pdf = pdfBytes(
+    "%PDF-1.4\n1 0 obj<</Type/Catalog>>endobj\n2 0 obj<</Type /Pages/Count 3>>endobj\n" +
+      "3 0 obj<</Type /Page/Parent 2 0 R>>endobj\n4 0 obj<</Type/Page/Parent 2 0 R>>endobj\n" +
+      "5 0 obj<</Type /Page/Parent 2 0 R>>endobj\n",
+  );
+  assertEquals(countPdfPagesHeuristic(pdf), 3);
+});
+
+Deno.test("countPdfPagesHeuristic: does not count the /Type /Pages tree node as a page", () => {
+  const pdf = pdfBytes("<</Type /Pages/Kids[3 0 R]/Count 1>>\n3 0 obj<</Type /Page>>endobj\n");
+  assertEquals(countPdfPagesHeuristic(pdf), 1);
+});
+
+Deno.test("countPdfPagesHeuristic: no markers found (e.g. a compressed-object-stream PDF) returns 0", () => {
+  assertEquals(countPdfPagesHeuristic(pdfBytes("%PDF-1.7\nnot a plaintext page table\n")), 0);
 });

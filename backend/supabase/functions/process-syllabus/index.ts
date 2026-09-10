@@ -1,10 +1,10 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.24.3";
-import { mapAnalysisToCourseUpdate, mapEventsToRows, stripJsonFences } from "./parse.ts";
+import { countPdfPagesHeuristic, mapAnalysisToCourseUpdate, mapEventsToRows, stripJsonFences } from "./parse.ts";
 import { type CourseEventsClient, type ReplaceCourseEventsResult, replaceCourseEvents } from "./events.ts";
 import { enforceAiQuota } from "../_shared/ai-quota.ts";
-import { MAX_SYLLABUS_BYTES } from "../_shared/ai-limits.ts";
+import { MAX_SYLLABUS_BYTES, MAX_SYLLABUS_PAGES } from "../_shared/ai-limits.ts";
 import { CORS_HEADERS as corsHeaders } from "../_shared/cors.ts";
 
 const supabase = createClient(
@@ -212,7 +212,41 @@ serve(async (req) => {
       .update({ analysis_status: "processing" })
       .eq("id", course_id);
 
-    // 3. Download syllabus file from Storage
+    // 3. Check the Storage object's size via metadata before downloading it
+    // (SYL-67) — the previous code downloaded the whole object just to
+    // compare its length against MAX_SYLLABUS_BYTES.
+    const lastSlash = course.syllabus_file_path.lastIndexOf("/");
+    const storageFolder = lastSlash >= 0 ? course.syllabus_file_path.slice(0, lastSlash) : "";
+    const storageFileName = lastSlash >= 0 ? course.syllabus_file_path.slice(lastSlash + 1) : course.syllabus_file_path;
+
+    const { data: listData, error: listError } = await supabase.storage
+      .from("syllabi")
+      .list(storageFolder, { search: storageFileName, limit: 1 });
+
+    if (listError || !listData || listData.length === 0) {
+      await supabase
+        .from("courses")
+        .update({ analysis_status: "failed", analysis_error: "Could not retrieve syllabus file" })
+        .eq("id", course_id);
+      return new Response(JSON.stringify({ error: "File not found" }), { status: 404, headers: corsHeaders });
+    }
+
+    const objectSize = listData[0]?.metadata?.size;
+    if (typeof objectSize === "number" && objectSize > MAX_SYLLABUS_BYTES) {
+      await supabase
+        .from("courses")
+        .update({
+          analysis_status: "failed",
+          analysis_error: "Syllabus file exceeds the maximum size for analysis",
+        })
+        .eq("id", course_id);
+      return new Response(JSON.stringify({ error: "Syllabus file is too large to analyze" }), {
+        status: 413,
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      });
+    }
+
+    // 4. Download syllabus file from Storage
     const { data: fileData, error: fileError } = await supabase.storage
       .from("syllabi")
       .download(course.syllabus_file_path);
@@ -225,10 +259,11 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: "File not found" }), { status: 404, headers: corsHeaders });
     }
 
-    // 4. Convert file for Claude
+    // 5. Convert file for Claude
     const fileBuffer = await fileData.arrayBuffer();
 
-    // Cost cap (SYL-29): refuse oversized files before any base64 work or model call.
+    // Backstop (SYL-29): the metadata check above should already have caught
+    // this — kept in case Storage ever reports no/stale size metadata.
     if (fileBuffer.byteLength > MAX_SYLLABUS_BYTES) {
       await supabase
         .from("courses")
@@ -247,6 +282,25 @@ serve(async (req) => {
     const fileNameForCheck = course.syllabus_file_name ?? course.syllabus_file_path ?? "";
     const isPDF = fileNameForCheck.toLowerCase().endsWith(".pdf") || fileData.type === "application/pdf";
     console.log(`[process-syllabus][file] downloaded OK | bytes=${fileBuffer.byteLength} | isPDF=${isPDF} | name_check="${fileNameForCheck}" | blob_type="${fileData.type}"`);
+
+    // Cost cap (SYL-67): reject PDFs with too many pages before the model
+    // call — Claude rejects them anyway, but only after an API round trip.
+    if (isPDF) {
+      const pageCount = countPdfPagesHeuristic(uint8Array);
+      if (pageCount > MAX_SYLLABUS_PAGES) {
+        await supabase
+          .from("courses")
+          .update({
+            analysis_status: "failed",
+            analysis_error: `Syllabus PDF has too many pages to analyze (${pageCount} > ${MAX_SYLLABUS_PAGES})`,
+          })
+          .eq("id", course_id);
+        return new Response(JSON.stringify({ error: "Syllabus PDF exceeds the maximum page count for analysis" }), {
+          status: 413,
+          headers: { "Content-Type": "application/json", ...corsHeaders },
+        });
+      }
+    }
 
     // 5. Build user message with context
     const userMessage = `Parse this syllabus for course_id: "${course_id}".
