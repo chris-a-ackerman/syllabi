@@ -143,6 +143,40 @@ Deno.test("buildCourseContext: already-percent weights pass through unchanged", 
   assertStringIncludes(buildCourseContext([course], [], "general"), "- Labs: 15%");
 });
 
+// SYL-69: a non-numeric/non-finite weight used to render as "null%" or "NaN%".
+Deno.test("buildCourseContext: a null or non-finite weight renders as unknown, not null%/NaN%", () => {
+  const course = {
+    ...COURSE,
+    grading_rules: {
+      components: [
+        { name: "Participation", weight: null },
+        { name: "Bonus", weight: NaN },
+      ],
+    },
+  };
+  const out = buildCourseContext([course], [], "general");
+  assertStringIncludes(out, "- Participation: unknown");
+  assertStringIncludes(out, "- Bonus: unknown");
+  assertEquals(out.includes("null%"), false);
+  assertEquals(out.includes("NaN%"), false);
+});
+
+// SYL-69: only one end of meeting_times present used to render "10:00–"
+// (dash with nothing after it).
+Deno.test("buildCourseContext: only a start time renders the start alone, not a trailing dash", () => {
+  const course = { ...COURSE, schedule: { ...COURSE.schedule, meeting_times: { start: "10:00", end: null } } };
+  const out = buildCourseContext([course], [], "general");
+  assertStringIncludes(out, "Meets: Mon, Wed 10:00 at Hall 2");
+  assertEquals(out.includes("10:00–"), false);
+});
+
+Deno.test("buildCourseContext: only an end time renders the end alone, not a leading dash", () => {
+  const course = { ...COURSE, schedule: { ...COURSE.schedule, meeting_times: { start: null, end: "11:15" } } };
+  const out = buildCourseContext([course], [], "general");
+  assertStringIncludes(out, "Meets: Mon, Wed 11:15 at Hall 2");
+  assertEquals(out.includes("–11:15"), false);
+});
+
 Deno.test("buildCourseContext: event section label depends on queryType", () => {
   const event = {
     date: "2026-09-08",
