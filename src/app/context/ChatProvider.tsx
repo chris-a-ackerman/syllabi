@@ -201,7 +201,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const deleteChat = useCallback(async (chatId: string) => {
-    await chatApi.deleteChat(chatId);
+    const { error } = await chatApi.deleteChat(chatId);
+    if (error) {
+      console.error('Error deleting chat:', error);
+      throw error;
+    }
     setChats(prev => prev.filter(c => c.id !== chatId));
     if (currentChatId === chatId) {
       setCurrentChatId(null);
@@ -210,7 +214,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   }, [currentChatId]);
 
   const renameChat = useCallback(async (chatId: string, title: string) => {
-    await chatApi.renameChat(chatId, title);
+    const { error } = await chatApi.renameChat(chatId, title);
+    if (error) {
+      console.error('Error renaming chat:', error);
+      throw error;
+    }
     setChats(prev => prev.map(c => c.id === chatId ? { ...c, title } : c));
   }, []);
 
@@ -220,7 +228,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     const chat = chats.find(c => c.id === currentChatId);
     const lastMessage = chatMessages[chatMessages.length - 1];
 
-    await chatApi.insertChatFeedback({
+    const { error } = await chatApi.insertChatFeedback({
       userId: user.id,
       chatId: currentChatId,
       semesterId: chat?.semesterId ?? null,
@@ -233,6 +241,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         sequence: m.sequence,
       })),
     });
+    if (error) {
+      console.error('Error submitting feedback:', error);
+      throw error;
+    }
   }, [user, chats, chatMessages, currentChatId]);
 
   const value = useMemo<ChatState>(() => ({

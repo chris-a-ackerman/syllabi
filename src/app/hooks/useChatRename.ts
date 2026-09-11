@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react';
+import { toast } from 'sonner';
 import { useChat } from '../context/ChatProvider';
 
 export interface ChatRenameControls {
@@ -32,7 +33,9 @@ export function useChatRename(): ChatRenameControls {
 
   const save = useCallback(() => {
     if (editingChatId && editingTitle.trim()) {
-      renameChat(editingChatId, editingTitle.trim());
+      renameChat(editingChatId, editingTitle.trim()).catch(() => {
+        toast.error('Failed to rename chat.', { description: 'Please try again in a moment.' });
+      });
     }
     setEditingChatId(null);
   }, [editingChatId, editingTitle, renameChat]);

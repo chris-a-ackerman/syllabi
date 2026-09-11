@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router';
+import { toast } from 'sonner';
 import { Calendar, Plus } from 'lucide-react';
 import type { UploadTarget } from '@/lib/types';
 import { useData } from '../context/DataProvider';
@@ -136,7 +137,9 @@ export function Dashboard() {
             onToggleCourse={toggleCourse}
             onToggleAllCourses={toggleAllCourses}
             onSemesterChange={(id) => {
-              setActiveSemester(id);
+              setActiveSemester(id).catch(() => {
+                toast.error('Failed to switch semester.', { description: 'Please try again in a moment.' });
+              });
               setSelectedCourses([]);
             }}
             rename={rename}
