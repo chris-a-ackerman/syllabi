@@ -28,6 +28,7 @@ const ChatContext = createContext<ChatState | undefined>(undefined);
 
 export function ChatProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
+  const userId = user?.id;
   // The global kill switch gates the AI call below; it lives in SettingsProvider
   // because the AdminPanel writes it and chat only reads it.
   const { aiEnabled } = useSettings();
@@ -37,7 +38,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   // Load the user's chats, and the most recent conversation, on sign-in
   useEffect(() => {
-    if (!user) {
+    if (!userId) {
       setChats([]);
       setCurrentChatId(null);
       setChatMessages([]);
@@ -58,7 +59,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     };
 
     fetchChats();
-  }, [user?.id]);
+  }, [userId]);
 
   const addChatMessage = useCallback((
     message: Omit<ChatMessage, 'id' | 'timestamp'>,

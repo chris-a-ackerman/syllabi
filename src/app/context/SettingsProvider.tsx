@@ -19,6 +19,7 @@ const SettingsContext = createContext<SettingsState | undefined>(undefined);
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
+  const userId = user?.id;
   // Mirrors the global `app_settings.ai_enabled` kill switch, which the `chat`
   // Edge Function also enforces server-side. Starts optimistically enabled (the
   // column's own default) and is corrected by the fetch below, so a slow read
@@ -26,7 +27,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const [aiEnabled, setAiEnabledState] = useState(true);
 
   useEffect(() => {
-    if (!user) {
+    if (!userId) {
       setAiEnabledState(true);
       return;
     }
@@ -41,7 +42,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     };
 
     fetchAiFlag();
-  }, [user?.id]);
+  }, [userId]);
 
   const setAiEnabled = useCallback(async (enabled: boolean) => {
     if (!user) return;

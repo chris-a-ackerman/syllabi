@@ -36,6 +36,7 @@ const DataContext = createContext<DataState | undefined>(undefined);
 
 export function DataProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
+  const userId = user?.id;
   const [semesters, setSemesters] = useState<Semester[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
   const [events, setEvents] = useState<Event[]>([]);
@@ -43,7 +44,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   // Fetch the user's data whenever the logged-in user changes
   useEffect(() => {
-    if (!user) {
+    if (!userId) {
       setSemesters([]);
       setCourses([]);
       setEvents([]);
@@ -76,7 +77,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     };
 
     fetchData();
-  }, [user?.id]);
+  }, [userId]);
 
   const addSemester = useCallback(async (semester: Omit<Semester, 'id'>): Promise<string> => {
     if (!user) return '';
