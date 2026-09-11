@@ -87,9 +87,7 @@ export function ChatHistoryList({ rename, onChatOpened }: ChatHistoryListProps) 
         title="Delete this chat?"
         description="This action cannot be undone. This chat will be permanently deleted from your chat history forever."
         confirmLabel="Delete Forever"
-        onConfirm={() => {
-          if (chatToDelete) deleteChat(chatToDelete);
-        }}
+        onConfirm={() => (chatToDelete ? deleteChat(chatToDelete) : undefined)}
       />
     </div>
   );

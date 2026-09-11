@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { toast } from 'sonner';
 import { useData } from '../context/DataProvider';
 import type { Semester } from '@/lib/types';
 import {
@@ -37,13 +38,21 @@ export function EditSemesterModal({ open, onClose, semester }: EditSemesterModal
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    await updateSemester(semester.id, { name, startDate, endDate, isActive: semester.isActive });
-    onClose();
+    try {
+      await updateSemester(semester.id, { name, startDate, endDate, isActive: semester.isActive });
+      onClose();
+    } catch {
+      toast.error('Failed to update semester.', { description: 'Please try again in a moment.' });
+    }
   };
 
   const handleDelete = async () => {
-    await deleteSemester(semester.id);
-    onClose();
+    try {
+      await deleteSemester(semester.id);
+      onClose();
+    } catch {
+      toast.error('Failed to delete semester.', { description: 'Please try again in a moment.' });
+    }
   };
 
   const handleClose = () => {

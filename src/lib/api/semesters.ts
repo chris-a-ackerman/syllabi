@@ -60,18 +60,17 @@ export async function updateSemester(
  * Deletes a semester and everything hanging off its courses.
  *
  * Notes are not deleted here: `course_notes.course_id` is ON DELETE CASCADE,
- * so dropping the courses removes them (SYL-37).
- *
- * NOTE: the `grading_components` delete below is carried over verbatim from
- * AppContext. That table does not exist in this schema, so the call is a
- * silently-failing no-op. Left as-is — flagged for a separate issue rather
- * than fixed inside a structural refactor.
+ * so dropping the courses removes them (SYL-37). Stops and reports the error
+ * from the first step that fails, so a partial failure never falls through
+ * to deleting the semester itself.
  */
 export async function deleteSemesterWithCourses(id: string, courseIds: string[]) {
   if (courseIds.length > 0) {
-    await supabase.from('course_events').delete().in('course_id', courseIds);
-    await supabase.from('grading_components').delete().in('course_id', courseIds);
-    await supabase.from('courses').delete().in('id', courseIds);
+    const { error: eventsError } = await supabase.from('course_events').delete().in('course_id', courseIds);
+    if (eventsError) return { error: eventsError };
+
+    const { error: coursesError } = await supabase.from('courses').delete().in('id', courseIds);
+    if (coursesError) return { error: coursesError };
   }
   return supabase.from('semesters').delete().eq('id', id);
 }

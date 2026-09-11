@@ -60,9 +60,14 @@ export async function insertChatMessage(
   return { data: data ? dbChatMessageToApp(data) : null, error };
 }
 
+/** Stops at the first failing step so a partial failure never deletes the chat row. */
 export async function deleteChat(chatId: string) {
-  await supabase.from('chat_messages').delete().eq('chat_id', chatId);
-  await supabase.from('chat_courses').delete().eq('chat_id', chatId);
+  const { error: messagesError } = await supabase.from('chat_messages').delete().eq('chat_id', chatId);
+  if (messagesError) return { error: messagesError };
+
+  const { error: courseLinksError } = await supabase.from('chat_courses').delete().eq('chat_id', chatId);
+  if (courseLinksError) return { error: courseLinksError };
+
   return supabase.from('chats').delete().eq('id', chatId);
 }
 

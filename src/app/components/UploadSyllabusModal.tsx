@@ -164,8 +164,12 @@ function UploadSyllabusModalContent({ onClose, existingCourse, onCreateManually,
       await removeSyllabusFile(uploadedFilePath);
     }
     if (createdCourseId) {
-      await deleteCourse(createdCourseId);
-      await refreshCourses();
+      try {
+        await deleteCourse(createdCourseId);
+        await refreshCourses();
+      } catch (err) {
+        console.error('Error cleaning up course after a failed upload:', err);
+      }
     }
     onClose();
   };
