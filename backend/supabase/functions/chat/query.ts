@@ -66,15 +66,24 @@ export function buildCourseContext(courses: any[], events: any[], queryType: str
     const s = c.schedule || {};
     const days = (s.meeting_days || []).join(", ") || "TBD";
     const mt = s.meeting_times || {};
-    const time = mt.start || mt.end ? `${mt.start || ""}–${mt.end || ""}` : "TBD";
+    // SYL-69: a dash needs both ends — one alone rendered as "10:00–" with
+    // nothing after it.
+    const time = mt.start && mt.end
+      ? `${mt.start}–${mt.end}`
+      : mt.start || mt.end || "TBD";
     const schedule = `Meets: ${days} ${time} at ${s.location || "TBD"}`;
 
     // Grading
     const rules = c.grading_rules || {};
     // deno-lint-ignore no-explicit-any
-    const components = (rules.components || []).map((comp: any) =>
-      `  - ${comp.name}: ${typeof comp.weight === "number" ? toPercent(comp.weight) : comp.weight}%${comp.drop_lowest ? ` (drop lowest ${comp.drop_lowest})` : ""}${comp.late_policy ? `, late: ${comp.late_policy}` : ""}`
-    ).join("\n");
+    const components = (rules.components || []).map((comp: any) => {
+      // SYL-69: a non-numeric or non-finite weight rendered as "null%" /
+      // "NaN%" — fall back to the raw value with no misleading "%" suffix.
+      const weight = typeof comp.weight === "number" && Number.isFinite(comp.weight)
+        ? `${toPercent(comp.weight)}%`
+        : "unknown";
+      return `  - ${comp.name}: ${weight}${comp.drop_lowest ? ` (drop lowest ${comp.drop_lowest})` : ""}${comp.late_policy ? `, late: ${comp.late_policy}` : ""}`;
+    }).join("\n");
     const grading = components
       ? `${components}${rules.grading_scale ? `\n  Scale: ${rules.grading_scale}` : ""}`
       : "  Not available.";

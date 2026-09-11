@@ -152,6 +152,20 @@ export class CanvasRedirectError extends UnsafeCanvasUrlError {
   }
 }
 
+// SYL-65: Canvas file/download URLs carry a `verifier=` query token that
+// grants unauthenticated download of that file — logging one is equivalent
+// to logging a bearer credential. Use this wherever a log line needs to name
+// which host a Canvas request went to, without the path/query that can carry
+// the token (or other per-request identifiers).
+export function redactUrl(url: string): string {
+  try {
+    const parsed = new URL(url);
+    return `${parsed.protocol}//${parsed.host}`;
+  } catch {
+    return "(invalid URL)";
+  }
+}
+
 /**
  * Validates `rawUrl` with assertSafeCanvasUrl, then fetches it with
  * `redirect: "manual"` so a 3xx response is surfaced (not followed). Any

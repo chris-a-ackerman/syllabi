@@ -5,7 +5,7 @@
 // only has a dummy key anyway). Limits are imported from the same module the
 // functions read, so the seeds always match what the handlers enforce.
 import { assert, assertEquals } from "@std/assert";
-import { AI_DAILY_LIMITS } from "../../functions/_shared/ai-limits.ts";
+import { AI_DAILY_LIMIT_GLOBAL, AI_DAILY_LIMITS } from "../../functions/_shared/ai-limits.ts";
 import { admin, callFn, getFixtures } from "./helpers.ts";
 
 // Must stay in sync with MAX_SYLLABUS_BYTES=1024 in tests/contract/.env.contract
@@ -41,6 +41,78 @@ Deno.test("chat: 429 once the daily limit is spent", async () => {
     });
     assertEquals(res.status, 429, `expected 429, got ${res.status}: ${res.text.slice(0, 200)}`);
   } finally {
+    await clearUsage(userA.id);
+  }
+});
+
+// SYL-67: consume_ai_quota only increments when the request fits under the
+// limit, so a 429 must never move the counter.
+Deno.test("chat: a rejected over-limit request does not increment the counter", async () => {
+  const { userA, semesterA } = await getFixtures();
+  const limit = AI_DAILY_LIMITS["chat"];
+  await seedUsageAtLimit(userA.id, "chat");
+  try {
+    const res = await callFn("chat", {
+      token: userA.token,
+      body: { message: "When is my midterm?", semester_id: semesterA },
+    });
+    assertEquals(res.status, 429, `expected 429, got ${res.status}: ${res.text.slice(0, 200)}`);
+    assertEquals(res.json?.scope, "user");
+
+    const { data: usage } = await admin
+      .from("ai_usage")
+      .select("count")
+      .eq("user_id", userA.id)
+      .eq("endpoint", "chat")
+      .eq("day", todayUTC())
+      .single();
+    assertEquals(usage?.count, limit, "a rejected request must leave the counter unchanged");
+  } finally {
+    await clearUsage(userA.id);
+  }
+});
+
+// SYL-67: the cross-user cap is consumed atomically alongside the per-user
+// unit, in the same consume_ai_quota call — this seeds the global counter
+// directly (spinning up AI_DAILY_LIMIT_GLOBAL real requests isn't practical)
+// and checks both the distinguishable 429 body and that the per-user counter
+// was left alone.
+Deno.test("chat: 429 with a distinguishable body once the GLOBAL daily limit is spent", async () => {
+  const { userA, semesterA } = await getFixtures();
+  const today = todayUTC();
+  const { error: seedError } = await admin
+    .from("ai_usage_global")
+    .upsert({ day: today, count: AI_DAILY_LIMIT_GLOBAL }, { onConflict: "day" });
+  assertEquals(seedError, null, `ai_usage_global seed failed: ${seedError?.message}`);
+
+  try {
+    const res = await callFn("chat", {
+      token: userA.token,
+      body: { message: "When is my midterm?", semester_id: semesterA },
+    });
+    assertEquals(res.status, 429, `expected 429, got ${res.status}: ${res.text.slice(0, 200)}`);
+    assertEquals(res.json?.scope, "global");
+
+    const { data: usage } = await admin
+      .from("ai_usage")
+      .select("count")
+      .eq("user_id", userA.id)
+      .eq("endpoint", "chat")
+      .eq("day", today)
+      .maybeSingle();
+    assert(
+      !usage || usage.count === 0,
+      `a global-cap rejection must not create/increment the per-user row (got count=${usage?.count})`,
+    );
+
+    const { data: globalUsage } = await admin
+      .from("ai_usage_global")
+      .select("count")
+      .eq("day", today)
+      .single();
+    assertEquals(globalUsage?.count, AI_DAILY_LIMIT_GLOBAL, "the global counter must not move on rejection");
+  } finally {
+    await admin.from("ai_usage_global").delete().eq("day", today);
     await clearUsage(userA.id);
   }
 });

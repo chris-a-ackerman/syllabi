@@ -150,10 +150,12 @@ serve(async (req) => {
       totalInputTokens += response.usage?.input_tokens ?? 0;
       totalOutputTokens += response.usage?.output_tokens ?? 0;
 
-      // Log any text reasoning Claude emitted
+      // Log the shape of any text reasoning Claude emitted, not its content —
+      // Claude's reasoning can quote a tool result verbatim (a file_url or
+      // html_content snippet), so only the length is safe to log (SYL-65).
       const textBlocks = response.content.filter((b) => b.type === "text");
       for (const tb of textBlocks) {
-        console.log(`[loop:${i}] Claude text: ${(tb as Anthropic.TextBlock).text}`);
+        console.log(`[loop:${i}] Claude text length=${(tb as Anthropic.TextBlock).text.length}`);
       }
 
       if (response.stop_reason === "end_turn") break;
@@ -178,7 +180,7 @@ serve(async (req) => {
             (foundInput.source_type === "html" || foundInput.source_type === "page") &&
             !foundInput.html_content?.trim()
           ) break; // rejected in executeTools — let Claude retry
-          console.log(`[loop] report_syllabus_found ACCEPTED by loop check: ${JSON.stringify(foundInput)}`);
+          console.log(`[loop] report_syllabus_found ACCEPTED by loop check: source_type=${foundInput.source_type} confidence=${foundInput.confidence}`);
           agentResult = { tool: "report_syllabus_found", input: foundInput };
           break;
         }
@@ -199,7 +201,7 @@ serve(async (req) => {
       ];
     }
 
-    console.log(`[result] agentResult: ${JSON.stringify(agentResult)}`);
+    console.log(`[result] agentResult: tool=${agentResult?.tool ?? "none"}`);
 
     // Log to claude_api_logs
     await supabaseService.from("claude_api_logs").insert({

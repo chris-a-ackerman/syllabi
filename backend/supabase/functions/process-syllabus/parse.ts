@@ -162,3 +162,24 @@ export function mapEventsToRows(
     confidence: ["high", "medium", "low"].includes(event.confidence) ? event.confidence : "medium",
   }));
 }
+
+// ── Page count (SYL-67) ──────────────────────────────────────────────────────
+//
+// Claude rejects very long PDFs outright, but nothing checked page count
+// before spending the AI quota unit and making the call. A precise count
+// needs a real PDF parser; this is a cheap heuristic instead, scanning the
+// raw bytes for literal `/Type /Page` object markers (not `/Type /Pages`,
+// the page-tree node).
+//
+// Known limitation: PDF 1.5+ allows page objects to live inside a compressed
+// object stream, where this marker never appears as literal bytes — mostly
+// LaTeX and other programmatic generators. Those PDFs undercount (often to
+// 0) and pass through uncounted. That's an accepted gap, not a bypass: the
+// existing MAX_SYLLABUS_BYTES cap still bounds the very large files this
+// guard is mainly aimed at, and a scanned/photographed syllabus (the case
+// this guard exists for) is essentially never compressed-object-stream PDF.
+export function countPdfPagesHeuristic(bytes: Uint8Array): number {
+  const text = new TextDecoder("latin1").decode(bytes);
+  const matches = text.match(/\/Type\s*\/Page(?![A-Za-z])/g);
+  return matches?.length ?? 0;
+}
