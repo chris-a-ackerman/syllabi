@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // SYL-72: renders both card states from a mocked lib/api/apiKeys, and
 // asserts no key text ever appears in the DOM after a save.
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Settings } from './Settings';
 
@@ -107,5 +107,21 @@ describe('Settings', () => {
 
     await waitFor(() => expect(screen.getByText('Anthropic rejected this key')).toBeTruthy());
     expect(screen.queryByText('sk-ant-…')).toBeNull();
+  });
+
+  it('removes the key through the confirm dialog and shows the not-set form', async () => {
+    fetchApiKeyStatus.mockResolvedValue({ data: SET_STATUS, error: null });
+    deleteAnthropicKey.mockResolvedValue({ data: { ok: true }, error: null });
+    render(<Settings />);
+
+    await waitFor(() => expect(screen.getByText('sk-ant-…1234')).toBeTruthy());
+    fireEvent.click(screen.getByText('Remove'));
+
+    const dialog = await screen.findByRole('alertdialog');
+    const confirmButtons = within(dialog).getAllByText('Remove');
+    fireEvent.click(confirmButtons[confirmButtons.length - 1]);
+
+    await waitFor(() => expect(screen.getByLabelText('API Key')).toBeTruthy());
+    expect(screen.queryByText('sk-ant-…1234')).toBeNull();
   });
 });
