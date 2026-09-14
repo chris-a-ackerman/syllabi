@@ -1,20 +1,20 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.24.3";
 import { countPdfPagesHeuristic, mapAnalysisToCourseUpdate, mapEventsToRows, stripJsonFences } from "./parse.ts";
 import { type CourseEventsClient, type ReplaceCourseEventsResult, replaceCourseEvents } from "./events.ts";
 import { enforceAiQuota } from "../_shared/ai-quota.ts";
 import { MAX_SYLLABUS_BYTES, MAX_SYLLABUS_PAGES } from "../_shared/ai-limits.ts";
+import {
+  claudeKeyRejectedResponse,
+  isAnthropicAuthError,
+  resolveAnthropicClient,
+} from "../_shared/anthropic-client.ts";
 import { CORS_HEADERS as corsHeaders } from "../_shared/cors.ts";
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
   Deno.env.get("SERVICE_ROLE_KEY")!
 );
-
-const anthropic = new Anthropic({
-  apiKey: Deno.env.get("ANTHROPIC_API_KEY")!,
-});
 
 // The full prompt from Syllabus_Agent_Instructions_v2.md
 const SYLLABUS_SYSTEM_PROMPT = `You are a syllabus parsing agent. Extract structured information from the provided course syllabus and return it as valid JSON matching the schema exactly. Do not wrap your response in markdown code fences. Output raw JSON only, starting with { and ending with }
@@ -143,6 +143,9 @@ serve(async (req) => {
     return new Response(null, { status: 204, headers: corsHeaders });
   }
 
+  // Visible to the outer catch's error body (SYL-72), set once resolved below.
+  let source: "user" | "project" | undefined;
+
   try {
     // Verify JWT manually (since verify_jwt = false to allow OPTIONS through)
     const authHeader = req.headers.get("Authorization");
@@ -182,8 +185,32 @@ serve(async (req) => {
       });
     }
 
-    const quotaResponse = await enforceAiQuota(supabase, user.id, "process-syllabus", corsHeaders);
-    if (quotaResponse) return quotaResponse;
+    // Resolve which Anthropic key this request uses (SYL-72).
+    const encKey = Deno.env.get("SECRETS_ENCRYPTION_KEY");
+    if (!encKey) {
+      console.error("SECRETS_ENCRYPTION_KEY is not set");
+      return new Response(JSON.stringify({ error: "Server misconfiguration." }), {
+        status: 500,
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      });
+    }
+    const resolved = await resolveAnthropicClient(supabase, user.id, encKey);
+    const anthropic = resolved.client;
+    source = resolved.source;
+
+    // BYOK requests bypass the project's cost-control quota entirely; a
+    // separate, unenforced counter still records volume for the admin panel.
+    if (source === "user") {
+      const { error: byokError } = await supabase.rpc("record_byok_usage", {
+        p_user_id: user.id,
+        p_endpoint: "process-syllabus",
+        p_amount: 1,
+      });
+      if (byokError) console.error("[process-syllabus] record_byok_usage failed:", byokError.message);
+    } else {
+      const quotaResponse = await enforceAiQuota(supabase, user.id, "process-syllabus", corsHeaders);
+      if (quotaResponse) return quotaResponse;
+    }
 
     // 1. Fetch course + semester data.
     // Scoped to the caller: this is a service-role client, so without the
@@ -340,19 +367,39 @@ Return the complete JSON analysis as specified.`;
     console.log(`[process-syllabus][claude] sending | isPDF=${isPDF} | content_blocks=${contentBlocks.length} | user_message_preview=${userMessage.slice(0, 200)}`);
 
     // 6. Call Claude with the document
-    const response = await anthropic.messages.create({
-      model: "claude-sonnet-4-6",
-      max_tokens: 16000,
-      temperature: 0,
-      system: SYLLABUS_SYSTEM_PROMPT_NEW,
-      messages: [
-        {
-          role: "user",
-          // deno-lint-ignore no-explicit-any
-          content: contentBlocks as any,
-        },
-      ],
-    });
+    let response;
+    try {
+      response = await anthropic.messages.create({
+        model: "claude-sonnet-4-6",
+        max_tokens: 16000,
+        temperature: 0,
+        system: SYLLABUS_SYSTEM_PROMPT_NEW,
+        messages: [
+          {
+            role: "user",
+            // deno-lint-ignore no-explicit-any
+            content: contentBlocks as any,
+          },
+        ],
+      });
+    } catch (err) {
+      if (source === "user" && isAnthropicAuthError(err)) {
+        await supabase.rpc("record_key_test", { p_user_id: user.id, p_provider: "anthropic", p_ok: false });
+        // Mark failed like every other early-exit path (SYL-66): a course
+        // left on "processing" never resolves for the poll. Retry after
+        // fixing the key in Settings re-invokes this function with the file
+        // already in Storage — no re-upload needed.
+        await supabase
+          .from("courses")
+          .update({
+            analysis_status: "failed",
+            analysis_error: "Your Claude API key was rejected. Update it in Settings.",
+          })
+          .eq("id", course_id);
+        return claudeKeyRejectedResponse(corsHeaders);
+      }
+      throw err;
+    }
 
     // 7. Parse Claude's response
     const rawOutput = response.content[0].type === "text" ? response.content[0].text : "";
@@ -496,7 +543,7 @@ Return the complete JSON analysis as specified.`;
   } catch (err) {
     // Detail stays server-side (SYL-31); clients get a generic message.
     console.error("process-syllabus error:", err);
-    return new Response(JSON.stringify({ error: "Internal server error" }), {
+    return new Response(JSON.stringify({ error: "Internal server error", source }), {
       status: 500,
       headers: { "Content-Type": "application/json", ...corsHeaders },
     });

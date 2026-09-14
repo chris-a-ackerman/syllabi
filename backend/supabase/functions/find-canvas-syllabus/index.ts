@@ -1,9 +1,14 @@
 // supabase/functions/find-canvas-syllabus/index.ts
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.24.3";
+import type Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.24.3";
 import { assertSafeCanvasUrl, UnsafeCanvasUrlError } from "../_shared/canvas-url.ts";
 import { enforceAiQuota } from "../_shared/ai-quota.ts";
+import {
+  claudeKeyRejectedResponse,
+  isAnthropicAuthError,
+  resolveAnthropicClient,
+} from "../_shared/anthropic-client.ts";
 import { CORS_HEADERS } from "../_shared/cors.ts";
 import { CanvasTokenExpiredError, SYSTEM_PROMPT, TOOLS, executeTools } from "./tools.ts";
 
@@ -18,14 +23,13 @@ const supabaseService = createClient(
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
 );
 
-const anthropic = new Anthropic({
-  apiKey: Deno.env.get("ANTHROPIC_API_KEY")!,
-});
-
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 204, headers: CORS_HEADERS });
   }
+
+  // Visible to the outer catch's error body (SYL-72), set once resolved below.
+  let source: "user" | "project" | undefined;
 
   try {
     // 1. Auth
@@ -40,6 +44,16 @@ serve(async (req) => {
     const { data: { user } } = await supabaseUser.auth.getUser();
     if (!user) return json({ error: "Unauthorized" }, 401);
 
+    // Resolve which Anthropic key this request uses (SYL-72).
+    const encKey = Deno.env.get("SECRETS_ENCRYPTION_KEY");
+    if (!encKey) {
+      console.error("SECRETS_ENCRYPTION_KEY is not set");
+      return json({ error: "Server misconfiguration." }, 500);
+    }
+    const resolved = await resolveAnthropicClient(supabaseService, user.id, encKey);
+    const anthropic = resolved.client;
+    source = resolved.source;
+
     // 2. Parse body
     let body: Record<string, string>;
     try {
@@ -52,8 +66,19 @@ serve(async (req) => {
       return json({ error: "course_id and canvas_course_id are required." }, 400);
     }
 
-    const quotaResponse = await enforceAiQuota(supabaseService, user.id, "find-canvas-syllabus", CORS_HEADERS);
-    if (quotaResponse) return quotaResponse;
+    // BYOK requests bypass the project's cost-control quota entirely; a
+    // separate, unenforced counter still records volume for the admin panel.
+    if (source === "user") {
+      const { error: byokError } = await supabaseService.rpc("record_byok_usage", {
+        p_user_id: user.id,
+        p_endpoint: "find-canvas-syllabus",
+        p_amount: 1,
+      });
+      if (byokError) console.error("[find-canvas-syllabus] record_byok_usage failed:", byokError.message);
+    } else {
+      const quotaResponse = await enforceAiQuota(supabaseService, user.id, "find-canvas-syllabus", CORS_HEADERS);
+      if (quotaResponse) return quotaResponse;
+    }
 
     // 3. Fetch Canvas token + base URL in parallel
     const encryptionKey = Deno.env.get("CANVAS_ENCRYPTION_KEY");
@@ -137,14 +162,23 @@ serve(async (req) => {
     ];
 
     for (let i = 0; i < 8; i++) {
-      const response = await anthropic.messages.create({
-        model: "claude-sonnet-4-6",
-        max_tokens: 1024,
-        // deno-lint-ignore no-explicit-any
-        system: [{ type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }] as any,
-        tools: TOOLS,
-        messages,
-      });
+      let response;
+      try {
+        response = await anthropic.messages.create({
+          model: "claude-sonnet-4-6",
+          max_tokens: 1024,
+          // deno-lint-ignore no-explicit-any
+          system: [{ type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }] as any,
+          tools: TOOLS,
+          messages,
+        });
+      } catch (err) {
+        if (source === "user" && isAnthropicAuthError(err)) {
+          await supabaseService.rpc("record_key_test", { p_user_id: user.id, p_provider: "anthropic", p_ok: false });
+          return claudeKeyRejectedResponse(CORS_HEADERS);
+        }
+        throw err;
+      }
 
       console.log(`[loop:${i}] stop_reason=${response.stop_reason} input_tokens=${response.usage?.input_tokens} output_tokens=${response.usage?.output_tokens}`);
       totalInputTokens += response.usage?.input_tokens ?? 0;
@@ -259,6 +293,6 @@ serve(async (req) => {
     }
     // Detail stays server-side (SYL-31); clients get a generic message.
     console.error("find-canvas-syllabus unexpected error:", err);
-    return json({ error: "Internal server error" }, 500);
+    return json({ error: "Internal server error", source }, 500);
   }
 });
