@@ -2,6 +2,7 @@ import { useEffect, useRef, useCallback } from 'react';
 import { useData } from '../context/DataProvider';
 import { useProcessingPoll } from '../hooks/useProcessingPoll';
 import { BulkReviewForm } from './BulkReviewForm';
+import { ProcessingCourseList } from './ProcessingCourseList';
 import { useBulkUpload } from '../hooks/useBulkUpload';
 import {
   Dialog,
@@ -13,7 +14,7 @@ import {
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 import { Alert, AlertDescription } from '../components/ui/alert';
-import { Upload, Check, X, Loader2, AlertCircle, ChevronRight, FileText, RefreshCw } from 'lucide-react';
+import { Upload, X, Loader2, AlertCircle, ChevronRight, FileText } from 'lucide-react';
 
 interface BulkUploadModalProps {
   open: boolean;
@@ -214,51 +215,7 @@ export function BulkUploadModal({ open, onClose, fixedSemesterId }: BulkUploadMo
         {/* ── Step 4: Processing ── */}
         {!noSemesterAvailable && step === 'processing' && (
           <div className="space-y-3">
-            {createdCourseIds.map((courseId) => {
-              const course = allCourses.find(c => c.id === courseId);
-              return (
-                <div key={courseId} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
-                  <div className="min-w-0">
-                    <p className="font-medium text-sm text-gray-900">{course?.code || '—'}</p>
-                    <p className="text-xs text-gray-500 truncate">{course?.name}</p>
-                    {course?.status === 'failed' && course.analysisError && (
-                      <p className="text-xs text-red-600 mt-0.5">{course.analysisError}</p>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2 ml-4 shrink-0">
-                    {(!course || course.status === 'processing') && (
-                      <span className="flex items-center gap-1 text-xs text-indigo-600">
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        Processing
-                      </span>
-                    )}
-                    {course?.status === 'ready' && (
-                      <span className="flex items-center gap-1 text-xs text-green-600">
-                        <Check className="w-3.5 h-3.5" />
-                        Done
-                      </span>
-                    )}
-                    {course?.status === 'failed' && (
-                      <>
-                        <span className="flex items-center gap-1 text-xs text-red-600">
-                          <X className="w-3.5 h-3.5" />
-                          Failed
-                        </span>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-6 text-xs rounded-lg px-2"
-                          onClick={() => retryProcessing(courseId)}
-                        >
-                          <RefreshCw className="w-3 h-3 mr-1" />
-                          Retry
-                        </Button>
-                      </>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
+            <ProcessingCourseList courseIds={createdCourseIds} courses={allCourses} onRetry={retryProcessing} />
 
             <Button variant="outline" className="w-full rounded-lg mt-2" onClick={onClose}>
               Done

@@ -3,12 +3,13 @@ import { useNavigate } from 'react-router';
 import { useAuth } from '../context/AuthProvider';
 import { useData } from '../context/DataProvider';
 import { BulkReviewForm } from '../components/BulkReviewForm';
+import { ProcessingCourseList } from '../components/ProcessingCourseList';
 import { useBulkUpload } from '../hooks/useBulkUpload';
 import { useProcessingPoll } from '../hooks/useProcessingPoll';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 import { Alert, AlertDescription } from '../components/ui/alert';
-import { Upload, Check, X, Loader2, AlertCircle, ChevronRight, FileText, RefreshCw } from 'lucide-react';
+import { Upload, X, Loader2, AlertCircle, ChevronRight, FileText } from 'lucide-react';
 
 export function Onboarding() {
   const navigate = useNavigate();
@@ -220,53 +221,12 @@ export function Onboarding() {
         {/* ── Step 4: Processing ── */}
         {step === 'processing' && (
           <div className="space-y-4">
-            {createdCourseIds.map((courseId) => {
-              const course = allCourses.find(c => c.id === courseId);
-              return (
-                <Card key={courseId} className="p-4 rounded-xl">
-                  <div className="flex items-center justify-between">
-                    <div className="min-w-0">
-                      <p className="font-medium text-gray-900">{course?.code || '—'}</p>
-                      <p className="text-sm text-gray-500 truncate">{course?.name}</p>
-                      {course?.status === 'failed' && course.analysisError && (
-                        <p className="text-xs text-red-600 mt-0.5">{course.analysisError}</p>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 ml-4 shrink-0">
-                      {(!course || course.status === 'processing') && (
-                        <span className="flex items-center gap-1.5 text-sm text-indigo-600">
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          Processing
-                        </span>
-                      )}
-                      {course?.status === 'ready' && (
-                        <span className="flex items-center gap-1.5 text-sm text-green-600">
-                          <Check className="w-4 h-4" />
-                          Done
-                        </span>
-                      )}
-                      {course?.status === 'failed' && (
-                        <>
-                          <span className="flex items-center gap-1 text-sm text-red-600">
-                            <X className="w-4 h-4" />
-                            Failed
-                          </span>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="h-7 text-xs rounded-lg"
-                            onClick={() => retryProcessing(courseId)}
-                          >
-                            <RefreshCw className="w-3 h-3 mr-1" />
-                            Retry
-                          </Button>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                </Card>
-              );
-            })}
+            <ProcessingCourseList
+              courseIds={createdCourseIds}
+              courses={allCourses}
+              onRetry={retryProcessing}
+              variant="page"
+            />
 
             <Button
               variant="outline"
