@@ -7,7 +7,7 @@ import {
   removeSyllabusFile,
   uploadAndProcess,
 } from '@/lib/api/syllabus';
-import { COURSE_COLORS } from '@/lib/courseColors';
+import { initialFormValues, type CourseFormValues } from '@/lib/courseForm';
 import {
   Dialog,
   DialogContent,
@@ -21,7 +21,7 @@ import { Alert, AlertDescription } from './ui/alert';
 import { Loader2, CheckCircle, AlertCircle } from 'lucide-react';
 import { AddCourseChooser } from './AddCourseChooser';
 import { SyllabusDropzone } from './SyllabusDropzone';
-import { CourseFormFields, type CourseFormValues } from './CourseFormFields';
+import { CourseFormFields } from './CourseFormFields';
 import type { CourseModalTarget } from '@/lib/types';
 
 interface UploadSyllabusModalProps {
@@ -36,8 +36,6 @@ interface UploadSyllabusModalProps {
 
 type Step = 'choose' | 'upload' | 'processing' | 'review' | 'error';
 
-const EMPTY_VALUES: CourseFormValues = { name: '', code: '', professor: '', color: COURSE_COLORS[0] };
-
 /** Single-syllabus upload → process → review flow (SYL-39: split out of AddCourseModal). */
 export function UploadSyllabusModal({ open, ...props }: UploadSyllabusModalProps) {
   // Mounted only while open so flow state initializes fresh from props each time
@@ -46,7 +44,7 @@ export function UploadSyllabusModal({ open, ...props }: UploadSyllabusModalProps
 }
 
 function UploadSyllabusModalContent({ onClose, existingCourse, onCreateManually, onBulkUpload }: Omit<UploadSyllabusModalProps, 'open'>) {
-  const { addCourse, updateCourse, refreshCourses, refreshEvents, semesters } = useData();
+  const { addCourse, updateCourse, refreshCourses, refreshEvents, semesters, courses } = useData();
   const { user } = useAuth();
   const [step, setStep] = useState<Step>(existingCourse ? 'upload' : 'choose');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -57,12 +55,15 @@ function UploadSyllabusModalContent({ onClose, existingCourse, onCreateManually,
   const [processingLog, setProcessingLog] = useState<string[]>([]);
   const [processingError, setProcessingError] = useState<string | null>(null);
 
-  // Review form state
-  const [values, setValues] = useState<CourseFormValues>(EMPTY_VALUES);
+  const activeSemester = semesters.find(s => s.isActive);
+
+  // Review form state — seeded from the target course on a re-upload, or with
+  // the next free colour in the active semester for a new course (SYL-62).
+  const [values, setValues] = useState<CourseFormValues>(() =>
+    initialFormValues(existingCourse, courses.filter(c => c.semesterId === activeSemester?.id)),
+  );
   const [extractionQuality, setExtractionQuality] = useState<'complete' | 'partial' | 'minimal'>('complete');
   const [extractedCount, setExtractedCount] = useState(0);
-
-  const activeSemester = semesters.find(s => s.isActive);
 
   const handleContinue = async () => {
     if (!selectedFile || !activeSemester || !user) return;

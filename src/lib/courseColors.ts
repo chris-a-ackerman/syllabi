@@ -6,3 +6,18 @@ export const COURSE_COLORS = [
   '#f97316', '#eab308', '#22c55e', '#14b8a6',
   '#0ea5e9', '#64748b',
 ];
+
+/** The palette colour for the n-th course of a batch, wrapping around. */
+export function courseColorAt(index: number): string {
+  return COURSE_COLORS[index % COURSE_COLORS.length];
+}
+
+/**
+ * Colour for a course being added next to `existingCourses` (SYL-62): the
+ * first palette colour none of them uses, falling back to the rotation once
+ * every colour is taken.
+ */
+export function nextCourseColor(existingCourses: ReadonlyArray<{ color: string }>): string {
+  const used = new Set(existingCourses.map(c => c.color));
+  return COURSE_COLORS.find(c => !used.has(c)) ?? courseColorAt(existingCourses.length);
+}

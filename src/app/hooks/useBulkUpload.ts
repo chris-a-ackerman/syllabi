@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { useAuth } from '../context/AuthProvider';
 import { useData } from '../context/DataProvider';
-import { COURSE_COLORS } from '@/lib/courseColors';
+import { courseColorAt } from '@/lib/courseColors';
 import {
   detectSyllabiInfo,
   reprocessSyllabus,
@@ -185,7 +185,7 @@ export function useBulkUpload({ fixedSemesterId }: BulkUploadOptions = {}) {
         : semesterMap.get(dc.semesterName.trim());
       if (!semId) continue;
 
-      const color = COURSE_COLORS[createdIds.length % COURSE_COLORS.length];
+      const color = courseColorAt(createdIds.length);
       const courseId = await addCourse({
         semesterId: semId,
         name: dc.courseName || dc.fileItem.file.name,

@@ -1,13 +1,7 @@
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { COURSE_COLORS } from '@/lib/courseColors';
-
-export interface CourseFormValues {
-  name: string;
-  code: string;
-  professor: string;
-  color: string;
-}
+import type { CourseFormValues } from '@/lib/courseForm';
 
 interface CourseFormFieldsProps {
   values: CourseFormValues;

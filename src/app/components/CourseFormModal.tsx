@@ -10,8 +10,8 @@ import {
 import { Button } from './ui/button';
 import { Alert, AlertDescription } from './ui/alert';
 import { Upload, CheckCircle, AlertCircle } from 'lucide-react';
-import { CourseFormFields, type CourseFormValues } from './CourseFormFields';
-import { COURSE_COLORS } from '@/lib/courseColors';
+import { CourseFormFields } from './CourseFormFields';
+import { initialFormValues, type CourseFormValues } from '@/lib/courseForm';
 import type { CourseModalTarget } from '@/lib/types';
 
 interface CourseFormModalProps {
@@ -25,8 +25,6 @@ interface CourseFormModalProps {
   onUploadSyllabus?: (course: CourseModalTarget) => void;
 }
 
-const EMPTY_VALUES: CourseFormValues = { name: '', code: '', professor: '', color: COURSE_COLORS[0] };
-
 /** Manual course create + edit form (SYL-39: split out of AddCourseModal). */
 export function CourseFormModal({ open, ...props }: CourseFormModalProps) {
   // Mounted only while open so form state initializes fresh from props each time
@@ -35,20 +33,17 @@ export function CourseFormModal({ open, ...props }: CourseFormModalProps) {
 }
 
 function CourseFormModalContent({ onClose, existingCourse, onBack, onUploadSyllabus }: Omit<CourseFormModalProps, 'open'>) {
-  const { addCourse, updateCourse, semesters } = useData();
-  const [values, setValues] = useState<CourseFormValues>(() => existingCourse
-    ? {
-        name: existingCourse.name,
-        code: existingCourse.code,
-        professor: existingCourse.professor,
-        color: existingCourse.color,
-      }
-    : EMPTY_VALUES);
-  const [createdCourse, setCreatedCourse] = useState<CourseModalTarget | null>(null);
-  const [saving, setSaving] = useState(false);
-
+  const { addCourse, updateCourse, semesters, courses } = useData();
   const activeSemester = semesters.find(s => s.isActive);
   const editMode = !!existingCourse;
+
+  // Same seeding as the upload modal (SYL-62): edit keeps the course's colour,
+  // create gets the next free colour in the active semester.
+  const [values, setValues] = useState<CourseFormValues>(() =>
+    initialFormValues(existingCourse, courses.filter(c => c.semesterId === activeSemester?.id)),
+  );
+  const [createdCourse, setCreatedCourse] = useState<CourseModalTarget | null>(null);
+  const [saving, setSaving] = useState(false);
 
   const handleSave = async () => {
     if (!values.name) return;
