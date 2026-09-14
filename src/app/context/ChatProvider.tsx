@@ -10,6 +10,7 @@ import {
 import { useAuth } from './AuthProvider';
 import { useSettings } from './SettingsProvider';
 import * as chatApi from '@/lib/api/chat';
+import { isClaudeKeyRejected, toastClaudeKeyRejected } from '@/lib/claudeKeyRejection';
 import type { Chat, ChatMessage } from '@/lib/types';
 
 interface ChatState {
@@ -146,6 +147,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
         if (fnError) {
           console.error('[chat] Edge function invocation error:', fnError);
+          if (await isClaudeKeyRejected(fnError)) {
+            toastClaudeKeyRejected();
+            addErrorMessage('Your Claude API key was rejected. Update it in Settings.');
+            return;
+          }
           addErrorMessage("Sorry, I couldn't reach the assistant. Please check your connection and try again.");
           return;
         }

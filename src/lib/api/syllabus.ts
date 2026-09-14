@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { isClaudeKeyRejected, toastClaudeKeyRejected } from '@/lib/claudeKeyRejection';
 
 // Syllabus storage + processing pipeline (SYL-38). The upload/record/invoke
 // sequence previously lived inline in useBulkUpload, useBulkCourseUpload, and
@@ -9,6 +10,23 @@ export interface ProcessSyllabusResponse {
   events_created?: number;
   completeness?: 'complete' | 'partial' | 'minimal';
   error?: string;
+}
+
+const KEY_REJECTED_MESSAGE = 'Your Claude API key was rejected. Update it in Settings.';
+
+/**
+ * process-syllabus is invoked fire-and-forget from useBulkUpload and awaited
+ * from UploadSyllabusModal — both funnel through uploadAndProcess/
+ * reprocessSyllabus below, so the claude_key_rejected check (SYL-72) lives
+ * here once rather than in each caller. supabase.functions.invoke collapses
+ * a non-2xx response into a FunctionsHttpError whose `.context` is the raw
+ * Response — read here, before it's gone by the time a caller only sees a
+ * plain `{ message }`.
+ */
+async function toastIfClaudeKeyRejected(fnError: unknown): Promise<boolean> {
+  const rejected = await isClaudeKeyRejected(fnError);
+  if (rejected) toastClaudeKeyRejected();
+  return rejected;
 }
 
 export type UploadStage = 'uploading' | 'processing';
@@ -36,7 +54,7 @@ export async function uploadAndProcess(
   opts: { awaitProcessing?: boolean; onStage?: (stage: UploadStage) => void } = {}
 ): Promise<{
   data: { path: string | null; fnData?: ProcessSyllabusResponse };
-  error: { message: string } | null;
+  error: { message: string; code?: string } | null;
 }> {
   const path = `${userId}/${courseId}/${file.name}`;
 
@@ -83,7 +101,11 @@ export async function uploadAndProcess(
     // poll never settles. Mark it failed unless the function got far enough
     // to settle the row itself.
     void invokeProcessSyllabus(courseId)
-      .then(({ error }) => (error ? `Processing failed: ${error.message}` : null))
+      .then(async ({ error }) => {
+        if (!error) return null;
+        if (await toastIfClaudeKeyRejected(error)) return KEY_REJECTED_MESSAGE;
+        return `Processing failed: ${error.message}`;
+      })
       .catch((e: unknown) => `Processing failed: ${errorMessage(e)}`)
       .then((message) => {
         if (message) return markSyllabusFailed(courseId, message, { onlyIfProcessing: true });
@@ -93,6 +115,9 @@ export async function uploadAndProcess(
 
   const { data: fnData, error: fnError } = await invokeProcessSyllabus(courseId);
   if (fnError) {
+    if (await toastIfClaudeKeyRejected(fnError)) {
+      return { data: { path }, error: { message: KEY_REJECTED_MESSAGE, code: 'claude_key_rejected' } };
+    }
     return { data: { path }, error: { message: `Processing failed: ${fnError.message}` } };
   }
   if (!fnData?.success) {
@@ -172,7 +197,9 @@ export async function reprocessSyllabus(courseId: string): Promise<{ error: { me
     .eq('id', courseId);
   const { error } = await invokeProcessSyllabus(courseId);
   if (error) {
-    const message = `Processing failed: ${error.message}`;
+    const message = (await toastIfClaudeKeyRejected(error))
+      ? KEY_REJECTED_MESSAGE
+      : `Processing failed: ${error.message}`;
     await markSyllabusFailed(courseId, message, { onlyIfProcessing: true });
     return { error: { message } };
   }

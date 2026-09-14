@@ -9,6 +9,7 @@ import {
   uploadAndProcess,
   uploadTempSyllabus,
 } from '@/lib/api/syllabus';
+import { isClaudeKeyRejected, toastClaudeKeyRejected } from '@/lib/claudeKeyRejection';
 
 export type BulkUploadStep = 'upload' | 'detecting' | 'review' | 'processing';
 
@@ -132,7 +133,12 @@ export function useBulkUpload({ fixedSemesterId }: BulkUploadOptions = {}) {
     if (successPaths.length > 0) {
       const { data, error: fnError } = await detectSyllabiInfo(successPaths);
       if (fnError || !data?.results) {
-        setGlobalError('Failed to analyze syllabi. Please try again.');
+        if (fnError && (await isClaudeKeyRejected(fnError))) {
+          toastClaudeKeyRejected();
+          setGlobalError('Your Claude API key was rejected. Update it in Settings.');
+        } else {
+          setGlobalError('Failed to analyze syllabi. Please try again.');
+        }
         setStep('upload');
         return;
       }

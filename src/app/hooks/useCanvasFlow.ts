@@ -2,6 +2,7 @@ import { useState, useCallback, useMemo } from 'react';
 import { useData } from '../context/DataProvider';
 import * as canvasApi from '@/lib/api/canvas';
 import { COURSE_COLORS } from '@/lib/courseColors';
+import { isClaudeKeyRejected, toastClaudeKeyRejected } from '@/lib/claudeKeyRejection';
 import type { CanvasSyllabusSourceType } from '@/lib/types';
 
 export type CanvasStep = 'dates' | 'detecting' | 'review' | 'processing' | 'syllabi' | 'downloading';
@@ -171,11 +172,22 @@ export function useCanvasFlow() {
     links.forEach(({ courseId }) => { initialResults[courseId] = { status: 'searching' }; });
     setSyllabiResults(initialResults);
 
+    // Set once, even though multiple courses can hit this in parallel — a
+    // rejected BYOK key fails every one of them identically, and the toast
+    // only needs to appear once per confirm() run.
+    let keyRejectedNotified = false;
+
     links.forEach(({ courseId, canvasCourseId }) => {
       canvasApi.findCanvasSyllabus(courseId, canvasCourseId)
-        .then(({ data, error: fnError }) => {
+        .then(async ({ data, error: fnError }) => {
           let result: SyllabusFindResult;
-          if (fnError) {
+          if (fnError && (await isClaudeKeyRejected(fnError))) {
+            if (!keyRejectedNotified) {
+              keyRejectedNotified = true;
+              toastClaudeKeyRejected();
+            }
+            result = { status: 'error' };
+          } else if (fnError) {
             result = { status: 'error' };
           } else if (data?.success === false || !data?.found) {
             result = { status: 'not_found' };
