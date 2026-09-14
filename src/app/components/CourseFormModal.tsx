@@ -81,8 +81,6 @@ function CourseFormModalContent({ onClose, existingCourse, onBack, onUploadSylla
       professor: values.professor,
       color: values.color,
       status: 'processing',
-      extractionQuality: undefined,
-      extractedCount: 0,
     });
     setSaving(false);
     if (newId) {

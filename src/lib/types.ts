@@ -71,9 +71,9 @@ export interface Course {
   professor: string;
   color: string;
   status: 'processing' | 'ready' | 'failed';
-  syllabusUrl?: string;
+  /** Storage object key in the `syllabi` bucket (`{user}/{course}/{file}`), not a URL. */
+  syllabusPath?: string;
   extractionQuality?: 'complete' | 'partial' | 'minimal';
-  extractedCount?: number;
   grading_rules?: GradingRules;
   policies?: Policies;
   schedule?: CourseSchedule;
@@ -93,17 +93,25 @@ export interface CanvasMetadata {
   time_limit: number | null;
 }
 
+/** Where a course_events row came from (matches the DB CHECK constraint). */
+export type EventSource = 'syllabus' | 'canvas_matched' | 'canvas' | 'canvas_deleted';
+
 export interface Event {
   id: string;
   courseId: string;
   title: string;
   date: string | null;
+  /** The raw date text when the parser could not resolve `date` (e.g. "Week 5"). */
+  dateUnresolved?: string | null;
   time?: string | null;
   type: 'exam' | 'deadline' | 'quiz' | 'presentation' | 'project_due' | 'no_class' | 'other';
   category?: string | null;
   canvasAssignmentId?: string | null;
   confidence?: 'low' | 'medium' | 'high';
   canvasMetadata?: CanvasMetadata | null;
+  source?: EventSource;
+  /** True for rows match-canvas-assignments inserted from Canvas with no syllabus counterpart. */
+  canvasOnly?: boolean;
 }
 
 export interface Note {
