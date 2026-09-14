@@ -72,10 +72,15 @@ export function Dashboard() {
     );
   };
 
+  // Set semantics, computed once and passed down (SYL-68): selectedCourses
+  // can hold an id that is no longer ready (e.g. after a re-upload), so a
+  // length comparison could read "all selected" while a ready course is not.
+  const readyCourses = activeCourses.filter((c) => c.status === 'ready');
+  const allReadySelected =
+    readyCourses.length > 0 && readyCourses.every((c) => selectedCourses.includes(c.id));
+
   const toggleAllCourses = () => {
-    const readyCourses = activeCourses.filter((c) => c.status === 'ready');
-    const allSelected = readyCourses.length > 0 && selectedCourses.length === readyCourses.length;
-    setSelectedCourses(allSelected ? [] : readyCourses.map((c) => c.id));
+    setSelectedCourses(allReadySelected ? [] : readyCourses.map((c) => c.id));
   };
 
   const closeAddCourse = () => {
@@ -134,6 +139,7 @@ export function Dashboard() {
             activeSemester={activeSemester}
             activeCourses={activeCourses}
             selectedCourses={selectedCourses}
+            allReadySelected={allReadySelected}
             onToggleCourse={toggleCourse}
             onToggleAllCourses={toggleAllCourses}
             onSemesterChange={(id) => {

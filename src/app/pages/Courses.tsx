@@ -3,7 +3,6 @@ import type { CourseModalTarget } from '@/lib/types';
 import { useData } from '../context/DataProvider';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
-import { Badge } from '../components/ui/badge';
 import {
   BookOpen,
   Calendar,
@@ -32,6 +31,7 @@ import { CourseFormModal } from '../components/CourseFormModal';
 import { ConfirmDeleteDialog } from '../components/ConfirmDeleteDialog';
 import { BulkUploadModal } from '../components/BulkUploadModal';
 import { EditSemesterModal } from '../components/EditSemesterModal';
+import { NoSyllabusBadge, UploadSyllabusButton } from '../components/UploadExistingCourseCard';
 
 export function Courses() {
   const { semesters, courses, events, deleteCourse } = useData();
@@ -157,11 +157,7 @@ export function Courses() {
                         {course.code.substring(0, 2).toUpperCase()}
                       </div>
                       <div className="flex items-center gap-2">
-                        {!hasSyllabus && (
-                          <Badge variant="outline" className="text-xs text-gray-500 border-gray-300">
-                            No syllabus
-                          </Badge>
-                        )}
+                        {!hasSyllabus && <NoSyllabusBadge />}
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button
@@ -224,19 +220,14 @@ export function Courses() {
                       </div>
                     ) : (
                       <div className="pt-4 border-t border-gray-100">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="w-full rounded-lg"
+                        <UploadSyllabusButton
+                          className="w-full"
                           onClick={(e) => {
                             e.stopPropagation();
                             setSelectedCourseForUpload(course);
                             setShowAddCourse(true);
                           }}
-                        >
-                          <Upload className="mr-2 h-3 w-3" />
-                          Upload Syllabus
-                        </Button>
+                        />
                       </div>
                     )}
                   </div>
