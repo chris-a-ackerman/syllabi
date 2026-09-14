@@ -1,15 +1,16 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { useAuth } from '../context/AuthProvider';
 import { useData } from '../context/DataProvider';
 import { BulkReviewForm } from '../components/BulkReviewForm';
 import { ProcessingCourseList } from '../components/ProcessingCourseList';
+import { SyllabusDropzone } from '../components/SyllabusDropzone';
 import { useBulkUpload } from '../hooks/useBulkUpload';
 import { useProcessingPoll } from '../hooks/useProcessingPoll';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 import { Alert, AlertDescription } from '../components/ui/alert';
-import { Upload, X, Loader2, AlertCircle, ChevronRight, FileText } from 'lucide-react';
+import { X, Loader2, AlertCircle, ChevronRight, FileText } from 'lucide-react';
 
 export function Onboarding() {
   const navigate = useNavigate();
@@ -19,10 +20,6 @@ export function Onboarding() {
     step, fileItems, detectedCourses, createdCourseIds, allDone, globalError,
     addFiles, removeFile, analyze, updateDetectedCourse, confirm, retryProcessing,
   } = useBulkUpload();
-
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const dropRef = useRef<HTMLDivElement>(null);
-  const isDraggingRef = useRef(false);
 
   // Poll for course status updates during processing; stop once all have settled
   useProcessingPoll(step === 'processing' && !allDone, refreshCourses);
@@ -37,33 +34,6 @@ export function Onboarding() {
     return () => clearTimeout(t);
   }, [step, allDone, navigate, markOnboardingComplete, refreshEvents]);
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    isDraggingRef.current = false;
-    if (dropRef.current) dropRef.current.dataset.dragging = 'false';
-    const files = Array.from(e.dataTransfer.files).filter(f => f.type === 'application/pdf');
-    addFiles(files);
-  }, [addFiles]);
-
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    if (!isDraggingRef.current) {
-      isDraggingRef.current = true;
-      if (dropRef.current) dropRef.current.dataset.dragging = 'true';
-    }
-  }, []);
-
-  const handleDragLeave = useCallback(() => {
-    isDraggingRef.current = false;
-    if (dropRef.current) dropRef.current.dataset.dragging = 'false';
-  }, []);
-
-  const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) addFiles(Array.from(e.target.files));
-    e.target.value = '';
-  };
-
-  // Group detected courses by semesterName for the review step
   return (
     <div className="min-h-screen bg-gradient-to-b from-white to-indigo-50">
       <div className="max-w-2xl mx-auto px-4 py-12">
@@ -115,26 +85,13 @@ export function Onboarding() {
         {/* ── Step 1: Upload ── */}
         {step === 'upload' && (
           <div className="space-y-4">
-            <div
-              ref={dropRef}
-              className="border-2 border-dashed rounded-2xl p-12 text-center cursor-pointer transition-colors border-gray-300 hover:border-indigo-400 bg-white data-[dragging=true]:border-indigo-500 data-[dragging=true]:bg-indigo-50"
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
-              onClick={() => fileInputRef.current?.click()}
-            >
-              <Upload className="w-10 h-10 text-gray-400 mx-auto mb-4" />
-              <p className="text-lg font-medium text-gray-700 mb-1">Drop your syllabi here</p>
-              <p className="text-sm text-gray-500">or click to browse — PDF files only, up to 50 MB each</p>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".pdf"
-                multiple
-                className="hidden"
-                onChange={handleFileInput}
-              />
-            </div>
+            <SyllabusDropzone
+              multiple
+              onFiles={addFiles}
+              title="Drop your syllabi here"
+              hint="or click to browse — PDF files only, up to 50 MB each"
+              variant="page"
+            />
 
             {fileItems.length > 0 && (
               <Card className="p-2 rounded-xl divide-y divide-gray-100">

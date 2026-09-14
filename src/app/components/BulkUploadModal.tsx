@@ -1,8 +1,9 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect } from 'react';
 import { useData } from '../context/DataProvider';
 import { useProcessingPoll } from '../hooks/useProcessingPoll';
 import { BulkReviewForm } from './BulkReviewForm';
 import { ProcessingCourseList } from './ProcessingCourseList';
+import { SyllabusDropzone } from './SyllabusDropzone';
 import { useBulkUpload } from '../hooks/useBulkUpload';
 import {
   Dialog,
@@ -14,7 +15,7 @@ import {
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 import { Alert, AlertDescription } from '../components/ui/alert';
-import { Upload, X, Loader2, AlertCircle, ChevronRight, FileText } from 'lucide-react';
+import { X, Loader2, AlertCircle, ChevronRight, FileText } from 'lucide-react';
 
 interface BulkUploadModalProps {
   open: boolean;
@@ -44,9 +45,6 @@ export function BulkUploadModal({ open, onClose, fixedSemesterId }: BulkUploadMo
   // detect-a-semester form and silently discarding the upload (SYL-61 review).
   const noSemesterAvailable = fixedSemesterId === '';
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const dropRef = useRef<HTMLDivElement>(null);
-
   // Reset state whenever the modal opens
   useEffect(() => {
     if (open) reset();
@@ -62,19 +60,6 @@ export function BulkUploadModal({ open, onClose, fixedSemesterId }: BulkUploadMo
     return () => clearTimeout(t);
   }, [step, allDone, onClose]);
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    if (dropRef.current) dropRef.current.dataset.dragging = 'false';
-    const files = Array.from(e.dataTransfer.files).filter(f => f.type === 'application/pdf');
-    addFiles(files);
-  }, [addFiles]);
-
-  const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) addFiles(Array.from(e.target.files));
-    e.target.value = '';
-  };
-
-  // Group detected courses by semester for the review step
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
       <DialogContent className="rounded-2xl max-w-xl max-h-[90vh] overflow-y-auto">
@@ -114,26 +99,7 @@ export function BulkUploadModal({ open, onClose, fixedSemesterId }: BulkUploadMo
         {/* ── Step 1: Upload ── */}
         {!noSemesterAvailable && step === 'upload' && (
           <div className="space-y-3">
-            <div
-              ref={dropRef}
-              className="border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors border-gray-300 hover:border-indigo-400 bg-white data-[dragging=true]:border-indigo-500 data-[dragging=true]:bg-indigo-50"
-              onDragOver={(e) => { e.preventDefault(); if (dropRef.current) dropRef.current.dataset.dragging = 'true'; }}
-              onDragLeave={() => { if (dropRef.current) dropRef.current.dataset.dragging = 'false'; }}
-              onDrop={handleDrop}
-              onClick={() => fileInputRef.current?.click()}
-            >
-              <Upload className="w-8 h-8 text-gray-400 mx-auto mb-3" />
-              <p className="text-sm font-medium text-gray-700 mb-1">Drop PDF syllabi here</p>
-              <p className="text-xs text-gray-500">or click to browse</p>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".pdf"
-                multiple
-                className="hidden"
-                onChange={handleFileInput}
-              />
-            </div>
+            <SyllabusDropzone multiple onFiles={addFiles} />
 
             {fileItems.length > 0 && (
               <Card className="p-2 rounded-lg divide-y divide-gray-100">

@@ -211,7 +211,14 @@ function UploadSyllabusModalContent({ onClose, existingCourse, onCreateManually,
             </DialogHeader>
 
             <div className="py-4">
-              <SyllabusDropzone selectedFile={selectedFile} onSelect={setSelectedFile} />
+              <SyllabusDropzone
+                selectedFile={selectedFile}
+                onFiles={([file]) => setSelectedFile(file)}
+                onClear={() => setSelectedFile(null)}
+                title="Drop your syllabus to get started"
+                hint="or click to browse — PDF files only"
+                variant="page"
+              />
             </div>
 
             <div className="flex gap-3 pt-4">
