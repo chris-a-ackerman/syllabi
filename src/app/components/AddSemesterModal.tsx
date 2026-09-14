@@ -5,7 +5,7 @@ import { BulkReviewForm } from './BulkReviewForm';
 import { SyllabusDropzone } from './SyllabusDropzone';
 import { useBulkUpload } from '../hooks/useBulkUpload';
 import { useCanvasFlow } from '../hooks/useCanvasFlow';
-import { supabase } from '../../lib/supabase';
+import { fetchCanvasProfile } from '@/lib/api/canvas';
 import {
   Dialog,
   DialogContent,
@@ -78,11 +78,7 @@ export function AddSemesterModal({ open, onClose }: AddSemesterModalProps) {
   useEffect(() => {
     if (!open) return;
     setCanvasConnected(null);
-    supabase
-      .from('profiles_safe')
-      .select('has_canvas_connected')
-      .single()
-      .then(({ data }) => setCanvasConnected(data?.has_canvas_connected ?? false));
+    fetchCanvasProfile().then(({ data }) => setCanvasConnected(data?.has_canvas_connected ?? false));
   }, [open]);
 
   // Close modal once courses are created — sidebar banner takes over processing status

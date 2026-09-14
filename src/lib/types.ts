@@ -99,6 +99,62 @@ export interface CanvasMetadata {
   time_limit: number | null;
 }
 
+/** `profiles_safe` view columns the Canvas connect/disconnect UI needs. */
+export interface CanvasProfile {
+  has_canvas_connected: boolean;
+  canvas_base_url: string | null;
+}
+
+/** One `find-canvas-courses` result item — a Canvas course candidate for import. */
+export interface CanvasCourseCandidate {
+  canvas_course_id: string;
+  name: string;
+  course_code: string | null;
+  instructor: string | null;
+  term_name: string | null;
+  term_start: string | null;
+  term_end: string | null;
+  has_syllabus: boolean;
+  needs_review: boolean;
+}
+
+export interface FindCanvasCoursesResponse {
+  courses: CanvasCourseCandidate[];
+  total_found: number;
+  needs_review_count: number;
+}
+
+export type CanvasSyllabusSourceType = 'file' | 'html' | 'page';
+
+export interface CanvasSyllabusFindResult {
+  success: boolean;
+  found: boolean;
+  course_id: string;
+  reason?: string;
+  source_type?: CanvasSyllabusSourceType;
+  file_name?: string | null;
+  file_url?: string | null;
+  html_content?: string | null;
+  confidence?: 'high' | 'medium';
+}
+
+export interface CanvasSyllabusDownloadResult {
+  success: boolean;
+  course_id?: string;
+  file_name?: string;
+  file_path?: string;
+  processing?: boolean;
+}
+
+export interface SaveCanvasTokenResult {
+  success: true;
+  canvas_user: string;
+}
+
+export interface DeleteCanvasTokenResult {
+  success: true;
+}
+
 /** Where a course_events row came from (matches the DB CHECK constraint). */
 export type EventSource = 'syllabus' | 'canvas_matched' | 'canvas' | 'canvas_deleted';
 

@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { useData } from '../context/DataProvider';
-import { supabase } from '../../lib/supabase';
+import * as canvasApi from '@/lib/api/canvas';
 import { COURSE_COLORS } from '@/lib/courseColors';
 
 export type CanvasStep = 'dates' | 'detecting' | 'review' | 'processing' | 'syllabi' | 'downloading';
@@ -56,10 +56,7 @@ export function useCanvasFlow() {
     setError(null);
     setStep('detecting');
 
-    const { data, error: fnError } = await supabase.functions.invoke(
-      'find-canvas-courses',
-      { body: { semester_start: startDate, semester_end: endDate } }
-    );
+    const { data, error: fnError } = await canvasApi.findCanvasCourses(startDate, endDate);
 
     if (fnError || !data?.courses) {
       setError('Failed to fetch Canvas courses. Please check your connection and try again.');
@@ -132,10 +129,7 @@ export function useCanvasFlow() {
       createdIds.push(courseId);
 
       // Store canvas_course_id — not part of the Course interface so update directly
-      await supabase
-        .from('courses')
-        .update({ canvas_course_id: dc.canvas_course_id })
-        .eq('id', courseId);
+      await canvasApi.linkCanvasCourse(courseId, dc.canvas_course_id);
     }
 
     setCreatedCourseIds(createdIds);
@@ -149,10 +143,7 @@ export function useCanvasFlow() {
     createdIds.forEach((courseId, i) => {
       const dc = detectedCourses[i];
       if (!dc) return;
-      supabase.functions
-        .invoke('find-canvas-syllabus', {
-          body: { course_id: courseId, canvas_course_id: dc.canvas_course_id },
-        })
+      canvasApi.findCanvasSyllabus(courseId, dc.canvas_course_id)
         .then(({ data, error: fnError }) => {
           let result: SyllabusFindResult;
           if (fnError) {
@@ -192,16 +183,13 @@ export function useCanvasFlow() {
       const result = syllabiResults[courseId];
       if (result?.status !== 'found') return;
 
-      supabase.functions
-        .invoke('download-canvas-syllabus', {
-          body: {
-            course_id: courseId,
-            source_type: result.source_type,
-            file_url: result.file_url ?? undefined,
-            file_name: result.file_name ?? undefined,
-            html_content: result.html_content ?? undefined,
-          },
-        })
+      canvasApi.downloadCanvasSyllabus({
+        courseId,
+        sourceType: result.source_type ?? 'file',
+        fileUrl: result.file_url,
+        fileName: result.file_name,
+        htmlContent: result.html_content,
+      })
         .then(({ data, error: fnError }) => {
           const status: SyllabusDownloadStatus =
             fnError || !data?.success ? 'error' : 'started';
