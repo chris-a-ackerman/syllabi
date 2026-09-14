@@ -366,3 +366,142 @@ BEGIN
   RAISE NOTICE 'SYL-31 hardening assertions passed.';
 END;
 $$;
+
+-- ── SYL-72: BYOK Claude key storage ──────────────────────────────────────
+DO $$
+DECLARE
+  v_b        UUID;
+  v_blocked  BOOLEAN;
+  v_cols     TEXT[];
+  v_missing  TEXT;
+  v_encrypted_cols TEXT;
+  v_key      TEXT;
+  v_last4    TEXT;
+  v_ok       BOOLEAN;
+  v_tested_at TIMESTAMPTZ;
+BEGIN
+  SELECT id INTO v_b FROM auth.users WHERE email = 'b@test.local';
+
+  -- ── none of the new privileged columns are client-writable ──────────────
+  SELECT array_agg(column_name ORDER BY column_name) INTO v_cols
+  FROM information_schema.column_privileges
+  WHERE table_schema = 'public' AND table_name = 'profiles'
+    AND grantee = 'authenticated' AND privilege_type = 'UPDATE';
+
+  FOREACH v_missing IN ARRAY ARRAY[
+    'anthropic_key_encrypted', 'anthropic_key_last4', 'anthropic_key_added_at',
+    'anthropic_key_last_tested_at', 'anthropic_key_last_test_ok',
+    'canvas_token_last_tested_at', 'canvas_token_last_test_ok'
+  ] LOOP
+    IF v_cols @> ARRAY[v_missing] THEN
+      RAISE EXCEPTION 'SYL-72: authenticated still holds UPDATE on %', v_missing;
+    END IF;
+  END LOOP;
+
+  -- ── the guard trigger rejects a direct write too (defense in depth) ─────
+  v_blocked := false;
+  BEGIN
+    SET LOCAL ROLE authenticated;
+    PERFORM set_config('request.jwt.claims', json_build_object('sub', v_b)::text, true);
+    UPDATE public.profiles SET anthropic_key_last4 = '9999' WHERE id = v_b;
+  EXCEPTION WHEN OTHERS THEN
+    v_blocked := true;
+  END;
+  RESET ROLE;
+  IF NOT v_blocked THEN
+    RAISE EXCEPTION 'SYL-72: authenticated was able to write anthropic_key_last4 directly';
+  END IF;
+
+  -- ── profiles_safe never exposes ciphertext ───────────────────────────────
+  SELECT string_agg(column_name, ', ') INTO v_encrypted_cols
+  FROM information_schema.columns
+  WHERE table_schema = 'public' AND table_name = 'profiles_safe'
+    AND column_name LIKE '%_encrypted';
+  IF v_encrypted_cols IS NOT NULL THEN
+    RAISE EXCEPTION 'SYL-72: profiles_safe exposes ciphertext column(s): %', v_encrypted_cols;
+  END IF;
+
+  -- ── store/get/delete_anthropic_key round trip, last4 computed server-side ─
+  PERFORM public.store_anthropic_key(v_b, 'sk-ant-local-test-1234', 'test_key');
+  SELECT public.get_anthropic_key(v_b, 'test_key') INTO v_key;
+  IF v_key IS DISTINCT FROM 'sk-ant-local-test-1234' THEN
+    RAISE EXCEPTION 'SYL-72: anthropic key round trip returned %, expected sk-ant-local-test-1234', v_key;
+  END IF;
+  SELECT anthropic_key_last4 FROM public.profiles WHERE id = v_b INTO v_last4;
+  IF v_last4 IS DISTINCT FROM '1234' THEN
+    RAISE EXCEPTION 'SYL-72: store_anthropic_key computed last4=%, expected 1234', v_last4;
+  END IF;
+
+  -- ── record_key_test updates the right pair of columns per provider ───────
+  PERFORM public.record_key_test(v_b, 'anthropic', true);
+  SELECT anthropic_key_last_test_ok, anthropic_key_last_tested_at
+    INTO v_ok, v_tested_at FROM public.profiles WHERE id = v_b;
+  IF v_ok IS DISTINCT FROM true OR v_tested_at IS NULL THEN
+    RAISE EXCEPTION 'SYL-72: record_key_test(anthropic, true) did not persist';
+  END IF;
+
+  PERFORM public.record_key_test(v_b, 'canvas', false);
+  SELECT canvas_token_last_test_ok, canvas_token_last_tested_at
+    INTO v_ok, v_tested_at FROM public.profiles WHERE id = v_b;
+  IF v_ok IS DISTINCT FROM false OR v_tested_at IS NULL THEN
+    RAISE EXCEPTION 'SYL-72: record_key_test(canvas, false) did not persist';
+  END IF;
+
+  -- ── profiles_safe reflects has_anthropic_key + metadata for the owner ────
+  BEGIN
+    SET LOCAL ROLE authenticated;
+    PERFORM set_config('request.jwt.claims', json_build_object('sub', v_b)::text, true);
+    SELECT has_anthropic_key, anthropic_key_last4 INTO v_ok, v_last4 FROM public.profiles_safe;
+  END;
+  RESET ROLE;
+  IF v_ok IS DISTINCT FROM true OR v_last4 IS DISTINCT FROM '1234' THEN
+    RAISE EXCEPTION 'SYL-72: profiles_safe did not reflect the stored anthropic key';
+  END IF;
+
+  -- ── delete clears every column ────────────────────────────────────────────
+  PERFORM public.delete_anthropic_key(v_b);
+  IF (SELECT anthropic_key_encrypted FROM public.profiles WHERE id = v_b) IS NOT NULL
+    OR (SELECT anthropic_key_last4 FROM public.profiles WHERE id = v_b) IS NOT NULL
+  THEN
+    RAISE EXCEPTION 'SYL-72: delete_anthropic_key left data behind';
+  END IF;
+
+  -- ── ai_usage_byok: counts, and is not client-readable/executable ─────────
+  PERFORM public.record_byok_usage(v_b, 'chat', 1);
+  PERFORM public.record_byok_usage(v_b, 'chat', 1);
+  IF (
+    SELECT count FROM public.ai_usage_byok
+    WHERE user_id = v_b AND endpoint = 'chat' AND day = (now() AT TIME ZONE 'utc')::date
+  ) <> 2 THEN
+    RAISE EXCEPTION 'SYL-72: record_byok_usage did not accumulate';
+  END IF;
+
+  v_blocked := false;
+  BEGIN
+    SET LOCAL ROLE authenticated;
+    PERFORM set_config('request.jwt.claims', json_build_object('sub', v_b)::text, true);
+    PERFORM public.record_byok_usage(v_b, 'chat', 1);
+  EXCEPTION WHEN insufficient_privilege THEN
+    v_blocked := true;
+  END;
+  RESET ROLE;
+  IF NOT v_blocked THEN
+    RAISE EXCEPTION 'SYL-72: authenticated can execute record_byok_usage';
+  END IF;
+
+  v_blocked := false;
+  BEGIN
+    SET LOCAL ROLE authenticated;
+    PERFORM set_config('request.jwt.claims', json_build_object('sub', v_b)::text, true);
+    PERFORM count(*) FROM public.ai_usage_byok;
+  EXCEPTION WHEN insufficient_privilege THEN
+    v_blocked := true;
+  END;
+  RESET ROLE;
+  IF NOT v_blocked THEN
+    RAISE EXCEPTION 'SYL-72: authenticated can SELECT from ai_usage_byok';
+  END IF;
+
+  RAISE NOTICE 'SYL-72 BYOK assertions passed.';
+END;
+$$;
