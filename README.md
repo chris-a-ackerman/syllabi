@@ -129,15 +129,15 @@ psql "$DB_URL" -c "UPDATE public.profiles SET is_admin = true WHERE id = '<uuid 
 
 Five tiers, one per CI job. The first three run with no Docker; the last two need it.
 
-| Tier                       | Command                                                          | Needs                                  | CI job          |
-| -------------------------- | ---------------------------------------------------------------- | -------------------------------------- | --------------- |
-| Frontend static + unit     | `npm run typecheck && npm run lint && npm test && npm run build` | Node                                   | `frontend-unit` |
-| Backend unit               | `cd backend/supabase && deno task test:unit`                     | Deno                                   | `deno-unit`     |
-| Schema + RLS assertions    | `npm run db:test`                                                | a local Postgres                       | `db-test`       |
-| Edge-function contracts    | below                                                            | Docker, Supabase CLI, Deno             | `contract`      |
-| Authenticated browser pass | `./e2e/run.sh`                                                   | Docker, Supabase CLI, Chrome, Node 22+ | `e2e`           |
+| Tier                       | Command                                                                                  | Needs                                  | CI job          |
+| -------------------------- | ---------------------------------------------------------------------------------------- | -------------------------------------- | --------------- |
+| Frontend static + unit     | `npm run typecheck && npm run lint && npm run format:check && npm test && npm run build` | Node                                   | `frontend-unit` |
+| Backend unit               | `cd backend/supabase && deno task test:unit`                                             | Deno                                   | `deno-unit`     |
+| Schema + RLS assertions    | `npm run db:test`                                                                        | a local Postgres                       | `db-test`       |
+| Edge-function contracts    | below                                                                                    | Docker, Supabase CLI, Deno             | `contract`      |
+| Authenticated browser pass | `./e2e/run.sh`                                                                           | Docker, Supabase CLI, Chrome, Node 22+ | `e2e`           |
 
-Formatting is `npm run format` (write) / `npm run format:check` (check). **Not yet wired into CI** — see [Known gaps](#known-gaps).
+Formatting is `npm run format` (write) / `npm run format:check` (check); the `frontend-unit` job runs the check. The `deno-unit` job also fails if `deno task test:unit` modifies `backend/supabase/deno.lock` — when you add or bump a remote import, run the unit tests once and commit the refreshed lockfile.
 
 ### Contract tests
 
@@ -187,7 +187,7 @@ It signs in through the real form, visits every screen (including both states of
 
 ## CI
 
-`.github/workflows/ci.yml` runs on every pull request and on pushes to `main`: `frontend-unit`, `deno-unit`, `db-test` (postgres:17 service), `contract` and `e2e` (each of the last two boots a real local stack with Supabase CLI 2.116.0). Pushes to a long-lived branch such as `refactor` are only tested through the PRs into it.
+`.github/workflows/ci.yml` runs on every pull request and on pushes to `main`: `frontend-unit` (typecheck, lint, Prettier check, Vitest, build), `deno-unit` (Deno unit tests plus a `deno.lock` drift assertion), `db-test` (postgres:17 service), `contract` and `e2e` (each of the last two boots a real local stack with Supabase CLI 2.116.0). Pushes to a long-lived branch such as `refactor` are only tested through the PRs into it.
 
 ---
 
@@ -195,7 +195,7 @@ It signs in through the real form, visits every screen (including both states of
 
 - `main` is what Vercel deploys. Work happens on a branch named after its Linear issue (`chris333/syl-NN-…`) and lands through a PR.
 - Large multi-PR efforts use a long-lived integration branch (currently `refactor`, Linear project "App Refactor"). PRs into it are stacked and reviewed in 300–800-line chunks; one final `refactor → main` PR is the release gate. GitHub rebases the upper branches when a lower PR merges, so `git fetch && git reset --hard origin/<branch>` before building on one, and restack with `git rebase --onto <new-base> <old-base>` + `git push --force-with-lease`.
-- Before opening a PR: typecheck, lint, Vitest, Deno unit and `db:test` green locally. CI covers contract + e2e.
+- Before opening a PR: typecheck, lint, `format:check`, Vitest, Deno unit and `db:test` green locally. CI covers contract + e2e.
 - Close the loop in Linear with a comment: what shipped, where the implementation departed from the acceptance criteria, and any hosted-project steps still required.
 
 ---
@@ -228,13 +228,13 @@ Worked once the `refactor → main` PR is open and its own CI is green — see t
 
 - [ ] `supabase db push` — apply every migration the hosted DB is missing (see "Pending" below for the list as of this PR; re-run `supabase migration list --workdir backend` on the day of the push, since more may land before then).
 - [ ] `supabase functions deploy` — all 15 functions (or name each one that changed since the last hosted deploy).
-- [ ] `supabase secrets set SECRETS_ENCRYPTION_KEY=...` — new secret introduced by SYL-72; the hosted project does not have it yet.
+- [ ] `supabase secrets set SECRETS_ENCRYPTION_KEY=...` — new secret introduced by SYL-72; `supabase secrets list --workdir backend` confirmed it absent from the hosted project on 2026-09-14.
 - [ ] Supabase dashboard (SYL-32): confirm email **on**, minimum password length **8**, Site URL `https://syllabi-one.vercel.app`, redirect allow-list including `/auth/callback`. Then verify a real signup confirmation and a Google sign-in against production.
 - [ ] Spot-check `/settings` in production after deploy: Canvas card unchanged for existing connected users, Claude API key card starts in the not-set state for everyone (no backfill needed — the column is new).
 
 ### Pending for the `refactor → main` release (as of 2026-09-14)
 
-Migrations the hosted DB is believed to be missing, oldest first. **Re-verify against `supabase migration list --workdir backend` and the dashboard on the day this merges** — this list is a snapshot from this pass, not a live query against the hosted project (this sandbox has no hosted-project credentials).
+Migrations the hosted DB is missing, oldest first — verified with `supabase migration list --workdir backend` on 2026-09-14 (the hosted DB has everything through `20260828000001`). **Re-run that command on the day this merges**, since more may land before then.
 
 - [ ] `20260901000000_ai_usage`
 - [ ] `20260902000000_rls_hardening`
@@ -335,10 +335,8 @@ Tables: `profiles` (now also carrying the BYOK Anthropic key columns and Canvas/
 
 ## Known gaps
 
-- Prettier is enforced locally (`npm run format` / `format:check`) but **not yet wired into CI** — the `npm run format:check` step could not be added to the `frontend-unit` job in this pass because this session's git/GitHub credentials lack the `workflow` OAuth scope needed to push any change to `.github/workflows/ci.yml`. The exact diff (also covers a `deno.lock` drift assertion in `deno-unit`) is in this pass's PR description; someone with push access to workflow files needs to apply it by hand.
 - `course_events` has no `time_end`; `.ics` exports use a default duration (follow-up noted on SYL-52).
 - ESLint reports 21 warnings (`react-hooks/set-state-in-effect`, `react-hooks/purity`, `react-refresh/only-export-components`); warnings do not fail CI. See the [Conventions](#conventions) decision.
-- `backend/supabase/deno.lock` has no `remote` lock entries for the packages fetched over plain URL imports (e.g. `anthropic-client.ts`'s `https://esm.sh/@anthropic-ai/sdk` import); a full `deno task test:unit` run adds them and leaves the lockfile modified. Not resolved in this pass — the sandbox this pass ran in blocks outbound access to `esm.sh`, so the lockfile couldn't be regenerated here. Whoever next runs `deno task test:unit` with real network access should commit the resulting `backend/supabase/deno.lock`.
 - `deno check` is not run anywhere and is known to fail on two functions pre-dating Wave 6 (`find-canvas-courses/index.ts`, `process-syllabus/index.ts` — see the SYL-70 Linear comment for specifics). Adding `deno check functions/*/index.ts` to `deno-unit` would make this a gate; not done here.
 - `download-canvas-syllabus` calls `process-syllabus` and `match-canvas-assignments` directly (edge function → edge function `fetch`), not from the client. Flagged for review in SYL-70; left as-is this pass.
 - No root-level `CLAUDE.md` exists in this repository (only `backend/supabase/CLAUDE.md`, backend-scoped) — this README is the root guide for agents and humans alike.
