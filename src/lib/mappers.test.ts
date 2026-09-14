@@ -66,10 +66,17 @@ describe('dbCourseToApp', () => {
     expect(course.professor).toBe('');
     expect(course.color).toBe('#6366f1');
     expect(course.status).toBe('ready');
+    expect(course.analysisError).toBeUndefined();
     expect(course.syllabusPath).toBeUndefined();
     expect(course.grading_rules).toBeUndefined();
     expect(course.policies).toBeUndefined();
     expect(course.schedule).toBeUndefined();
+  });
+
+  it('maps a failed row with its analysis_error (SYL-66)', () => {
+    const course = dbCourseToApp({ ...baseRow, analysis_status: 'failed', analysis_error: 'Upload failed: boom' });
+    expect(course.status).toBe('failed');
+    expect(course.analysisError).toBe('Upload failed: boom');
   });
 
   it('prefers dedicated columns over the syllabus_analysis blob', () => {

@@ -71,6 +71,8 @@ export interface Course {
   professor: string;
   color: string;
   status: 'processing' | 'ready' | 'failed';
+  /** Why the last syllabus processing failed (courses.analysis_error); set when status is 'failed'. */
+  analysisError?: string;
   /** Storage object key in the `syllabi` bucket (`{user}/{course}/{file}`), not a URL. */
   syllabusPath?: string;
   extractionQuality?: 'complete' | 'partial' | 'minimal';

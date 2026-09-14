@@ -49,6 +49,7 @@ export function dbCourseToApp(row: any): Course {
     professor: row.professor ?? '',
     color: row.color ?? '#6366f1',
     status: mapAnalysisStatus(row.analysis_status),
+    analysisError: row.analysis_error ?? undefined,
     syllabusPath: row.syllabus_file_path ?? undefined,
     extractionQuality: analysis?.extraction_quality ?? undefined,
     grading_rules: gradingRules,

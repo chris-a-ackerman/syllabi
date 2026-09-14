@@ -16,6 +16,7 @@ vi.mock('../context/DataProvider', () => ({
     refreshCourses: vi.fn(),
     addSemester: vi.fn(),
     addCourse: vi.fn(),
+    updateCourse: vi.fn(),
   }),
 }));
 
@@ -32,6 +33,7 @@ vi.mock('@/lib/api/syllabus', () => ({
   detectSyllabiInfo: vi.fn(),
   uploadAndProcess: vi.fn(),
   reprocessSyllabus: vi.fn(),
+  markSyllabusFailed: vi.fn(),
 }));
 
 afterEach(cleanup);

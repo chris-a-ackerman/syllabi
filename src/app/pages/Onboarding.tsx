@@ -15,19 +15,13 @@ export function Onboarding() {
   const { user, markOnboardingComplete } = useAuth();
   const { courses: allCourses, refreshCourses, refreshEvents } = useData();
   const {
-    step, fileItems, detectedCourses, createdCourseIds, globalError,
+    step, fileItems, detectedCourses, createdCourseIds, allDone, globalError,
     addFiles, removeFile, analyze, updateDetectedCourse, confirm, retryProcessing,
   } = useBulkUpload();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dropRef = useRef<HTMLDivElement>(null);
   const isDraggingRef = useRef(false);
-
-  const created = allCourses.filter(c => createdCourseIds.includes(c.id));
-  const allDone =
-    createdCourseIds.length > 0 &&
-    created.length === createdCourseIds.length &&
-    created.every(c => c.status === 'ready' || c.status === 'failed');
 
   // Poll for course status updates during processing; stop once all have settled
   useProcessingPoll(step === 'processing' && !allDone, refreshCourses);
@@ -234,6 +228,9 @@ export function Onboarding() {
                     <div className="min-w-0">
                       <p className="font-medium text-gray-900">{course?.code || '—'}</p>
                       <p className="text-sm text-gray-500 truncate">{course?.name}</p>
+                      {course?.status === 'failed' && course.analysisError && (
+                        <p className="text-xs text-red-600 mt-0.5">{course.analysisError}</p>
+                      )}
                     </div>
                     <div className="flex items-center gap-2 ml-4 shrink-0">
                       {(!course || course.status === 'processing') && (

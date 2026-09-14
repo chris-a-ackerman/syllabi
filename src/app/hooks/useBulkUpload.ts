@@ -1,9 +1,10 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthProvider';
 import { useData } from '../context/DataProvider';
 import { courseColorAt } from '@/lib/courseColors';
 import {
   detectSyllabiInfo,
+  markSyllabusFailed,
   reprocessSyllabus,
   uploadAndProcess,
   uploadTempSyllabus,
@@ -40,12 +41,49 @@ interface BulkUploadOptions {
 
 export function useBulkUpload({ fixedSemesterId }: BulkUploadOptions = {}) {
   const { user } = useAuth();
-  const { addSemester, addCourse } = useData();
+  const { courses, addSemester, addCourse, updateCourse } = useData();
   const [step, setStep] = useState<BulkUploadStep>('upload');
   const [fileItems, setFileItems] = useState<FileItem[]>([]);
   const [detectedCourses, setDetectedCourses] = useState<DetectedCourse[]>([]);
   const [createdCourseIds, setCreatedCourseIds] = useState<string[]>([]);
   const [globalError, setGlobalError] = useState<string | null>(null);
+  // Files whose Storage upload failed, by course id — Retry re-uploads these
+  // instead of re-invoking process-syllabus against a row with no file.
+  const pendingUploads = useRef(new Map<string, File>());
+
+  /**
+   * Every created course has settled — complete or failed (SYL-66) — so the
+   * processing poll can stop and the Done/auto-close state is reachable. A
+   * course that has disappeared from state (deleted elsewhere) counts as
+   * settled: nothing can change it any more.
+   */
+  const allDone =
+    createdCourseIds.length > 0 &&
+    createdCourseIds.every((id) => {
+      const course = courses.find((c) => c.id === id);
+      return !course || course.status === 'ready' || course.status === 'failed';
+    });
+
+  // Marks the course failed locally (card) and on the row (poll) with the same
+  // message, so the two never disagree about a course that never got a file.
+  const markFailed = useCallback(async (courseId: string, message: string) => {
+    updateCourse(courseId, { status: 'failed', analysisError: message });
+    const { error } = await markSyllabusFailed(courseId, message);
+    if (error) console.error('Error recording syllabus failure:', error);
+  }, [updateCourse]);
+
+  // Runs upload + process for one course and applies the outcome to state.
+  const uploadForCourse = useCallback(async (courseId: string, file: File) => {
+    if (!user) return;
+    const { data, error } = await uploadAndProcess(user.id, courseId, file);
+    if (!error) {
+      pendingUploads.current.delete(courseId);
+      return;
+    }
+    // data.path is null only when the file never reached Storage.
+    if (data.path === null) pendingUploads.current.set(courseId, file);
+    await markFailed(courseId, error.message);
+  }, [user, markFailed]);
 
   const addFiles = useCallback((files: File[]) => {
     const MAX_SIZE = 50 * 1024 * 1024;
@@ -67,6 +105,7 @@ export function useBulkUpload({ fixedSemesterId }: BulkUploadOptions = {}) {
     setDetectedCourses([]);
     setCreatedCourseIds([]);
     setGlobalError(null);
+    pendingUploads.current.clear();
   }, []);
 
   const analyze = useCallback(async () => {
@@ -196,20 +235,38 @@ export function useBulkUpload({ fixedSemesterId }: BulkUploadOptions = {}) {
       });
       if (!courseId) continue;
       createdIds.push(courseId);
+      // The insert lands at the DB default ('pending', shown as ready); the
+      // card must read as processing until the poll sees the row settle.
+      updateCourse(courseId, { status: 'processing' });
 
-      // A failed upload leaves the course without a syllabus file; errors are
-      // not surfaced per-course here.
-      await uploadAndProcess(user.id, courseId, dc.fileItem.file);
+      await uploadForCourse(courseId, dc.fileItem.file);
     }
 
     setCreatedCourseIds(createdIds);
-  }, [user, fixedSemesterId, detectedCourses, addSemester, addCourse]);
+  }, [user, fixedSemesterId, detectedCourses, addSemester, addCourse, updateCourse, uploadForCourse]);
+
+  /**
+   * Retry for a failed course: re-uploads when the file never reached Storage,
+   * otherwise re-invokes process-syllabus. Either way the card goes back to
+   * processing so the poll resumes and picks up the outcome.
+   */
+  const retryProcessing = useCallback(async (courseId: string) => {
+    updateCourse(courseId, { status: 'processing', analysisError: undefined });
+    const file = pendingUploads.current.get(courseId);
+    if (file) {
+      await uploadForCourse(courseId, file);
+      return;
+    }
+    const { error } = await reprocessSyllabus(courseId);
+    if (error) updateCourse(courseId, { status: 'failed', analysisError: error.message });
+  }, [updateCourse, uploadForCourse]);
 
   return {
     step,
     fileItems,
     detectedCourses,
     createdCourseIds,
+    allDone,
     globalError,
     addFiles,
     removeFile,
@@ -217,6 +274,6 @@ export function useBulkUpload({ fixedSemesterId }: BulkUploadOptions = {}) {
     analyze,
     updateDetectedCourse,
     confirm,
-    retryProcessing: reprocessSyllabus,
+    retryProcessing,
   };
 }

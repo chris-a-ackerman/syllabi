@@ -30,7 +30,7 @@ interface BulkUploadModalProps {
 export function BulkUploadModal({ open, onClose, fixedSemesterId }: BulkUploadModalProps) {
   const { courses: allCourses, semesters, refreshCourses } = useData();
   const {
-    step, fileItems, detectedCourses, createdCourseIds, globalError,
+    step, fileItems, detectedCourses, createdCourseIds, allDone, globalError,
     addFiles, removeFile, reset, analyze, updateDetectedCourse, confirm, retryProcessing,
   } = useBulkUpload({ fixedSemesterId });
 
@@ -50,12 +50,6 @@ export function BulkUploadModal({ open, onClose, fixedSemesterId }: BulkUploadMo
   useEffect(() => {
     if (open) reset();
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const created = allCourses.filter(c => createdCourseIds.includes(c.id));
-  const allDone =
-    createdCourseIds.length > 0 &&
-    created.length === createdCourseIds.length &&
-    created.every(c => c.status === 'ready' || c.status === 'failed');
 
   // Poll during processing; stop as soon as every course has settled
   useProcessingPoll(step === 'processing' && !allDone, refreshCourses);
@@ -227,6 +221,9 @@ export function BulkUploadModal({ open, onClose, fixedSemesterId }: BulkUploadMo
                   <div className="min-w-0">
                     <p className="font-medium text-sm text-gray-900">{course?.code || '—'}</p>
                     <p className="text-xs text-gray-500 truncate">{course?.name}</p>
+                    {course?.status === 'failed' && course.analysisError && (
+                      <p className="text-xs text-red-600 mt-0.5">{course.analysisError}</p>
+                    )}
                   </div>
                   <div className="flex items-center gap-2 ml-4 shrink-0">
                     {(!course || course.status === 'processing') && (
