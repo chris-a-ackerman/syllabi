@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router';
 import { supabase } from '../../lib/supabase';
+import { fetchProfile } from '@/lib/api/auth';
 import type { Session } from '@supabase/supabase-js';
 
 export function AuthCallback() {
@@ -11,11 +12,7 @@ export function AuthCallback() {
     const doNavigate = async (session: Session) => {
       if (redirected.current) return;
       redirected.current = true;
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('onboarding_completed')
-        .eq('id', session.user.id)
-        .single();
+      const { data: profile } = await fetchProfile(session.user.id);
       navigate(profile?.onboarding_completed ? '/dashboard' : '/onboarding', { replace: true });
     };
 

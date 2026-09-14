@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
-import { supabase } from '../../lib/supabase';
+import { fetchCanvasProfile, saveCanvasToken, deleteCanvasToken } from '@/lib/api/canvas';
+import type { CanvasProfile } from '@/lib/types';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 import { Input } from '../components/ui/input';
@@ -19,11 +20,6 @@ import {
 import { ArrowLeft, Eye, EyeOff, CheckCircle2, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
-interface CanvasProfile {
-  has_canvas_connected: boolean;
-  canvas_base_url: string | null;
-}
-
 export function CanvasSettings() {
   const navigate = useNavigate();
   const [profile, setProfile] = useState<CanvasProfile | null>(null);
@@ -40,81 +36,44 @@ export function CanvasSettings() {
   const [showDisconnectDialog, setShowDisconnectDialog] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
 
-  const fetchProfile = async () => {
-    const { data, error } = await supabase
-      .from('profiles_safe')
-      .select('has_canvas_connected, canvas_base_url')
-      .single();
+  const loadProfile = async () => {
+    const { data, error } = await fetchCanvasProfile();
     if (!error && data) {
-      setProfile(data as CanvasProfile);
+      setProfile(data);
     }
     setLoading(false);
   };
 
   useEffect(() => {
-    fetchProfile();
+    loadProfile();
   }, []);
 
   const handleConnect = async (e: React.FormEvent) => {
     e.preventDefault();
     setConnectError(null);
     setConnecting(true);
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        setConnectError('Not authenticated. Please sign in again.');
-        return;
-      }
-      const res = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/save-canvas-token`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${session.access_token}`,
-          },
-          body: JSON.stringify({
-            canvas_token: canvasToken,
-            canvas_base_url: canvasUrl,
-          }),
-        }
-      );
-      const json = await res.json();
-      if (!res.ok) {
-        setConnectError(json.error ?? 'Failed to connect Canvas.');
-        return;
-      }
-      await fetchProfile();
-      setCanvasUrl('');
-      setCanvasToken('');
-      toast.success('Canvas connected successfully');
-    } catch {
-      setConnectError('Unexpected error. Please try again.');
-    } finally {
+    const { error } = await saveCanvasToken(canvasToken, canvasUrl);
+    if (error) {
+      setConnectError(error.message ?? 'Failed to connect Canvas.');
       setConnecting(false);
+      return;
     }
+    await loadProfile();
+    setCanvasUrl('');
+    setCanvasToken('');
+    toast.success('Canvas connected successfully');
+    setConnecting(false);
   };
 
   const handleDisconnect = async () => {
     setDisconnecting(true);
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
-      const res = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-canvas-token`,
-        {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${session.access_token}` },
-        }
-      );
-      if (res.ok) {
-        await fetchProfile();
-        toast.success('Canvas disconnected');
-      }
-    } finally {
-      setDisconnecting(false);
-      setShowDisconnectDialog(false);
+    const { error } = await deleteCanvasToken();
+    if (!error) {
+      await loadProfile();
+      toast.success('Canvas disconnected');
     }
+    setDisconnecting(false);
+    setShowDisconnectDialog(false);
   };
 
   return (
