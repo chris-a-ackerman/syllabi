@@ -43,6 +43,9 @@ vi.mock('@/lib/api/syllabus', () => ({
   markSyllabusFailed,
 }));
 
+const { toastError } = vi.hoisted(() => ({ toastError: vi.fn() }));
+vi.mock('sonner', () => ({ toast: { error: toastError } }));
+
 const courseById = (id: string) => courses.find(c => c.id === id);
 
 function makeFile(name: string) {
@@ -257,6 +260,27 @@ describe('useBulkUpload', () => {
     expect(reprocessSyllabus).toHaveBeenCalledWith('course-1');
     expect(uploadAndProcess).toHaveBeenCalledTimes(1);
     expect(courseById('course-1')).toMatchObject({ status: 'processing', analysisError: undefined });
+  });
+
+  // ── SYL-72: a rejected BYOK key surfaces distinctly, not as a generic failure ──
+
+  it('analyze: a claude_key_rejected error from detect-syllabi-info toasts and shows a specific message', async () => {
+    detectSyllabiInfo.mockResolvedValue({
+      data: null,
+      error: { context: new Response(JSON.stringify({ error: 'claude_key_rejected' }), { status: 402 }) },
+    });
+    const { result } = renderHook(() => useBulkUpload({ fixedSemesterId: 'sem-active' }));
+
+    act(() => {
+      result.current.addFiles([makeFile('a.pdf')]);
+    });
+    await act(async () => {
+      await result.current.analyze();
+    });
+
+    expect(result.current.step).toBe('upload');
+    expect(result.current.globalError).toBe('Your Claude API key was rejected. Update it in Settings.');
+    expect(toastError).toHaveBeenCalledTimes(1);
   });
 
   it('retryProcessing surfaces a failed re-invoke on the card', async () => {

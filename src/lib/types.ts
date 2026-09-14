@@ -155,6 +155,35 @@ export interface DeleteCanvasTokenResult {
   success: true;
 }
 
+/** `profiles_safe` view columns the Settings page's two cards need (SYL-72). */
+export interface ApiKeyStatus {
+  has_canvas_connected: boolean;
+  canvas_base_url: string | null;
+  canvas_token_last_tested_at: string | null;
+  canvas_token_last_test_ok: boolean | null;
+  has_anthropic_key: boolean;
+  anthropic_key_last4: string | null;
+  anthropic_key_added_at: string | null;
+  anthropic_key_last_tested_at: string | null;
+  anthropic_key_last_test_ok: boolean | null;
+}
+
+export interface SaveAnthropicKeyResult {
+  ok: true;
+  last4: string;
+}
+
+export interface TestAnthropicKeyResult {
+  ok: boolean;
+  tested_at: string;
+}
+
+export interface TestCanvasTokenResult {
+  ok: boolean;
+  canvas_user?: string | null;
+  reason?: 'rejected' | 'unreachable';
+}
+
 /** Where a course_events row came from (matches the DB CHECK constraint). */
 export type EventSource = 'syllabus' | 'canvas_matched' | 'canvas' | 'canvas_deleted';
 

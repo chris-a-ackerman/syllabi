@@ -1,12 +1,16 @@
 // supabase/functions/match-canvas-assignments/index.ts
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.24.3";
 import { assertSafeCanvasUrl, safeCanvasFetch, UnsafeCanvasUrlError } from "../_shared/canvas-url.ts";
 import { isoToDate } from "../_shared/iso-date.ts";
 import { stripHtml } from "../_shared/strip-html.ts";
 import { stripJsonFences } from "../_shared/strip-json-fences.ts";
 import { enforceAiQuota } from "../_shared/ai-quota.ts";
+import {
+  claudeKeyRejectedResponse,
+  isAnthropicAuthError,
+  resolveAnthropicClient,
+} from "../_shared/anthropic-client.ts";
 import { CORS_HEADERS } from "../_shared/cors.ts";
 
 const json = (body: unknown, status = 200) =>
@@ -19,8 +23,6 @@ const supabaseService = createClient(
   Deno.env.get("SUPABASE_URL")!,
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
 );
-
-const anthropic = new Anthropic({ apiKey: Deno.env.get("ANTHROPIC_API_KEY")! });
 
 interface CanvasAssignment {
   id: number;
@@ -68,6 +70,9 @@ serve(async (req) => {
     return new Response(null, { status: 204, headers: CORS_HEADERS });
   }
 
+  // Visible to the outer catch's error body (SYL-72), set once resolved below.
+  let source: "user" | "project" | undefined;
+
   try {
     // 1. Auth
     const authHeader = req.headers.get("Authorization");
@@ -81,6 +86,16 @@ serve(async (req) => {
     const { data: { user } } = await supabaseUser.auth.getUser();
     if (!user) return json({ error: "Unauthorized" }, 401);
 
+    // Resolve which Anthropic key this request uses (SYL-72).
+    const encKey = Deno.env.get("SECRETS_ENCRYPTION_KEY");
+    if (!encKey) {
+      console.error("SECRETS_ENCRYPTION_KEY is not set");
+      return json({ error: "Server misconfiguration." }, 500);
+    }
+    const resolved = await resolveAnthropicClient(supabaseService, user.id, encKey);
+    const anthropic = resolved.client;
+    source = resolved.source;
+
     // 2. Parse body
     let body: { course_id: string };
     try {
@@ -91,8 +106,19 @@ serve(async (req) => {
     const { course_id } = body;
     if (!course_id) return json({ error: "course_id is required." }, 400);
 
-    const quotaResponse = await enforceAiQuota(supabaseService, user.id, "match-canvas-assignments", CORS_HEADERS);
-    if (quotaResponse) return quotaResponse;
+    // BYOK requests bypass the project's cost-control quota entirely; a
+    // separate, unenforced counter still records volume for the admin panel.
+    if (source === "user") {
+      const { error: byokError } = await supabaseService.rpc("record_byok_usage", {
+        p_user_id: user.id,
+        p_endpoint: "match-canvas-assignments",
+        p_amount: 1,
+      });
+      if (byokError) console.error("[match-canvas] record_byok_usage failed:", byokError.message);
+    } else {
+      const quotaResponse = await enforceAiQuota(supabaseService, user.id, "match-canvas-assignments", CORS_HEADERS);
+      if (quotaResponse) return quotaResponse;
+    }
 
     console.log(`[match-canvas] start course_id=${course_id} user_id=${user.id}`);
 
@@ -187,16 +213,25 @@ serve(async (req) => {
       }));
       const eventList = syllabusEvents.map(e => ({ id: e.id, title: e.title, date: e.date }));
 
-      const matchingResponse = await anthropic.messages.create({
-        model: "claude-sonnet-4-6",
-        max_tokens: 2048,
-        temperature: 0,
-        system: MATCHING_SYSTEM_PROMPT,
-        messages: [{
-          role: "user",
-          content: `Match these Canvas assignments to syllabus course events.\n\nCanvas assignments:\n${JSON.stringify(canvasList, null, 2)}\n\nSyllabus course events:\n${JSON.stringify(eventList, null, 2)}`,
-        }],
-      });
+      let matchingResponse;
+      try {
+        matchingResponse = await anthropic.messages.create({
+          model: "claude-sonnet-4-6",
+          max_tokens: 2048,
+          temperature: 0,
+          system: MATCHING_SYSTEM_PROMPT,
+          messages: [{
+            role: "user",
+            content: `Match these Canvas assignments to syllabus course events.\n\nCanvas assignments:\n${JSON.stringify(canvasList, null, 2)}\n\nSyllabus course events:\n${JSON.stringify(eventList, null, 2)}`,
+          }],
+        });
+      } catch (err) {
+        if (source === "user" && isAnthropicAuthError(err)) {
+          await supabaseService.rpc("record_key_test", { p_user_id: user.id, p_provider: "anthropic", p_ok: false });
+          return claudeKeyRejectedResponse(CORS_HEADERS);
+        }
+        throw err;
+      }
 
       const rawOutput = matchingResponse.content[0].type === "text" ? matchingResponse.content[0].text : "";
       console.log(`[match-canvas] claude tokens=${matchingResponse.usage?.output_tokens}`);

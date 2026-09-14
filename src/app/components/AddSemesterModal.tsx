@@ -393,7 +393,7 @@ export function AddSemesterModal({ open, onClose }: AddSemesterModalProps) {
                   </Button>
                   <Button
                     className="flex-1 bg-emerald-600 hover:bg-emerald-700 rounded-lg"
-                    onClick={() => { onClose(); navigate('/settings/canvas'); }}
+                    onClick={() => { onClose(); navigate('/settings#canvas'); }}
                   >
                     Connect Canvas
                     <ChevronRight className="ml-1 w-4 h-4" />

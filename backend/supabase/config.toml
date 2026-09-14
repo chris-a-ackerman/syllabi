@@ -481,3 +481,23 @@ entrypoint = "./functions/download-canvas-syllabus/index.ts"
 enabled = true
 verify_jwt = false
 entrypoint = "./functions/match-canvas-assignments/index.ts"
+
+[functions.save-anthropic-key]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/save-anthropic-key/index.ts"
+
+[functions.test-anthropic-key]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/test-anthropic-key/index.ts"
+
+[functions.delete-anthropic-key]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/delete-anthropic-key/index.ts"
+
+[functions.test-canvas-token]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/test-canvas-token/index.ts"

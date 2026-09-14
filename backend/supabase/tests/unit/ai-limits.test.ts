@@ -37,6 +37,15 @@ Deno.test("intFromEnv ignores junk and non-positive values", () => {
   }
 });
 
+Deno.test("manage-api-keys reads AI_DAILY_LIMIT_MANAGE_API_KEYS from the environment", () => {
+  Deno.env.set("AI_DAILY_LIMIT_MANAGE_API_KEYS", "7");
+  try {
+    assertEquals(intFromEnv("AI_DAILY_LIMIT_MANAGE_API_KEYS", 20), 7);
+  } finally {
+    Deno.env.delete("AI_DAILY_LIMIT_MANAGE_API_KEYS");
+  }
+});
+
 Deno.test("every configured limit is a positive integer", () => {
   for (const [endpoint, limit] of Object.entries(AI_DAILY_LIMITS)) {
     assert(Number.isInteger(limit) && limit > 0, `${endpoint} limit is ${limit}`);

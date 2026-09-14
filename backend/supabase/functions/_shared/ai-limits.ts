@@ -21,6 +21,11 @@ export const AI_DAILY_LIMITS: Record<string, number> = {
   "detect-syllabi-info": intFromEnv("AI_DAILY_LIMIT_DETECT_SYLLABI_INFO", 50),
   "find-canvas-syllabus": intFromEnv("AI_DAILY_LIMIT_FIND_CANVAS_SYLLABUS", 25),
   "match-canvas-assignments": intFromEnv("AI_DAILY_LIMIT_MATCH_CANVAS_ASSIGNMENTS", 25),
+  // SYL-72: shared across save-anthropic-key, test-anthropic-key and
+  // test-canvas-token — each makes one outbound validation call, so without a
+  // limit the endpoint is a free key/token-validation oracle. delete-anthropic-key
+  // makes no outbound call and is not rate-limited.
+  "manage-api-keys": intFromEnv("AI_DAILY_LIMIT_MANAGE_API_KEYS", 20),
 };
 
 /**

@@ -464,7 +464,94 @@ if (noteSaved !== 'ok') {
 await check('Agenda renders grouped by week', '/agenda', {
   expectText: ['Agenda', 'Problem Set 1 due'],
 });
-await check('Canvas settings renders', '/settings/canvas', { expectText: ['Canvas Integration'] });
+
+// /settings/canvas is a compatibility redirect (SYL-72) to /settings#canvas —
+// the hash means location.pathname lands on /settings, not the requested
+// route, so this can't reuse check()'s exact-path assertion.
+await send('Page.navigate', { url: `${BASE}/settings/canvas` });
+await wait(3000);
+events = [];
+const canvasRedirect = await evaluate(`(() => JSON.stringify({
+  path: location.pathname,
+  hash: location.hash,
+  text: (document.getElementById('root')?.innerText || ''),
+}))()`);
+{
+  const info = JSON.parse(canvasRedirect);
+  const ok =
+    info.path === '/settings' && info.hash === '#canvas' && info.text.includes('Canvas Integration') &&
+    problems().length === 0;
+  if (ok) {
+    console.log('PASS  /settings/canvas redirects to /settings#canvas');
+  } else {
+    console.log('FAIL  /settings/canvas redirects to /settings#canvas');
+    console.log(`        path=${info.path} hash=${info.hash}`);
+    problems().forEach((e) => console.log(`        ${e.slice(0, 220)}`));
+    failures++;
+  }
+}
+
+// Settings renders with a Claude key already set (seeded, SYL-72) — masked
+// key, added date, and the Test/Replace/Remove actions.
+await check('Settings renders with a Claude key set', '/settings', {
+  expectText: ['sk-ant-…0000', 'Test', 'Replace', 'Remove', 'Canvas Integration'],
+});
+
+// Remove it through the real UI flow (delete-anthropic-key makes no outbound
+// call, so this needs no network stub) and confirm the not-set form comes
+// back — the other of the two key states the render pass must cover. Split
+// into polled steps (rather than one blocking evaluate with fixed sleeps)
+// since handleRemove awaits a real network round trip to the edge function,
+// whose latency in CI isn't something a fixed sleep should have to guess.
+async function attemptRemoveClaudeKey() {
+  events = [];
+  const clicked = await evaluate(`(() => {
+    const removeButton = [...document.querySelectorAll('button, a')].find(
+      (x) => (x.innerText || '').trim() === 'Remove'
+    );
+    if (!removeButton) return 'no Remove button';
+    removeButton.click();
+    return 'ok';
+  })()`);
+  if (clicked !== 'ok') return clicked;
+
+  if (!(await pollFor(`document.querySelector('[role="alertdialog"]')`, 5000))) {
+    return 'confirmation dialog never opened';
+  }
+
+  const confirmed = await evaluate(`(() => {
+    const dialog = document.querySelector('[role="alertdialog"]');
+    if (!dialog) return 'dialog disappeared before confirming';
+    const confirmButton = [...dialog.querySelectorAll('button')].find(
+      (b) => (b.innerText || '').trim() === 'Remove'
+    );
+    if (!confirmButton) return 'no confirm button in dialog';
+    confirmButton.click();
+    return 'ok';
+  })()`);
+  if (confirmed !== 'ok') return confirmed;
+
+  if (
+    !(await pollFor(
+      `(document.getElementById('root')?.innerText || '').includes('Save & verify')`,
+      10000
+    ))
+  ) {
+    return 'not-set form did not reappear after removing the key';
+  }
+  return 'ok';
+}
+
+const removedKey = await attemptRemoveClaudeKey();
+if (removedKey === 'ok' && problems().length === 0) {
+  console.log('PASS  Removing the Claude key through the UI shows the not-set state');
+} else {
+  console.log(`FAIL  Removing the Claude key through the UI: ${removedKey}`);
+  const rootText = await evaluate(`(document.getElementById('root')?.innerText || '').slice(0, 300)`);
+  console.log(`        #root text at failure: ${JSON.stringify(rootText)}`);
+  problems().forEach((e) => console.log(`        ${e.slice(0, 220)}`));
+  failures++;
+}
 
 // Direct URL load: ProtectedRoute holds until the profile fetch settles
 // instead of bouncing an admin to /dashboard (SYL-55).

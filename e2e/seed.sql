@@ -9,6 +9,12 @@ UPDATE public.profiles
        onboarding_completed = true, onboarding_completed_at = now()
  WHERE id = :'uid1';
 
+-- SYL-72: seeds a Claude key so the render pass can assert the Settings
+-- page's "set" state without a real Anthropic key or a network stub — the
+-- key never needs decrypting for this, so any encryption key string works.
+SELECT public.store_anthropic_key(:'uid1', 'sk-ant-e2e-fixture-0000', 'e2e_seed_enc_key');
+SELECT public.record_key_test(:'uid1', 'anthropic', true);
+
 INSERT INTO public.semesters (id, user_id, name, start_date, end_date, is_active) VALUES
   ('11111111-1111-1111-1111-111111111111', :'uid1', 'Fall 2026',   '2026-08-24', '2026-12-18', true),
   ('22222222-2222-2222-2222-222222222222', :'uid1', 'Spring 2026', '2026-01-20', '2026-05-15', false);

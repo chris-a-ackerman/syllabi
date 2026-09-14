@@ -134,7 +134,7 @@ export function AppHeader({
             <DropdownMenuContent align="end" className="rounded-lg">
               <div className="px-2 py-1.5 text-sm font-medium">{user?.displayName}</div>
               <div className="px-2 py-1.5 text-xs text-gray-500">{user?.email}</div>
-              <DropdownMenuItem onClick={() => navigate('/settings/canvas')}>
+              <DropdownMenuItem onClick={() => navigate('/settings')}>
                 <Cog className="mr-2 h-4 w-4" />
                 Settings
               </DropdownMenuItem>
