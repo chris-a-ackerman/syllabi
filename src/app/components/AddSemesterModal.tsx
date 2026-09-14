@@ -17,6 +17,7 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Card } from '../components/ui/card';
+import { Checkbox } from '../components/ui/checkbox';
 import { Alert, AlertDescription } from '../components/ui/alert';
 import {
   Loader2,
@@ -61,6 +62,7 @@ export function AddSemesterModal({ open, onClose }: AddSemesterModalProps) {
   } = useBulkUpload();
 
   const canvasFlow = useCanvasFlow();
+  const selectedCount = canvasFlow.detectedCourses.filter(dc => dc.selected).length;
 
   // Reset everything when modal opens
   useEffect(() => {
@@ -94,9 +96,20 @@ export function AddSemesterModal({ open, onClose }: AddSemesterModalProps) {
     onClose();
   };
 
+  // Leaving the Canvas flow after Confirm & Create but before any download
+  // has been kicked off would otherwise strand the semester and every course
+  // it just created (SYL-71) — roll them back first. Once downloads have
+  // started (step 'downloading'), leave everything for the user to manage.
+  const handleClose = () => {
+    if (modalStep === 'canvas' && (canvasFlow.step === 'processing' || canvasFlow.step === 'syllabi')) {
+      void canvasFlow.rollback();
+    }
+    onClose();
+  };
+
   // Group detected courses by semester for the review step
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
+    <Dialog open={open} onOpenChange={(v) => { if (!v) handleClose(); }}>
       <DialogContent className="rounded-2xl max-w-xl max-h-[90vh] overflow-y-auto overflow-x-hidden">
 
         {/* ── Choose ── */}
@@ -355,7 +368,7 @@ export function AddSemesterModal({ open, onClose }: AddSemesterModalProps) {
                 {canvasFlow.step === 'detecting' && 'Searching Canvas for your courses…'}
                 {canvasFlow.step === 'review' && 'Review and confirm your courses before creating them.'}
                 {canvasFlow.step === 'processing' && 'Creating your semester and courses…'}
-                {canvasFlow.step === 'syllabi' && 'Courses created. Searching Canvas for your syllabi…'}
+                {canvasFlow.step === 'syllabi' && 'Semester and courses saved — searching Canvas for your syllabi…'}
                 {canvasFlow.step === 'downloading' && 'Downloading syllabi and starting processing…'}
               </DialogDescription>
             </DialogHeader>
@@ -524,28 +537,36 @@ export function AddSemesterModal({ open, onClose }: AddSemesterModalProps) {
                               >
                                 <X className="h-3 w-3" />
                               </Button>
-                              <div className="grid grid-cols-2 gap-2 pr-6">
-                                <div>
-                                  <Label className="text-xs">Course Name</Label>
-                                  <Input
-                                    value={dc.editedName}
-                                    onChange={(e) => canvasFlow.updateCourse(i, 'editedName', e.target.value)}
-                                    placeholder="Course name"
-                                    className="mt-1 rounded-lg h-8 text-sm"
-                                  />
-                                </div>
-                                <div>
-                                  <Label className="text-xs">Course Code</Label>
-                                  <Input
-                                    value={dc.editedCode}
-                                    onChange={(e) => canvasFlow.updateCourse(i, 'editedCode', e.target.value)}
-                                    placeholder="e.g. MATH 202"
-                                    className="mt-1 rounded-lg h-8 text-sm"
-                                  />
+                              <div className="flex items-start gap-2 pr-6">
+                                <Checkbox
+                                  checked={dc.selected}
+                                  onCheckedChange={() => canvasFlow.toggleCourse(i)}
+                                  className="mt-2.5"
+                                  aria-label={`Create ${dc.editedName || dc.name}`}
+                                />
+                                <div className="grid grid-cols-2 gap-2 flex-1">
+                                  <div>
+                                    <Label className="text-xs">Course Name</Label>
+                                    <Input
+                                      value={dc.editedName}
+                                      onChange={(e) => canvasFlow.updateCourse(i, 'editedName', e.target.value)}
+                                      placeholder="Course name"
+                                      className="mt-1 rounded-lg h-8 text-sm"
+                                    />
+                                  </div>
+                                  <div>
+                                    <Label className="text-xs">Course Code</Label>
+                                    <Input
+                                      value={dc.editedCode}
+                                      onChange={(e) => canvasFlow.updateCourse(i, 'editedCode', e.target.value)}
+                                      placeholder="e.g. MATH 202"
+                                      className="mt-1 rounded-lg h-8 text-sm"
+                                    />
+                                  </div>
                                 </div>
                               </div>
                               {dc.instructor && (
-                                <p className="text-xs text-gray-400">Instructor: {dc.instructor}</p>
+                                <p className="text-xs text-gray-400 pl-6">Instructor: {dc.instructor}</p>
                               )}
                             </div>
                           ))}
@@ -563,10 +584,13 @@ export function AddSemesterModal({ open, onClose }: AddSemesterModalProps) {
                       </Button>
                       <Button
                         className="flex-1 bg-emerald-600 hover:bg-emerald-700 rounded-lg"
-                        disabled={canvasFlow.detectedCourses.length === 0}
+                        disabled={selectedCount === 0}
                         onClick={canvasFlow.confirm}
                       >
-                        Confirm &amp; Create
+                        {/* Persistence happens the moment this is clicked — say so, since only
+                            selected courses below are created and everything else is saved
+                            right away (SYL-71). */}
+                        Create {selectedCount} Course{selectedCount === 1 ? '' : 's'}
                         <ChevronRight className="ml-1 w-4 h-4" />
                       </Button>
                     </div>
@@ -576,7 +600,7 @@ export function AddSemesterModal({ open, onClose }: AddSemesterModalProps) {
                 {/* Step: processing */}
                 {canvasFlow.step === 'processing' && (
                   <div className="space-y-3 py-4">
-                    {canvasFlow.detectedCourses.map((dc) => {
+                    {canvasFlow.detectedCourses.filter(dc => dc.selected).map((dc) => {
                       const created = canvasFlow.createdCourseIds.length > 0;
                       return (
                         <div key={dc.canvas_course_id} className="flex items-center gap-3">
@@ -615,8 +639,7 @@ export function AddSemesterModal({ open, onClose }: AddSemesterModalProps) {
                         </div>
                       </div>
                       <div className="space-y-2">
-                        {canvasFlow.createdCourseIds.map((courseId, i) => {
-                          const dc = canvasFlow.detectedCourses[i];
+                        {canvasFlow.courseLinks.map(({ courseId, detected }) => {
                           const result = canvasFlow.syllabiResults[courseId];
                           const status = result?.status ?? 'searching';
                           return (
@@ -634,7 +657,7 @@ export function AddSemesterModal({ open, onClose }: AddSemesterModalProps) {
                                 <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
                               )}
                               <span className="text-sm text-gray-700 truncate flex-1">
-                                {dc?.editedName || dc?.name}
+                                {detected.editedName || detected.name}
                               </span>
                               {status === 'not_found' && (
                                 <span className="text-xs text-amber-500 shrink-0">Not found</span>
@@ -673,8 +696,7 @@ export function AddSemesterModal({ open, onClose }: AddSemesterModalProps) {
                   return (
                     <div className="space-y-4 py-2">
                       <div className="space-y-2">
-                        {canvasFlow.createdCourseIds.map((courseId, i) => {
-                          const dc = canvasFlow.detectedCourses[i];
+                        {canvasFlow.courseLinks.map(({ courseId, detected }) => {
                           const status = canvasFlow.downloadResults[courseId] ?? 'downloading';
                           return (
                             <div key={courseId} className="flex items-center gap-3 px-1">
@@ -691,7 +713,7 @@ export function AddSemesterModal({ open, onClose }: AddSemesterModalProps) {
                                 <XCircle className="w-4 h-4 text-amber-400 shrink-0" />
                               )}
                               <span className="text-sm text-gray-700 truncate flex-1">
-                                {dc?.editedName || dc?.name}
+                                {detected.editedName || detected.name}
                               </span>
                               {status === 'started' && (
                                 <span className="text-xs text-emerald-600 shrink-0">Processing started</span>
