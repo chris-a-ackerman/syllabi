@@ -23,6 +23,20 @@ const clientOpts = { auth: { persistSession: false, autoRefreshToken: false } };
 export const admin: SupabaseClient = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, clientOpts);
 const anon: SupabaseClient = createClient(SUPABASE_URL, ANON_KEY, clientOpts);
 
+/**
+ * A PostgREST client authenticated as a fixture user via their access token
+ * (same pattern the edge functions use internally). Needed to read
+ * `profiles_safe` — it's filtered by `auth.uid()`, which is null under the
+ * service-role `admin` client, so `admin.from("profiles_safe")` always
+ * returns zero rows.
+ */
+export function userClient(token: string): SupabaseClient {
+  return createClient(SUPABASE_URL, ANON_KEY, {
+    ...clientOpts,
+    global: { headers: { Authorization: `Bearer ${token}` } },
+  });
+}
+
 const PASSWORD = "contract-tests-Password1!";
 
 export interface FixtureUser {

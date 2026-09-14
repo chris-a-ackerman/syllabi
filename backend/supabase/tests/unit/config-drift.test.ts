@@ -57,10 +57,12 @@ Deno.test("no function relies on platform JWT verification", () => {
   // one) should be a conscious decision that updates this test. SYL-42 flipped
   // the last two (generate-ics, admin-get-users) to verify_jwt=false so the
   // browser's CORS preflight passes — every function now enforces auth
-  // in-handler, which the test above pins for all eleven.
+  // in-handler, which the test above pins for all of them.
   assertEquals(verified, []);
 });
 
-Deno.test("sanity: eleven functions are configured", () => {
-  assert(Object.keys(fnConfigs).length === 11, `expected 11, got ${Object.keys(fnConfigs).length}`);
+Deno.test("sanity: fifteen functions are configured", () => {
+  // SYL-72 added save-anthropic-key, test-anthropic-key, delete-anthropic-key
+  // and test-canvas-token (11 + 4).
+  assert(Object.keys(fnConfigs).length === 15, `expected 15, got ${Object.keys(fnConfigs).length}`);
 });

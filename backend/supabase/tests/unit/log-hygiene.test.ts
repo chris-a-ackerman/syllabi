@@ -128,3 +128,69 @@ Deno.test("log-hygiene checker: allows plain label text mentioning the field nam
   const good = "console.error(`REJECTED: source_type=file but file_url missing`);";
   assertEquals(findViolations(good, "synthetic"), []);
 });
+
+// ── SYL-72: extend the tripwire to the BYOK key-management functions ───────
+// Unlike a Canvas URL (which has a safe "shape" to log — host, length,
+// presence), a Claude key or Canvas token has no safe partial form: any
+// direct reference inside a console.* interpolation is a violation. `key` is
+// checked with a word-boundary so it doesn't also flag legitimate
+// identifiers that merely contain it (encKey, keyError, ANTHROPIC_API_KEY).
+const SECRET_FILES = [
+  "save-anthropic-key/index.ts",
+  "test-anthropic-key/index.ts",
+  "delete-anthropic-key/index.ts",
+  "test-canvas-token/index.ts",
+  "_shared/anthropic-client.ts",
+];
+
+const SECRET_IDENTIFIERS = ["canvasToken", "anthropicKey", "last4"];
+const BARE_KEY_PATTERN = /\bkey\b/;
+// A header name with no legitimate reason to appear in a log line at all.
+const SECRET_BANNED_SUBSTRINGS = ["x-api-key"];
+
+function findSecretViolations(source: string, label: string): string[] {
+  const violations: string[] = [];
+  const calls = source.match(/console\.(?:log|error|warn|info)\([\s\S]*?\);/g) ?? [];
+  for (const call of calls) {
+    if (SECRET_BANNED_SUBSTRINGS.some((banned) => call.toLowerCase().includes(banned))) {
+      violations.push(`${label}: banned substring in: ${call.trim()}`);
+    }
+    for (const brace of call.match(/\$\{[^}]*\}/g) ?? []) {
+      if (SECRET_IDENTIFIERS.some((id) => brace.includes(id)) || BARE_KEY_PATTERN.test(brace)) {
+        violations.push(`${label}: raw key/token interpolation in: ${call.trim()}`);
+      }
+    }
+  }
+  return violations;
+}
+
+Deno.test("no console.* call in a BYOK key-management file logs key/token material", async () => {
+  const violations: string[] = [];
+  for (const file of SECRET_FILES) {
+    const url = new URL(file, FUNCTIONS_DIR);
+    let source: string;
+    try {
+      source = await Deno.readTextFile(url);
+    } catch {
+      continue;
+    }
+    violations.push(...findSecretViolations(source, file));
+  }
+  assertEquals(violations, [], `log hygiene violations:\n${violations.join("\n")}`);
+});
+
+Deno.test("log-hygiene checker (secrets): flags a raw key interpolation", () => {
+  const bad = "console.log(`saving ${key}`);";
+  assert(findSecretViolations(bad, "synthetic").length > 0);
+});
+
+Deno.test("log-hygiene checker (secrets): flags canvasToken and last4 interpolation", () => {
+  assert(findSecretViolations("console.log(`token: ${canvasToken}`);", "synthetic").length > 0);
+  assert(findSecretViolations("console.log(`last4: ${last4}`);", "synthetic").length > 0);
+});
+
+Deno.test("log-hygiene checker (secrets): allows identifiers that merely contain 'key'", () => {
+  const good =
+    "console.error(`get_anthropic_key RPC error: ${keyError.message}`); console.error(`have key: ${!!encKey}`);";
+  assertEquals(findSecretViolations(good, "synthetic"), []);
+});

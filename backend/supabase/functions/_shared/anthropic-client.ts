@@ -64,3 +64,26 @@ export function claudeKeyRejectedResponse(corsHeaders: Record<string, string>): 
     { status: CLAUDE_KEY_REJECTED_STATUS, headers: { "Content-Type": "application/json", ...corsHeaders } },
   );
 }
+
+export const ANTHROPIC_API_VERSION = "2023-06-01";
+
+/**
+ * Validates a Claude API key against GET /v1/models — the cheapest endpoint
+ * that requires auth, so this costs no tokens. Never throws: a network
+ * failure comes back as `{ ok: false, networkError: true }` rather than an
+ * unhandled rejection, so callers can always turn the result into a response.
+ * `fetchImpl` is injectable for unit tests.
+ */
+export async function validateAnthropicKey(
+  key: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<{ ok: boolean; networkError?: boolean }> {
+  try {
+    const res = await fetchImpl("https://api.anthropic.com/v1/models", {
+      headers: { "x-api-key": key, "anthropic-version": ANTHROPIC_API_VERSION },
+    });
+    return { ok: res.ok };
+  } catch {
+    return { ok: false, networkError: true };
+  }
+}

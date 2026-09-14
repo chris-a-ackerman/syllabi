@@ -5,6 +5,7 @@ import {
   claudeKeyRejectedResponse,
   isAnthropicAuthError,
   resolveAnthropicClient,
+  validateAnthropicKey,
 } from "../../functions/_shared/anthropic-client.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -72,4 +73,32 @@ Deno.test("claudeKeyRejectedResponse: distinct status and body, never falls back
   const body = await res.json();
   assertEquals(body.error, "claude_key_rejected");
   assertEquals(body.source, "user");
+});
+
+Deno.test("validateAnthropicKey: ok on a 200 from /v1/models, sends the key as x-api-key", async () => {
+  let sentHeaders: Headers | undefined;
+  const fakeFetch = ((url: string, init?: RequestInit) => {
+    sentHeaders = new Headers(init?.headers);
+    return Promise.resolve(new Response("{}", { status: 200 }));
+    // deno-lint-ignore no-explicit-any
+  }) as any;
+  const result = await validateAnthropicKey("sk-ant-good", fakeFetch);
+  assertEquals(result.ok, true);
+  assertEquals(sentHeaders?.get("x-api-key"), "sk-ant-good");
+  assertEquals(sentHeaders?.get("anthropic-version"), "2023-06-01");
+});
+
+Deno.test("validateAnthropicKey: not ok on a 401", async () => {
+  // deno-lint-ignore no-explicit-any
+  const fakeFetch = (() => Promise.resolve(new Response("{}", { status: 401 }))) as any;
+  const result = await validateAnthropicKey("sk-ant-bad", fakeFetch);
+  assertEquals(result.ok, false);
+});
+
+Deno.test("validateAnthropicKey: a network failure comes back as networkError, not a throw", async () => {
+  // deno-lint-ignore no-explicit-any
+  const fakeFetch = (() => Promise.reject(new Error("network down"))) as any;
+  const result = await validateAnthropicKey("sk-ant-x", fakeFetch);
+  assertEquals(result.ok, false);
+  assertEquals(result.networkError, true);
 });
