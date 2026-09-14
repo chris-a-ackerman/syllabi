@@ -94,6 +94,24 @@ describe('selectUrgentDeadlines', () => {
     expect(result.map(r => r.event.id)).toEqual(['canvas-a', 'canvas-b', 'canvas-c']);
   });
 
+  it('keeps the soonest three Canvas events, not the first three in input order (SYL-69)', () => {
+    // Four Canvas-matched events arrive out of date order, the way a DB read
+    // ordered by insertion would hand them over. A "first three wins" policy
+    // would keep the 09-12 event and drop 09-05; the soonest-three policy
+    // must drop 09-12 instead.
+    const result = selectUrgentDeadlines(
+      [
+        makeEvent({ id: 'canvas-12', date: '2026-09-12', canvasAssignmentId: '1' }),
+        makeEvent({ id: 'canvas-03', date: '2026-09-03', canvasAssignmentId: '2' }),
+        makeEvent({ id: 'canvas-10', date: '2026-09-10', canvasAssignmentId: '3' }),
+        makeEvent({ id: 'canvas-05', date: '2026-09-05', canvasAssignmentId: '4' }),
+      ],
+      COURSES,
+      TODAY,
+    );
+    expect(result.map(r => r.event.id)).toEqual(['canvas-03', 'canvas-05', 'canvas-10']);
+  });
+
   it('fills remaining slots with syllabus-only events', () => {
     const result = selectUrgentDeadlines(
       [
