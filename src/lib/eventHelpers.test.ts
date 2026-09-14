@@ -4,7 +4,13 @@ import { getEventTypeColor, getEventTypeLabel, getUpcomingEvents } from './event
 import type { Event } from '@/lib/types';
 
 const ALL_TYPES: Event['type'][] = [
-  'exam', 'deadline', 'quiz', 'presentation', 'project_due', 'no_class', 'other',
+  'exam',
+  'deadline',
+  'quiz',
+  'presentation',
+  'project_due',
+  'no_class',
+  'other',
 ];
 
 describe('getEventTypeColor', () => {
@@ -60,9 +66,9 @@ describe('getUpcomingEvents', () => {
         makeEvent({ id: 'future', date: '2026-09-15' }),
         makeEvent({ id: 'dateless', date: null }),
       ],
-      { today: TODAY },
+      { today: TODAY }
     );
-    expect(result.map(e => e.id)).toEqual(['today', 'future']);
+    expect(result.map((e) => e.id)).toEqual(['today', 'future']);
   });
 
   it('applies an inclusive day window when windowDays is set', () => {
@@ -71,31 +77,26 @@ describe('getUpcomingEvents', () => {
         makeEvent({ id: 'edge', date: '2026-09-15' }), // exactly 14 days out
         makeEvent({ id: 'beyond', date: '2026-09-16' }),
       ],
-      { today: TODAY, windowDays: 14 },
+      { today: TODAY, windowDays: 14 }
     );
-    expect(result.map(e => e.id)).toEqual(['edge']);
+    expect(result.map((e) => e.id)).toEqual(['edge']);
   });
 
   it('drops no_class events unless includeNoClass is set', () => {
-    const events = [
-      makeEvent({ id: 'nc', type: 'no_class' }),
-      makeEvent({ id: 'dl' }),
-    ];
-    expect(getUpcomingEvents(events, { today: TODAY }).map(e => e.id)).toEqual(['dl']);
+    const events = [makeEvent({ id: 'nc', type: 'no_class' }), makeEvent({ id: 'dl' })];
+    expect(getUpcomingEvents(events, { today: TODAY }).map((e) => e.id)).toEqual(['dl']);
     // deadline outranks no_class in the same-day tiebreak
-    expect(getUpcomingEvents(events, { today: TODAY, includeNoClass: true }).map(e => e.id))
-      .toEqual(['dl', 'nc']);
+    expect(
+      getUpcomingEvents(events, { today: TODAY, includeNoClass: true }).map((e) => e.id)
+    ).toEqual(['dl', 'nc']);
   });
 
   it('filters to the given courses when courseIds is set', () => {
     const result = getUpcomingEvents(
-      [
-        makeEvent({ id: 'mine', courseId: 'c1' }),
-        makeEvent({ id: 'other', courseId: 'c2' }),
-      ],
-      { today: TODAY, courseIds: ['c1'] },
+      [makeEvent({ id: 'mine', courseId: 'c1' }), makeEvent({ id: 'other', courseId: 'c2' })],
+      { today: TODAY, courseIds: ['c1'] }
     );
-    expect(result.map(e => e.id)).toEqual(['mine']);
+    expect(result.map((e) => e.id)).toEqual(['mine']);
   });
 
   it('sorts by date, breaking same-day ties by type priority', () => {
@@ -105,8 +106,8 @@ describe('getUpcomingEvents', () => {
         makeEvent({ id: 'deadline', date: '2026-09-08', type: 'deadline' }),
         makeEvent({ id: 'exam', date: '2026-09-08', type: 'exam' }),
       ],
-      { today: TODAY },
+      { today: TODAY }
     );
-    expect(result.map(e => e.id)).toEqual(['exam', 'deadline', 'later-exam']);
+    expect(result.map((e) => e.id)).toEqual(['exam', 'deadline', 'later-exam']);
   });
 });

@@ -37,7 +37,10 @@ interface UploadExistingCourseCardProps {
  * the "No syllabus" chip, name, and the upload action (SYL-68: previously
  * inline in DashboardSidebar, with the chip + button repeated in Courses).
  */
-export function UploadExistingCourseCard({ course, onUploadSyllabus }: UploadExistingCourseCardProps) {
+export function UploadExistingCourseCard({
+  course,
+  onUploadSyllabus,
+}: UploadExistingCourseCardProps) {
   return (
     <div className="flex-1">
       <div className="flex items-center gap-2 mb-2">
@@ -45,7 +48,10 @@ export function UploadExistingCourseCard({ course, onUploadSyllabus }: UploadExi
         <NoSyllabusBadge />
       </div>
       <div className="text-xs text-gray-500 line-clamp-1 mb-2">{course.name}</div>
-      <UploadSyllabusButton className="h-7 text-xs w-full" onClick={() => onUploadSyllabus(course)} />
+      <UploadSyllabusButton
+        className="h-7 text-xs w-full"
+        onClick={() => onUploadSyllabus(course)}
+      />
     </div>
   );
 }

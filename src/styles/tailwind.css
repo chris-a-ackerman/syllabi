@@ -5,6 +5,14 @@
 @import 'tw-animate-css';
 
 @keyframes typingDot {
-  0%, 60%, 100% { opacity: 0.3; transform: scale(1); }
-  30% { opacity: 1; transform: scale(1.2); }
+  0%,
+  60%,
+  100% {
+    opacity: 0.3;
+    transform: scale(1);
+  }
+  30% {
+    opacity: 1;
+    transform: scale(1.2);
+  }
 }

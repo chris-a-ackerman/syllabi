@@ -66,7 +66,9 @@ export function SyllabusDropzone({
       className={`border-2 border-dashed text-center transition-colors ${
         page ? 'rounded-2xl p-12' : 'rounded-xl p-8'
       } ${selectedFile ? '' : 'cursor-pointer'} ${
-        dragActive ? 'border-indigo-500 bg-indigo-50' : 'border-gray-300 hover:border-indigo-400 bg-white'
+        dragActive
+          ? 'border-indigo-500 bg-indigo-50'
+          : 'border-gray-300 hover:border-indigo-400 bg-white'
       }`}
     >
       {selectedFile ? (
@@ -85,7 +87,9 @@ export function SyllabusDropzone({
       ) : (
         <>
           <Upload className={`text-gray-400 mx-auto ${page ? 'w-10 h-10 mb-4' : 'w-8 h-8 mb-3'}`} />
-          <p className={`font-medium text-gray-700 mb-1 ${page ? 'text-lg' : 'text-sm'}`}>{title}</p>
+          <p className={`font-medium text-gray-700 mb-1 ${page ? 'text-lg' : 'text-sm'}`}>
+            {title}
+          </p>
           <p className={`text-gray-500 ${page ? 'text-sm' : 'text-xs'}`}>{hint}</p>
           {rejected && <p className="text-xs text-red-600 mt-2">Only PDF files are supported.</p>}
         </>

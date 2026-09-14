@@ -59,10 +59,10 @@ describe('selectUrgentDeadlines', () => {
         makeEvent({ id: 'day15', date: '2026-09-16' }),
       ],
       COURSES,
-      TODAY,
+      TODAY
     );
-    expect(result.map(r => r.event.id)).toEqual(['today', 'day14']);
-    expect(result.map(r => r.daysUntil)).toEqual([0, 14]);
+    expect(result.map((r) => r.event.id)).toEqual(['today', 'day14']);
+    expect(result.map((r) => r.daysUntil)).toEqual([0, 14]);
   });
 
   it('excludes no_class and dateless events', () => {
@@ -73,9 +73,9 @@ describe('selectUrgentDeadlines', () => {
         makeEvent({ id: 'real' }),
       ],
       COURSES,
-      TODAY,
+      TODAY
     );
-    expect(result.map(r => r.event.id)).toEqual(['real']);
+    expect(result.map((r) => r.event.id)).toEqual(['real']);
   });
 
   it('gives Canvas-matched events the slots first, capped at 3, then sorts by date', () => {
@@ -87,11 +87,11 @@ describe('selectUrgentDeadlines', () => {
         makeEvent({ id: 'canvas-c', date: '2026-09-12', canvasAssignmentId: '3' }),
       ],
       COURSES,
-      TODAY,
+      TODAY
     );
     // The syllabus-only event dated soonest is squeezed out by Canvas-matched ones,
     // and the final list is date-ascending.
-    expect(result.map(r => r.event.id)).toEqual(['canvas-a', 'canvas-b', 'canvas-c']);
+    expect(result.map((r) => r.event.id)).toEqual(['canvas-a', 'canvas-b', 'canvas-c']);
   });
 
   it('keeps the soonest three Canvas events, not the first three in input order (SYL-69)', () => {
@@ -107,9 +107,9 @@ describe('selectUrgentDeadlines', () => {
         makeEvent({ id: 'canvas-05', date: '2026-09-05', canvasAssignmentId: '4' }),
       ],
       COURSES,
-      TODAY,
+      TODAY
     );
-    expect(result.map(r => r.event.id)).toEqual(['canvas-03', 'canvas-05', 'canvas-10']);
+    expect(result.map((r) => r.event.id)).toEqual(['canvas-03', 'canvas-05', 'canvas-10']);
   });
 
   it('fills remaining slots with syllabus-only events', () => {
@@ -119,9 +119,9 @@ describe('selectUrgentDeadlines', () => {
         makeEvent({ id: 'canvas', date: '2026-09-10', canvasAssignmentId: '1' }),
       ],
       COURSES,
-      TODAY,
+      TODAY
     );
-    expect(result.map(r => r.event.id)).toEqual(['syllabus', 'canvas']);
+    expect(result.map((r) => r.event.id)).toEqual(['syllabus', 'canvas']);
   });
 
   it('attaches the course and computes daysUntil', () => {

@@ -12,7 +12,11 @@ interface DeadlineUrgencyBannerProps {
   activeSemesterId?: string;
 }
 
-export function DeadlineUrgencyBanner({ events, courses, activeSemesterId }: DeadlineUrgencyBannerProps) {
+export function DeadlineUrgencyBanner({
+  events,
+  courses,
+  activeSemesterId,
+}: DeadlineUrgencyBannerProps) {
   const [dismissed, setDismissed] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
 
@@ -23,7 +27,7 @@ export function DeadlineUrgencyBanner({ events, courses, activeSemesterId }: Dea
 
   const urgentEvents = useMemo(
     () => selectUrgentDeadlines(events, courses, startOfDay(new Date())),
-    [events, courses],
+    [events, courses]
   );
 
   if (dismissed || urgentEvents.length === 0) return null;
@@ -37,14 +41,12 @@ export function DeadlineUrgencyBanner({ events, courses, activeSemesterId }: Dea
 
         <div className="flex-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm text-amber-800">
           <span className="font-medium">
-            {count === 1
-              ? '1 deadline coming up'
-              : `${count} deadlines coming up`}
+            {count === 1 ? '1 deadline coming up' : `${count} deadlines coming up`}
           </span>
         </div>
 
         <button
-          onClick={() => setCollapsed(v => !v)}
+          onClick={() => setCollapsed((v) => !v)}
           className="p-1 rounded-md transition-colors shrink-0 text-amber-600 hover:text-amber-800 hover:bg-amber-100"
           aria-label={collapsed ? 'Expand deadline banner' : 'Collapse deadline banner'}
         >
@@ -78,9 +80,7 @@ export function DeadlineUrgencyBanner({ events, courses, activeSemesterId }: Dea
                   />
                 )}
                 {/* Course code */}
-                {course && (
-                  <span className="font-semibold">{course.code}</span>
-                )}
+                {course && <span className="font-semibold">{course.code}</span>}
                 {/* Event title */}
                 <span className="max-w-[200px] truncate">{event.title}</span>
                 {/* Type badge */}

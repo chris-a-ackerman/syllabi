@@ -17,8 +17,18 @@ export function Onboarding() {
   const { user, markOnboardingComplete } = useAuth();
   const { courses: allCourses, refreshCourses, refreshEvents } = useData();
   const {
-    step, fileItems, detectedCourses, createdCourseIds, allDone, globalError,
-    addFiles, removeFile, analyze, updateDetectedCourse, confirm, retryProcessing,
+    step,
+    fileItems,
+    detectedCourses,
+    createdCourseIds,
+    allDone,
+    globalError,
+    addFiles,
+    removeFile,
+    analyze,
+    updateDetectedCourse,
+    confirm,
+    retryProcessing,
   } = useBulkUpload();
 
   // Poll for course status updates during processing; stop once all have settled
@@ -37,7 +47,6 @@ export function Onboarding() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-white to-indigo-50">
       <div className="max-w-2xl mx-auto px-4 py-12">
-
         {/* Wordmark */}
         <div className="text-center mb-10">
           <h1 className="text-3xl font-bold text-indigo-600 mb-4">Syllabi</h1>
@@ -108,7 +117,10 @@ export function Onboarding() {
                       variant="ghost"
                       size="sm"
                       className="h-7 w-7 p-0 text-gray-400 hover:text-red-500 shrink-0"
-                      onClick={(e) => { e.stopPropagation(); removeFile(fi.id); }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removeFile(fi.id);
+                      }}
                     >
                       <X className="w-4 h-4" />
                     </Button>

@@ -14,11 +14,7 @@ export async function fetchCourses() {
 }
 
 export async function fetchCourse(id: string) {
-  const { data, error } = await supabase
-    .from('courses')
-    .select('*')
-    .eq('id', id)
-    .single();
+  const { data, error } = await supabase.from('courses').select('*').eq('id', id).single();
   return { data: data ? dbCourseToApp(data) : null, error };
 }
 

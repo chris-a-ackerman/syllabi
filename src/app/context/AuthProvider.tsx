@@ -31,7 +31,7 @@ const AuthContext = createContext<AuthState | undefined>(undefined);
 function getInitials(name: string) {
   return name
     .split(' ')
-    .map(n => n[0])
+    .map((n) => n[0])
     .join('')
     .toUpperCase()
     .slice(0, 2);
@@ -41,9 +41,7 @@ function getInitials(name: string) {
 // isAdmin defaults to false and is corrected by enrichUserWithProfile below.
 function authUserFromSession(supabaseUser: SupabaseUser): User {
   const displayName =
-    supabaseUser.user_metadata?.display_name ||
-    supabaseUser.email?.split('@')[0] ||
-    'User';
+    supabaseUser.user_metadata?.display_name || supabaseUser.email?.split('@')[0] || 'User';
   return {
     id: supabaseUser.id,
     email: supabaseUser.email || '',
@@ -61,13 +59,13 @@ function authUserFromSession(supabaseUser: SupabaseUser): User {
 function enrichUserWithProfile(
   userId: string,
   setUser: React.Dispatch<React.SetStateAction<User | null>>,
-  onSettled: (userId: string) => void,
+  onSettled: (userId: string) => void
 ) {
   authApi
     .fetchProfile(userId)
     .then(({ data: profile }) => {
       if (!profile) return;
-      setUser(prev => {
+      setUser((prev) => {
         if (!prev || prev.id !== userId) return prev;
         const displayName = profile.display_name || prev.displayName;
         return {
@@ -112,7 +110,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const checkSession = async () => {
       if (isSupabaseConfigured()) {
         try {
-          const { data: { session } } = await supabase.auth.getSession();
+          const {
+            data: { session },
+          } = await supabase.auth.getSession();
           if (session?.user) {
             adoptSessionUser(session.user);
           }
@@ -127,7 +127,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (isSupabaseConfigured()) {
       // Callback must be synchronous so setUser is called before navigate() in AuthScreen.
-      const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      const {
+        data: { subscription },
+      } = supabase.auth.onAuthStateChange((_event, session) => {
         if (session?.user) {
           adoptSessionUser(session.user);
         } else {
@@ -144,7 +146,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const markOnboardingComplete = useCallback(async () => {
     if (!user) return;
     await authApi.markOnboardingComplete(user.id);
-    setUser(prev => prev ? { ...prev, onboardingCompleted: true } : prev);
+    setUser((prev) => (prev ? { ...prev, onboardingCompleted: true } : prev));
   }, [user]);
 
   const signOut = useCallback(async () => {
@@ -160,7 +162,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<AuthState>(
     () => ({ user, loading, profileLoaded, markOnboardingComplete, signOut }),
-    [user, loading, profileLoaded, markOnboardingComplete, signOut],
+    [user, loading, profileLoaded, markOnboardingComplete, signOut]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

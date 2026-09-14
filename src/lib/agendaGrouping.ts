@@ -29,15 +29,15 @@ export interface AgendaWeek {
 export function enrichAndSortEvents(
   events: Event[],
   activeCourses: Course[],
-  today: Date,
+  today: Date
 ): EnrichedEvent[] {
   return getUpcomingEvents(events, {
     today,
-    courseIds: activeCourses.map(c => c.id),
+    courseIds: activeCourses.map((c) => c.id),
     includeNoClass: true,
-  }).map(e => ({
+  }).map((e) => ({
     event: e,
-    course: activeCourses.find(c => c.id === e.courseId),
+    course: activeCourses.find((c) => c.id === e.courseId),
     dateKey: e.date!.slice(0, 10),
   }));
 }

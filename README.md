@@ -58,16 +58,16 @@ VITE_SUPABASE_ANON_KEY=...
 
 ## Routes
 
-| Path | Component | Notes |
-|---|---|---|
-| `/` | `AuthScreen` | Login / signup |
-| `/auth/callback` | `AuthCallback` | Google OAuth redirect handler |
-| `/onboarding` | `Onboarding` | First-time setup; protected |
-| `/dashboard` | `Dashboard` | Main chat interface; protected |
-| `/courses` | `Courses` | Course grid; protected |
-| `/course/:id` | `CourseDetail` | Per-course detail; protected |
-| `/admin` | `AdminPanel` | Admin only; protected + `is_admin` flag |
-| `/settings/canvas` | `CanvasSettings` | Canvas LMS integration; protected |
+| Path               | Component        | Notes                                   |
+| ------------------ | ---------------- | --------------------------------------- |
+| `/`                | `AuthScreen`     | Login / signup                          |
+| `/auth/callback`   | `AuthCallback`   | Google OAuth redirect handler           |
+| `/onboarding`      | `Onboarding`     | First-time setup; protected             |
+| `/dashboard`       | `Dashboard`      | Main chat interface; protected          |
+| `/courses`         | `Courses`        | Course grid; protected                  |
+| `/course/:id`      | `CourseDetail`   | Per-course detail; protected            |
+| `/admin`           | `AdminPanel`     | Admin only; protected + `is_admin` flag |
+| `/settings/canvas` | `CanvasSettings` | Canvas LMS integration; protected       |
 
 All routes except `/` and `/auth/callback` are wrapped in `ProtectedRoute`. The admin route additionally checks `profiles.is_admin`.
 
@@ -122,13 +122,13 @@ Full JSON stored in `courses.syllabus_analysis`; events flattened into `course_e
 
 Tabbed interface (`CourseDetail.tsx`):
 
-| Tab | Contents |
-|---|---|
-| Events | All extracted events, grouped by date; confidence indicators |
-| Grading | Component breakdown with weights; late policy; grading scale |
-| Schedule | Meeting days/times, location, instructor info |
+| Tab      | Contents                                                        |
+| -------- | --------------------------------------------------------------- |
+| Events   | All extracted events, grouped by date; confidence indicators    |
+| Grading  | Component breakdown with weights; late policy; grading scale    |
+| Schedule | Meeting days/times, location, instructor info                   |
 | Policies | Attendance, late work, academic integrity, AI, recording, other |
-| Notes | Free-text notes per course (max 1,000 chars) |
+| Notes    | Free-text notes per course (max 1,000 chars)                    |
 
 Quick actions: Chat About This Course, Download Calendar (.ics), Re-upload Syllabus, Delete Course.
 
@@ -171,33 +171,33 @@ AI can be globally disabled by an admin; the UI respects the `app_settings.ai_en
 
 ### Pages
 
-| File | Route |
-|---|---|
-| `src/app/pages/AuthScreen.tsx` | `/` |
-| `src/app/pages/AuthCallback.tsx` | `/auth/callback` |
-| `src/app/pages/Onboarding.tsx` | `/onboarding` |
-| `src/app/pages/Dashboard.tsx` | `/dashboard` |
-| `src/app/pages/Courses.tsx` | `/courses` |
-| `src/app/pages/CourseDetail.tsx` | `/course/:id` |
-| `src/app/pages/AdminPanel.tsx` | `/admin` |
+| File                               | Route              |
+| ---------------------------------- | ------------------ |
+| `src/app/pages/AuthScreen.tsx`     | `/`                |
+| `src/app/pages/AuthCallback.tsx`   | `/auth/callback`   |
+| `src/app/pages/Onboarding.tsx`     | `/onboarding`      |
+| `src/app/pages/Dashboard.tsx`      | `/dashboard`       |
+| `src/app/pages/Courses.tsx`        | `/courses`         |
+| `src/app/pages/CourseDetail.tsx`   | `/course/:id`      |
+| `src/app/pages/AdminPanel.tsx`     | `/admin`           |
 | `src/app/pages/CanvasSettings.tsx` | `/settings/canvas` |
 
 ### Modals
 
-| File | Purpose |
-|---|---|
-| `src/app/components/AddCourseModal.tsx` | Create course, upload syllabus, review extracted data |
-| `src/app/components/AddSemesterModal.tsx` | Create semester (manual, bulk upload, or Canvas import) |
-| `src/app/components/EditSemesterModal.tsx` | Edit/delete existing semester |
-| `src/app/components/BulkUploadModal.tsx` | Upload multiple PDFs, detect, review, create |
+| File                                       | Purpose                                                 |
+| ------------------------------------------ | ------------------------------------------------------- |
+| `src/app/components/AddCourseModal.tsx`    | Create course, upload syllabus, review extracted data   |
+| `src/app/components/AddSemesterModal.tsx`  | Create semester (manual, bulk upload, or Canvas import) |
+| `src/app/components/EditSemesterModal.tsx` | Edit/delete existing semester                           |
+| `src/app/components/BulkUploadModal.tsx`   | Upload multiple PDFs, detect, review, create            |
 
 ### Custom Hooks
 
-| File | Purpose |
-|---|---|
-| `src/app/hooks/useBulkUpload.ts` | Upload PDFs to storage, call `detect-syllabi-info`, manage detected course state |
-| `src/app/hooks/useBulkCourseUpload.ts` | Upload multiple syllabi to existing courses |
-| `src/app/hooks/useCanvasFlow.ts` | Multi-step Canvas course detection and syllabus download flow |
+| File                                   | Purpose                                                                          |
+| -------------------------------------- | -------------------------------------------------------------------------------- |
+| `src/app/hooks/useBulkUpload.ts`       | Upload PDFs to storage, call `detect-syllabi-info`, manage detected course state |
+| `src/app/hooks/useBulkCourseUpload.ts` | Upload multiple syllabi to existing courses                                      |
+| `src/app/hooks/useCanvasFlow.ts`       | Multi-step Canvas course detection and syllabus download flow                    |
 
 ### Context
 
@@ -221,42 +221,43 @@ AI can be globally disabled by an admin; the UI respects the `app_settings.ai_en
 
 ## Database Tables (referenced from frontend)
 
-| Table | Purpose |
-|---|---|
-| `profiles` | User data, `is_admin`, `onboarding_completed`, Canvas credentials |
-| `semesters` | Academic terms |
-| `courses` | Course info, `analysis_status`, `syllabus_analysis` JSONB |
-| `course_events` | Flattened extracted events |
-| `course_notes` | User notes per course |
-| `chats` | Conversation sessions |
-| `chat_courses` | Which courses a chat references |
-| `chat_messages` | Per-message history |
-| `chat_feedback` | User feedback on AI responses |
-| `app_settings` | Global `ai_enabled` kill switch |
+| Table           | Purpose                                                           |
+| --------------- | ----------------------------------------------------------------- |
+| `profiles`      | User data, `is_admin`, `onboarding_completed`, Canvas credentials |
+| `semesters`     | Academic terms                                                    |
+| `courses`       | Course info, `analysis_status`, `syllabus_analysis` JSONB         |
+| `course_events` | Flattened extracted events                                        |
+| `course_notes`  | User notes per course                                             |
+| `chats`         | Conversation sessions                                             |
+| `chat_courses`  | Which courses a chat references                                   |
+| `chat_messages` | Per-message history                                               |
+| `chat_feedback` | User feedback on AI responses                                     |
+| `app_settings`  | Global `ai_enabled` kill switch                                   |
 
 ---
 
 ## Edge Functions (called from frontend)
 
-| Function | Purpose |
-|---|---|
-| `process-syllabus` | Parse PDF, extract structured data (called on course upload) |
-| `detect-syllabi-info` | Lightweight parse for onboarding/bulk upload flow |
-| `chat` | AI assistant responses with course/semester context |
-| `generate-ics` | Export course events as `.ics` calendar file |
-| `find-canvas-courses` | Fetch courses from Canvas instance |
-| `find-canvas-syllabus` | Search Canvas modules for syllabus documents |
-| `download-canvas-syllabus` | Download syllabus PDF from Canvas and trigger parsing |
-| `match-canvas-assignments` | Match Canvas assignments to extracted syllabus events |
-| `save-canvas-token` | Encrypt and store Canvas API credentials |
-| `delete-canvas-token` | Revoke stored Canvas credentials |
-| `admin-get-users` | Paginated user list (admin only) |
+| Function                   | Purpose                                                      |
+| -------------------------- | ------------------------------------------------------------ |
+| `process-syllabus`         | Parse PDF, extract structured data (called on course upload) |
+| `detect-syllabi-info`      | Lightweight parse for onboarding/bulk upload flow            |
+| `chat`                     | AI assistant responses with course/semester context          |
+| `generate-ics`             | Export course events as `.ics` calendar file                 |
+| `find-canvas-courses`      | Fetch courses from Canvas instance                           |
+| `find-canvas-syllabus`     | Search Canvas modules for syllabus documents                 |
+| `download-canvas-syllabus` | Download syllabus PDF from Canvas and trigger parsing        |
+| `match-canvas-assignments` | Match Canvas assignments to extracted syllabus events        |
+| `save-canvas-token`        | Encrypt and store Canvas API credentials                     |
+| `delete-canvas-token`      | Revoke stored Canvas credentials                             |
+| `admin-get-users`          | Paginated user list (admin only)                             |
 
 ---
 
 ## Design Tokens
 
 **Colors**
+
 - Primary: `indigo-600` / `violet` accents
 - Background: white, `gray-50`, `gray-100`
 - Borders: `gray-200`, `gray-300`

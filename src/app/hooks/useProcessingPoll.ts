@@ -15,7 +15,7 @@ const DEFAULT_INTERVAL_MS = 3000;
 export function useProcessingPoll(
   active: boolean,
   onPoll: () => void,
-  intervalMs: number = DEFAULT_INTERVAL_MS,
+  intervalMs: number = DEFAULT_INTERVAL_MS
 ) {
   const onPollRef = useRef(onPoll);
 

@@ -66,7 +66,10 @@ export async function updateSemester(
  */
 export async function deleteSemesterWithCourses(id: string, courseIds: string[]) {
   if (courseIds.length > 0) {
-    const { error: eventsError } = await supabase.from('course_events').delete().in('course_id', courseIds);
+    const { error: eventsError } = await supabase
+      .from('course_events')
+      .delete()
+      .in('course_id', courseIds);
     if (eventsError) return { error: eventsError };
 
     const { error: coursesError } = await supabase.from('courses').delete().in('id', courseIds);

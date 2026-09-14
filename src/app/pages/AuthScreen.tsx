@@ -22,14 +22,16 @@ export function AuthScreen() {
     e.preventDefault();
     setLoading(true);
     setError(null);
-    
+
     // Check if Supabase is configured
     if (!isSupabaseConfigured()) {
-      setError('Supabase is not configured. Please add your Supabase credentials to the .env file.');
+      setError(
+        'Supabase is not configured. Please add your Supabase credentials to the .env file.'
+      );
       setLoading(false);
       return;
     }
-    
+
     try {
       if (isSignUp) {
         const { data, error } = await supabase.auth.signUp({
@@ -78,14 +80,16 @@ export function AuthScreen() {
   const handleGoogleSignIn = async () => {
     setLoading(true);
     setError(null);
-    
+
     // Check if Supabase is configured
     if (!isSupabaseConfigured()) {
-      setError('Supabase is not configured. Please add your Supabase credentials to the .env file.');
+      setError(
+        'Supabase is not configured. Please add your Supabase credentials to the .env file.'
+      );
       setLoading(false);
       return;
     }
-    
+
     try {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
@@ -113,7 +117,8 @@ export function AuthScreen() {
           <Alert className="mb-4 bg-amber-50 border-amber-200">
             <AlertCircle className="h-4 w-4 text-amber-600" />
             <AlertDescription className="text-amber-800">
-              <strong>Demo Mode:</strong> Supabase is not configured. Add your credentials to .env to enable authentication.
+              <strong>Demo Mode:</strong> Supabase is not configured. Add your credentials to .env
+              to enable authentication.
             </AlertDescription>
           </Alert>
         )}
@@ -174,13 +179,15 @@ export function AuthScreen() {
               required
               minLength={isSignUp ? 8 : undefined}
             />
-            {isSignUp && (
-              <p className="mt-1 text-xs text-gray-500">At least 8 characters.</p>
-            )}
+            {isSignUp && <p className="mt-1 text-xs text-gray-500">At least 8 characters.</p>}
           </div>
 
-          <Button type="submit" disabled={loading} className="w-full bg-indigo-600 hover:bg-indigo-700 rounded-lg">
-            {loading ? 'Loading...' : (isSignUp ? 'Sign Up' : 'Sign In')}
+          <Button
+            type="submit"
+            disabled={loading}
+            className="w-full bg-indigo-600 hover:bg-indigo-700 rounded-lg"
+          >
+            {loading ? 'Loading...' : isSignUp ? 'Sign Up' : 'Sign In'}
           </Button>
         </form>
 

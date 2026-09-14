@@ -32,13 +32,23 @@ interface BulkUploadModalProps {
 export function BulkUploadModal({ open, onClose, fixedSemesterId }: BulkUploadModalProps) {
   const { courses: allCourses, semesters, refreshCourses } = useData();
   const {
-    step, fileItems, detectedCourses, createdCourseIds, allDone, globalError,
-    addFiles, removeFile, reset, analyze, updateDetectedCourse, confirm, retryProcessing,
+    step,
+    fileItems,
+    detectedCourses,
+    createdCourseIds,
+    allDone,
+    globalError,
+    addFiles,
+    removeFile,
+    reset,
+    analyze,
+    updateDetectedCourse,
+    confirm,
+    retryProcessing,
   } = useBulkUpload({ fixedSemesterId });
 
-  const fixedSemester = fixedSemesterId !== undefined
-    ? semesters.find(s => s.id === fixedSemesterId)
-    : undefined;
+  const fixedSemester =
+    fixedSemesterId !== undefined ? semesters.find((s) => s.id === fixedSemesterId) : undefined;
   // The Add Course entry points pass '' when there is no active semester
   // (useBulkUpload treats '' as "no semester available" and confirm() then
   // creates nothing). Block the flow up front instead of showing the
@@ -61,15 +71,24 @@ export function BulkUploadModal({ open, onClose, fixedSemesterId }: BulkUploadMo
   }, [step, allDone, onClose]);
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
+    <Dialog
+      open={open}
+      onOpenChange={(v) => {
+        if (!v) onClose();
+      }}
+    >
       <DialogContent className="rounded-2xl max-w-xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Upload Multiple Courses</DialogTitle>
           <DialogDescription>
             {noSemesterAvailable && 'Create a semester before uploading courses.'}
-            {!noSemesterAvailable && step === 'upload' && 'Drop your syllabi and we\'ll detect course info automatically.'}
+            {!noSemesterAvailable &&
+              step === 'upload' &&
+              "Drop your syllabi and we'll detect course info automatically."}
             {step === 'detecting' && 'Analyzing your syllabi…'}
-            {step === 'review' && fixedSemester && `Review detected info and confirm. Courses will be added to ${fixedSemester.name}.`}
+            {step === 'review' &&
+              fixedSemester &&
+              `Review detected info and confirm. Courses will be added to ${fixedSemester.name}.`}
             {step === 'review' && !fixedSemester && 'Review detected info and confirm.'}
             {step === 'processing' && 'Creating your courses and processing syllabi.'}
           </DialogDescription>
@@ -87,7 +106,8 @@ export function BulkUploadModal({ open, onClose, fixedSemesterId }: BulkUploadMo
             <Alert className="bg-amber-50 border-amber-200">
               <AlertCircle className="h-4 w-4 text-amber-600" />
               <AlertDescription className="text-amber-800">
-                There is no active semester to add these courses to. Create a semester first, then upload your syllabi.
+                There is no active semester to add these courses to. Create a semester first, then
+                upload your syllabi.
               </AlertDescription>
             </Alert>
             <Button variant="outline" className="w-full rounded-lg" onClick={onClose}>
@@ -107,7 +127,9 @@ export function BulkUploadModal({ open, onClose, fixedSemesterId }: BulkUploadMo
                   <div key={fi.id} className="flex items-center justify-between px-2 py-1.5">
                     <div className="flex items-center gap-2 min-w-0">
                       <FileText className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-                      <span className="text-sm text-gray-700 truncate flex-1 min-w-0">{fi.file.name}</span>
+                      <span className="text-sm text-gray-700 truncate flex-1 min-w-0">
+                        {fi.file.name}
+                      </span>
                       <span className="text-xs text-gray-400 shrink-0">
                         {(fi.file.size / (1024 * 1024)).toFixed(1)} MB
                       </span>
@@ -116,7 +138,10 @@ export function BulkUploadModal({ open, onClose, fixedSemesterId }: BulkUploadMo
                       variant="ghost"
                       size="sm"
                       className="h-6 w-6 p-0 text-gray-400 hover:text-red-500 shrink-0"
-                      onClick={(e) => { e.stopPropagation(); removeFile(fi.id); }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removeFile(fi.id);
+                      }}
                     >
                       <X className="w-3.5 h-3.5" />
                     </Button>
@@ -181,7 +206,11 @@ export function BulkUploadModal({ open, onClose, fixedSemesterId }: BulkUploadMo
         {/* ── Step 4: Processing ── */}
         {!noSemesterAvailable && step === 'processing' && (
           <div className="space-y-3">
-            <ProcessingCourseList courseIds={createdCourseIds} courses={allCourses} onRetry={retryProcessing} />
+            <ProcessingCourseList
+              courseIds={createdCourseIds}
+              courses={allCourses}
+              onRetry={retryProcessing}
+            />
 
             <Button variant="outline" className="w-full rounded-lg mt-2" onClick={onClose}>
               Done

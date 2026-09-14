@@ -3,14 +3,7 @@ import type { CourseModalTarget } from '@/lib/types';
 import { useData } from '../context/DataProvider';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
-import {
-  BookOpen,
-  Calendar,
-  Upload,
-  MoreHorizontal,
-  Trash2,
-  Pencil,
-} from 'lucide-react';
+import { BookOpen, Calendar, Upload, MoreHorizontal, Trash2, Pencil } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -40,34 +33,30 @@ export function Courses() {
   const [showAddCourse, setShowAddCourse] = useState(false);
   const [showBulkUpload, setShowBulkUpload] = useState(false);
   const [showCourseForm, setShowCourseForm] = useState(false);
-  const [selectedCourseForUpload, setSelectedCourseForUpload] = useState<CourseModalTarget | undefined>(undefined);
+  const [selectedCourseForUpload, setSelectedCourseForUpload] = useState<
+    CourseModalTarget | undefined
+  >(undefined);
   const [courseToDelete, setCourseToDelete] = useState<string | null>(null);
   const [showEditSemester, setShowEditSemester] = useState(false);
 
-  const activeSemester = semesters.find(s => s.isActive);
+  const activeSemester = semesters.find((s) => s.isActive);
   // Restore from navigation state (e.g. back from CourseDetail), otherwise fall back to active semester
   const [selectedSemesterId, setSelectedSemesterId] = useState<string>(
     (location.state as { semesterId?: string } | null)?.semesterId ?? ''
   );
   const effectiveSemesterId = selectedSemesterId || activeSemester?.id || '';
 
-  const displayedCourses = courses.filter(c => c.semesterId === effectiveSemesterId);
+  const displayedCourses = courses.filter((c) => c.semesterId === effectiveSemesterId);
 
   return (
     <div className="min-h-screen bg-white">
-      <AppHeader
-        onBack={() => navigate('/dashboard')}
-        contentClassName="max-w-7xl mx-auto"
-      />
-
+      <AppHeader onBack={() => navigate('/dashboard')} contentClassName="max-w-7xl mx-auto" />
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-6 py-8">
         <div className="mb-8 flex items-start justify-between gap-4">
           <div className="flex-1">
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">
-              Course Details
-            </h2>
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">Course Details</h2>
             <p className="text-gray-600">
               Select a course to view details, deadlines, and policies
             </p>
@@ -93,7 +82,7 @@ export function Courses() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="rounded-lg">
-                    {semesters.map(semester => (
+                    {semesters.map((semester) => (
                       <SelectItem key={semester.id} value={semester.id}>
                         {semester.name}
                       </SelectItem>
@@ -118,12 +107,8 @@ export function Courses() {
         {displayedCourses.length === 0 ? (
           <Card className="p-12 text-center rounded-2xl">
             <Calendar className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">
-              No courses yet
-            </h3>
-            <p className="text-gray-600 mb-6">
-              Add your first course to get started
-            </p>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">No courses yet</h3>
+            <p className="text-gray-600 mb-6">Add your first course to get started</p>
             <Button
               onClick={() => setShowAddCourse(true)}
               className="bg-indigo-600 hover:bg-indigo-700 rounded-lg"
@@ -133,7 +118,7 @@ export function Courses() {
           </Card>
         ) : (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {displayedCourses.map(course => {
+            {displayedCourses.map((course) => {
               const hasSyllabus = course.status === 'ready';
               return (
                 <Card
@@ -185,17 +170,11 @@ export function Courses() {
                       </div>
                     </div>
 
-                    <h3 className="font-semibold text-gray-900 mb-1">
-                      {course.code}
-                    </h3>
-                    <p className="text-sm text-gray-600 mb-3 line-clamp-2">
-                      {course.name}
-                    </p>
+                    <h3 className="font-semibold text-gray-900 mb-1">{course.code}</h3>
+                    <p className="text-sm text-gray-600 mb-3 line-clamp-2">{course.name}</p>
 
                     {course.professor && (
-                      <p className="text-xs text-gray-500 mb-4">
-                        {course.professor}
-                      </p>
+                      <p className="text-xs text-gray-500 mb-4">{course.professor}</p>
                     )}
 
                     {hasSyllabus ? (
@@ -203,7 +182,7 @@ export function Courses() {
                         <div className="flex items-center gap-2 text-xs text-gray-500">
                           <BookOpen className="w-4 h-4" />
                           <span>
-                            {events.filter(e => e.courseId === course.id).length} events extracted
+                            {events.filter((e) => e.courseId === course.id).length} events extracted
                           </span>
                         </div>
                         <Button
@@ -275,16 +254,18 @@ export function Courses() {
         fixedSemesterId={activeSemester?.id ?? ''}
       />
 
-      {showEditSemester && effectiveSemesterId && (() => {
-        const sem = semesters.find(s => s.id === effectiveSemesterId);
-        return sem ? (
-          <EditSemesterModal
-            open={showEditSemester}
-            onClose={() => setShowEditSemester(false)}
-            semester={sem}
-          />
-        ) : null;
-      })()}
+      {showEditSemester &&
+        effectiveSemesterId &&
+        (() => {
+          const sem = semesters.find((s) => s.id === effectiveSemesterId);
+          return sem ? (
+            <EditSemesterModal
+              open={showEditSemester}
+              onClose={() => setShowEditSemester(false)}
+              semester={sem}
+            />
+          ) : null;
+        })()}
 
       <ConfirmDeleteDialog
         open={!!courseToDelete}

@@ -44,21 +44,24 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     fetchAiFlag();
   }, [userId]);
 
-  const setAiEnabled = useCallback(async (enabled: boolean) => {
-    if (!user) return;
-    setAiEnabledState(enabled); // Optimistic — reverted below if the write is refused
-    const { error } = await settingsApi.updateAiEnabled(enabled, user.id);
-    if (error) {
-      // RLS filters a non-admin's write out entirely, so this covers both a
-      // failed request and an unauthorised one.
-      console.error('Error updating AI kill switch:', error);
-      setAiEnabledState(!enabled);
-    }
-  }, [user]);
+  const setAiEnabled = useCallback(
+    async (enabled: boolean) => {
+      if (!user) return;
+      setAiEnabledState(enabled); // Optimistic — reverted below if the write is refused
+      const { error } = await settingsApi.updateAiEnabled(enabled, user.id);
+      if (error) {
+        // RLS filters a non-admin's write out entirely, so this covers both a
+        // failed request and an unauthorised one.
+        console.error('Error updating AI kill switch:', error);
+        setAiEnabledState(!enabled);
+      }
+    },
+    [user]
+  );
 
   const value = useMemo<SettingsState>(
     () => ({ aiEnabled, setAiEnabled }),
-    [aiEnabled, setAiEnabled],
+    [aiEnabled, setAiEnabled]
   );
 
   return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>;

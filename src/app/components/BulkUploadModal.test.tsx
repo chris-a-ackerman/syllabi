@@ -11,7 +11,13 @@ vi.mock('../context/DataProvider', () => ({
   useData: () => ({
     courses: [],
     semesters: [
-      { id: 'sem-1', name: 'Fall 2026', startDate: '2026-09-01', endDate: '2026-12-18', isActive: true },
+      {
+        id: 'sem-1',
+        name: 'Fall 2026',
+        startDate: '2026-09-01',
+        endDate: '2026-12-18',
+        isActive: true,
+      },
     ],
     refreshCourses: vi.fn(),
     addSemester: vi.fn(),

@@ -24,13 +24,29 @@ describe('initialFormValues', () => {
   });
 
   it('keeps a non-palette colour on an existing course rather than resetting it', () => {
-    const values = initialFormValues({ id: 'c1', name: 'X', code: 'X 1', professor: '', color: '#123456' });
+    const values = initialFormValues({
+      id: 'c1',
+      name: 'X',
+      code: 'X 1',
+      professor: '',
+      color: '#123456',
+    });
     expect(values.color).toBe('#123456');
   });
 
   it('starts a new course blank with the first palette colour when the semester is empty', () => {
-    expect(initialFormValues()).toEqual({ name: '', code: '', professor: '', color: COURSE_COLORS[0] });
-    expect(initialFormValues(undefined, [])).toEqual({ name: '', code: '', professor: '', color: COURSE_COLORS[0] });
+    expect(initialFormValues()).toEqual({
+      name: '',
+      code: '',
+      professor: '',
+      color: COURSE_COLORS[0],
+    });
+    expect(initialFormValues(undefined, [])).toEqual({
+      name: '',
+      code: '',
+      professor: '',
+      color: COURSE_COLORS[0],
+    });
   });
 
   it('gives two consecutive single uploads different colours', () => {
@@ -52,11 +68,13 @@ describe('initialFormValues', () => {
 describe('nextCourseColor', () => {
   it('picks the first palette colour not already used in the semester', () => {
     // A gap left by a deleted course is reused before moving further along.
-    expect(nextCourseColor([{ color: COURSE_COLORS[0] }, { color: COURSE_COLORS[2] }])).toBe(COURSE_COLORS[1]);
+    expect(nextCourseColor([{ color: COURSE_COLORS[0] }, { color: COURSE_COLORS[2] }])).toBe(
+      COURSE_COLORS[1]
+    );
   });
 
   it('wraps around by count once every palette colour is taken', () => {
-    const all = COURSE_COLORS.map(color => ({ color }));
+    const all = COURSE_COLORS.map((color) => ({ color }));
     expect(nextCourseColor(all)).toBe(COURSE_COLORS[0]);
     expect(nextCourseColor([...all, { color: COURSE_COLORS[0] }])).toBe(COURSE_COLORS[1]);
   });

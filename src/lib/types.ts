@@ -227,4 +227,3 @@ export interface Chat {
   courseIds: string[];
   createdAt: string;
 }
-

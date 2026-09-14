@@ -17,7 +17,12 @@ interface ProcessingCourseListProps {
  * being processed (SYL-68: previously duplicated in BulkUploadModal and
  * Onboarding). Failed courses show the recorded reason (SYL-66).
  */
-export function ProcessingCourseList({ courseIds, courses, onRetry, variant = 'compact' }: ProcessingCourseListProps) {
+export function ProcessingCourseList({
+  courseIds,
+  courses,
+  onRetry,
+  variant = 'compact',
+}: ProcessingCourseListProps) {
   const page = variant === 'page';
   const text = page ? 'text-sm' : 'text-xs';
   const icon = page ? 'w-4 h-4' : 'w-3.5 h-3.5';
@@ -29,7 +34,9 @@ export function ProcessingCourseList({ courseIds, courses, onRetry, variant = 'c
         const row = (
           <>
             <div className="min-w-0">
-              <p className={`font-medium text-gray-900 ${page ? '' : 'text-sm'}`}>{course?.code || '—'}</p>
+              <p className={`font-medium text-gray-900 ${page ? '' : 'text-sm'}`}>
+                {course?.code || '—'}
+              </p>
               <p className={`${text} text-gray-500 truncate`}>{course?.name}</p>
               {course?.status === 'failed' && course.analysisError && (
                 <p className="text-xs text-red-600 mt-0.5">{course.analysisError}</p>
@@ -73,7 +80,10 @@ export function ProcessingCourseList({ courseIds, courses, onRetry, variant = 'c
             <div className="flex items-center justify-between">{row}</div>
           </Card>
         ) : (
-          <div key={courseId} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
+          <div
+            key={courseId}
+            className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0"
+          >
             {row}
           </div>
         );

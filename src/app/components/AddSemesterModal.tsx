@@ -62,7 +62,7 @@ export function AddSemesterModal({ open, onClose }: AddSemesterModalProps) {
   } = useBulkUpload();
 
   const canvasFlow = useCanvasFlow();
-  const selectedCount = canvasFlow.detectedCourses.filter(dc => dc.selected).length;
+  const selectedCount = canvasFlow.detectedCourses.filter((dc) => dc.selected).length;
 
   // Reset everything when modal opens
   useEffect(() => {
@@ -80,15 +80,17 @@ export function AddSemesterModal({ open, onClose }: AddSemesterModalProps) {
   useEffect(() => {
     if (!open) return;
     setCanvasConnected(null);
-    fetchCanvasProfile().then(({ data }) => setCanvasConnected(data?.has_canvas_connected ?? false));
+    fetchCanvasProfile().then(({ data }) =>
+      setCanvasConnected(data?.has_canvas_connected ?? false)
+    );
   }, [open]);
 
   // Close modal once courses are created — sidebar banner takes over processing status
   useEffect(() => {
-    if (modalStep !== 'bulk-upload' || bulkStep !== 'processing' || createdCourseIds.length === 0) return;
+    if (modalStep !== 'bulk-upload' || bulkStep !== 'processing' || createdCourseIds.length === 0)
+      return;
     onClose();
   }, [modalStep, bulkStep, createdCourseIds.length, onClose]);
-
 
   const handleManualSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -101,7 +103,10 @@ export function AddSemesterModal({ open, onClose }: AddSemesterModalProps) {
   // it just created (SYL-71) — roll them back first. Once downloads have
   // started (step 'downloading'), leave everything for the user to manage.
   const handleClose = () => {
-    if (modalStep === 'canvas' && (canvasFlow.step === 'processing' || canvasFlow.step === 'syllabi')) {
+    if (
+      modalStep === 'canvas' &&
+      (canvasFlow.step === 'processing' || canvasFlow.step === 'syllabi')
+    ) {
       void canvasFlow.rollback();
     }
     onClose();
@@ -109,17 +114,19 @@ export function AddSemesterModal({ open, onClose }: AddSemesterModalProps) {
 
   // Group detected courses by semester for the review step
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v) handleClose(); }}>
+    <Dialog
+      open={open}
+      onOpenChange={(v) => {
+        if (!v) handleClose();
+      }}
+    >
       <DialogContent className="rounded-2xl max-w-xl max-h-[90vh] overflow-y-auto overflow-x-hidden">
-
         {/* ── Choose ── */}
         {modalStep === 'choose' && (
           <>
             <DialogHeader>
               <DialogTitle>Add Semester</DialogTitle>
-              <DialogDescription>
-                How would you like to set up your semester?
-              </DialogDescription>
+              <DialogDescription>How would you like to set up your semester?</DialogDescription>
             </DialogHeader>
 
             <div className="py-6 space-y-4">
@@ -132,11 +139,10 @@ export function AddSemesterModal({ open, onClose }: AddSemesterModalProps) {
                     <FileText className="w-6 h-6 text-indigo-600" />
                   </div>
                   <div className="flex-1">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-1">
-                      Upload Syllabi
-                    </h3>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-1">Upload Syllabi</h3>
                     <p className="text-sm text-gray-600">
-                      Upload one or more syllabus PDFs and we'll automatically detect the semester, course names, and dates.
+                      Upload one or more syllabus PDFs and we'll automatically detect the semester,
+                      course names, and dates.
                     </p>
                   </div>
                 </div>
@@ -151,9 +157,7 @@ export function AddSemesterModal({ open, onClose }: AddSemesterModalProps) {
                     <GraduationCap className="w-6 h-6 text-emerald-600" />
                   </div>
                   <div className="flex-1">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-1">
-                      Import from Canvas
-                    </h3>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-1">Import from Canvas</h3>
                     <p className="text-sm text-gray-600">
                       Connect to Canvas LMS to automatically detect your courses and find syllabi.
                     </p>
@@ -170,9 +174,7 @@ export function AddSemesterModal({ open, onClose }: AddSemesterModalProps) {
                     <PenSquare className="w-6 h-6 text-violet-600" />
                   </div>
                   <div className="flex-1">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-1">
-                      Create Manually
-                    </h3>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-1">Create Manually</h3>
                     <p className="text-sm text-gray-600">
                       Enter semester details manually. You can add courses and upload syllabi after.
                     </p>
@@ -194,9 +196,7 @@ export function AddSemesterModal({ open, onClose }: AddSemesterModalProps) {
           <>
             <DialogHeader>
               <DialogTitle>Add Semester</DialogTitle>
-              <DialogDescription>
-                Create a new semester to organize your courses.
-              </DialogDescription>
+              <DialogDescription>Create a new semester to organize your courses.</DialogDescription>
             </DialogHeader>
             <form onSubmit={handleManualSubmit} className="space-y-4">
               <div>
@@ -237,10 +237,18 @@ export function AddSemesterModal({ open, onClose }: AddSemesterModalProps) {
               </div>
 
               <div className="flex gap-3 pt-4">
-                <Button type="button" variant="outline" onClick={() => setModalStep('choose')} className="flex-1 rounded-lg">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setModalStep('choose')}
+                  className="flex-1 rounded-lg"
+                >
                   Back
                 </Button>
-                <Button type="submit" className="flex-1 bg-indigo-600 hover:bg-indigo-700 rounded-lg">
+                <Button
+                  type="submit"
+                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 rounded-lg"
+                >
                   Add Semester
                 </Button>
               </div>
@@ -254,7 +262,8 @@ export function AddSemesterModal({ open, onClose }: AddSemesterModalProps) {
             <DialogHeader>
               <DialogTitle>Upload Syllabi</DialogTitle>
               <DialogDescription>
-                {bulkStep === 'upload' && "Drop your syllabi and we'll detect semester and course info automatically."}
+                {bulkStep === 'upload' &&
+                  "Drop your syllabi and we'll detect semester and course info automatically."}
                 {bulkStep === 'detecting' && 'Analyzing your syllabi…'}
                 {bulkStep === 'review' && 'Review detected info and confirm.'}
                 {bulkStep === 'processing' && 'Creating your courses…'}
@@ -276,10 +285,15 @@ export function AddSemesterModal({ open, onClose }: AddSemesterModalProps) {
                 {fileItems.length > 0 && (
                   <Card className="p-2 rounded-lg divide-y divide-gray-100">
                     {fileItems.map((fi) => (
-                      <div key={fi.id} className="flex items-center justify-between px-2 py-1.5 overflow-hidden">
+                      <div
+                        key={fi.id}
+                        className="flex items-center justify-between px-2 py-1.5 overflow-hidden"
+                      >
                         <div className="flex items-center gap-2 min-w-0">
                           <FileText className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-                          <span className="text-sm text-gray-700 truncate min-w-0">{fi.file.name}</span>
+                          <span className="text-sm text-gray-700 truncate min-w-0">
+                            {fi.file.name}
+                          </span>
                           <span className="text-xs text-gray-400 shrink-0">
                             {(fi.file.size / (1024 * 1024)).toFixed(1)} MB
                           </span>
@@ -288,7 +302,10 @@ export function AddSemesterModal({ open, onClose }: AddSemesterModalProps) {
                           variant="ghost"
                           size="sm"
                           className="h-6 w-6 p-0 text-gray-400 hover:text-red-500 shrink-0"
-                          onClick={(e) => { e.stopPropagation(); removeFile(fi.id); }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            removeFile(fi.id);
+                          }}
                         >
                           <X className="w-3.5 h-3.5" />
                         </Button>
@@ -298,7 +315,11 @@ export function AddSemesterModal({ open, onClose }: AddSemesterModalProps) {
                 )}
 
                 <div className="flex gap-3 pt-2">
-                  <Button variant="outline" className="flex-1 rounded-lg" onClick={() => setModalStep('choose')}>
+                  <Button
+                    variant="outline"
+                    className="flex-1 rounded-lg"
+                    onClick={() => setModalStep('choose')}
+                  >
                     Back
                   </Button>
                   <Button
@@ -364,12 +385,16 @@ export function AddSemesterModal({ open, onClose }: AddSemesterModalProps) {
             <DialogHeader>
               <DialogTitle>Import from Canvas</DialogTitle>
               <DialogDescription>
-                {canvasFlow.step === 'dates' && 'Enter your semester dates to find your Canvas courses.'}
+                {canvasFlow.step === 'dates' &&
+                  'Enter your semester dates to find your Canvas courses.'}
                 {canvasFlow.step === 'detecting' && 'Searching Canvas for your courses…'}
-                {canvasFlow.step === 'review' && 'Review and confirm your courses before creating them.'}
+                {canvasFlow.step === 'review' &&
+                  'Review and confirm your courses before creating them.'}
                 {canvasFlow.step === 'processing' && 'Creating your semester and courses…'}
-                {canvasFlow.step === 'syllabi' && 'Semester and courses saved — searching Canvas for your syllabi…'}
-                {canvasFlow.step === 'downloading' && 'Downloading syllabi and starting processing…'}
+                {canvasFlow.step === 'syllabi' &&
+                  'Semester and courses saved — searching Canvas for your syllabi…'}
+                {canvasFlow.step === 'downloading' &&
+                  'Downloading syllabi and starting processing…'}
               </DialogDescription>
             </DialogHeader>
 
@@ -388,12 +413,19 @@ export function AddSemesterModal({ open, onClose }: AddSemesterModalProps) {
                   </div>
                 </div>
                 <div className="flex gap-3">
-                  <Button variant="outline" className="flex-1 rounded-lg" onClick={() => setModalStep('choose')}>
+                  <Button
+                    variant="outline"
+                    className="flex-1 rounded-lg"
+                    onClick={() => setModalStep('choose')}
+                  >
                     Back
                   </Button>
                   <Button
                     className="flex-1 bg-emerald-600 hover:bg-emerald-700 rounded-lg"
-                    onClick={() => { onClose(); navigate('/settings#canvas'); }}
+                    onClick={() => {
+                      onClose();
+                      navigate('/settings#canvas');
+                    }}
                   >
                     Connect Canvas
                     <ChevronRight className="ml-1 w-4 h-4" />
@@ -455,12 +487,18 @@ export function AddSemesterModal({ open, onClose }: AddSemesterModalProps) {
                       </div>
                     </div>
                     <div className="flex gap-3 pt-2">
-                      <Button variant="outline" className="flex-1 rounded-lg" onClick={() => setModalStep('choose')}>
+                      <Button
+                        variant="outline"
+                        className="flex-1 rounded-lg"
+                        onClick={() => setModalStep('choose')}
+                      >
                         Back
                       </Button>
                       <Button
                         className="flex-1 bg-emerald-600 hover:bg-emerald-700 rounded-lg"
-                        disabled={!canvasFlow.semesterName || !canvasFlow.startDate || !canvasFlow.endDate}
+                        disabled={
+                          !canvasFlow.semesterName || !canvasFlow.startDate || !canvasFlow.endDate
+                        }
                         onClick={canvasFlow.detect}
                       >
                         Find Courses
@@ -483,7 +521,9 @@ export function AddSemesterModal({ open, onClose }: AddSemesterModalProps) {
                   <div className="space-y-4 overflow-hidden">
                     {/* Editable semester header */}
                     <Card className="p-4 rounded-xl space-y-3">
-                      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Semester</p>
+                      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                        Semester
+                      </p>
                       <div>
                         <Label className="text-xs">Semester Name</Label>
                         <Input
@@ -549,7 +589,9 @@ export function AddSemesterModal({ open, onClose }: AddSemesterModalProps) {
                                     <Label className="text-xs">Course Name</Label>
                                     <Input
                                       value={dc.editedName}
-                                      onChange={(e) => canvasFlow.updateCourse(i, 'editedName', e.target.value)}
+                                      onChange={(e) =>
+                                        canvasFlow.updateCourse(i, 'editedName', e.target.value)
+                                      }
                                       placeholder="Course name"
                                       className="mt-1 rounded-lg h-8 text-sm"
                                     />
@@ -558,7 +600,9 @@ export function AddSemesterModal({ open, onClose }: AddSemesterModalProps) {
                                     <Label className="text-xs">Course Code</Label>
                                     <Input
                                       value={dc.editedCode}
-                                      onChange={(e) => canvasFlow.updateCourse(i, 'editedCode', e.target.value)}
+                                      onChange={(e) =>
+                                        canvasFlow.updateCourse(i, 'editedCode', e.target.value)
+                                      }
                                       placeholder="e.g. MATH 202"
                                       className="mt-1 rounded-lg h-8 text-sm"
                                     />
@@ -566,7 +610,9 @@ export function AddSemesterModal({ open, onClose }: AddSemesterModalProps) {
                                 </div>
                               </div>
                               {dc.instructor && (
-                                <p className="text-xs text-gray-400 pl-6">Instructor: {dc.instructor}</p>
+                                <p className="text-xs text-gray-400 pl-6">
+                                  Instructor: {dc.instructor}
+                                </p>
                               )}
                             </div>
                           ))}
@@ -600,158 +646,172 @@ export function AddSemesterModal({ open, onClose }: AddSemesterModalProps) {
                 {/* Step: processing */}
                 {canvasFlow.step === 'processing' && (
                   <div className="space-y-3 py-4">
-                    {canvasFlow.detectedCourses.filter(dc => dc.selected).map((dc) => {
-                      const created = canvasFlow.createdCourseIds.length > 0;
-                      return (
-                        <div key={dc.canvas_course_id} className="flex items-center gap-3">
-                          {created ? (
-                            <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
-                          ) : (
-                            <Loader2 className="w-4 h-4 text-emerald-500 animate-spin shrink-0" />
-                          )}
-                          <span className="text-sm text-gray-700 truncate">
-                            {dc.editedName || dc.name}
-                          </span>
-                        </div>
-                      );
-                    })}
+                    {canvasFlow.detectedCourses
+                      .filter((dc) => dc.selected)
+                      .map((dc) => {
+                        const created = canvasFlow.createdCourseIds.length > 0;
+                        return (
+                          <div key={dc.canvas_course_id} className="flex items-center gap-3">
+                            {created ? (
+                              <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                            ) : (
+                              <Loader2 className="w-4 h-4 text-emerald-500 animate-spin shrink-0" />
+                            )}
+                            <span className="text-sm text-gray-700 truncate">
+                              {dc.editedName || dc.name}
+                            </span>
+                          </div>
+                        );
+                      })}
                   </div>
                 )}
 
                 {/* Step: syllabi */}
-                {canvasFlow.step === 'syllabi' && (() => {
-                  const findStatuses = Object.values(canvasFlow.syllabiResults);
-                  const allFindSettled = findStatuses.length > 0 && findStatuses.every(r => r.status !== 'searching');
-                  const foundCount = findStatuses.filter(r => r.status === 'found').length;
-                  return (
-                    <div className="space-y-4 py-2">
-                      <div className="flex items-start gap-3 p-4 bg-emerald-50 border border-emerald-200 rounded-xl">
-                        <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
-                        <div>
-                          <p className="text-sm font-medium text-emerald-900">
-                            {canvasFlow.createdCourseIds.length} course{canvasFlow.createdCourseIds.length !== 1 ? 's' : ''} created
-                          </p>
-                          <p className="text-xs text-emerald-700 mt-0.5">
-                            {allFindSettled
-                              ? `${foundCount} syllab${foundCount !== 1 ? 'i' : 'us'} found in Canvas`
-                              : 'Searching Canvas for your syllabi…'}
-                          </p>
+                {canvasFlow.step === 'syllabi' &&
+                  (() => {
+                    const findStatuses = Object.values(canvasFlow.syllabiResults);
+                    const allFindSettled =
+                      findStatuses.length > 0 &&
+                      findStatuses.every((r) => r.status !== 'searching');
+                    const foundCount = findStatuses.filter((r) => r.status === 'found').length;
+                    return (
+                      <div className="space-y-4 py-2">
+                        <div className="flex items-start gap-3 p-4 bg-emerald-50 border border-emerald-200 rounded-xl">
+                          <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+                          <div>
+                            <p className="text-sm font-medium text-emerald-900">
+                              {canvasFlow.createdCourseIds.length} course
+                              {canvasFlow.createdCourseIds.length !== 1 ? 's' : ''} created
+                            </p>
+                            <p className="text-xs text-emerald-700 mt-0.5">
+                              {allFindSettled
+                                ? `${foundCount} syllab${foundCount !== 1 ? 'i' : 'us'} found in Canvas`
+                                : 'Searching Canvas for your syllabi…'}
+                            </p>
+                          </div>
                         </div>
+                        <div className="space-y-2">
+                          {canvasFlow.courseLinks.map(({ courseId, detected }) => {
+                            const result = canvasFlow.syllabiResults[courseId];
+                            const status = result?.status ?? 'searching';
+                            return (
+                              <div key={courseId} className="flex items-center gap-3 px-1">
+                                {status === 'searching' && (
+                                  <Loader2 className="w-4 h-4 text-indigo-500 animate-spin shrink-0" />
+                                )}
+                                {status === 'found' && (
+                                  <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                                )}
+                                {status === 'not_found' && (
+                                  <XCircle className="w-4 h-4 text-amber-400 shrink-0" />
+                                )}
+                                {status === 'error' && (
+                                  <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+                                )}
+                                <span className="text-sm text-gray-700 truncate flex-1">
+                                  {detected.editedName || detected.name}
+                                </span>
+                                {status === 'not_found' && (
+                                  <span className="text-xs text-amber-500 shrink-0">Not found</span>
+                                )}
+                                {status === 'error' && (
+                                  <span className="text-xs text-red-400 shrink-0">Error</span>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                        <Button
+                          className="w-full bg-emerald-600 hover:bg-emerald-700 rounded-lg"
+                          disabled={!allFindSettled}
+                          onClick={canvasFlow.downloadSyllabi}
+                        >
+                          {allFindSettled ? (
+                            <>
+                              {foundCount > 0 ? 'Download & Process Syllabi' : 'Continue'}
+                              <ChevronRight className="ml-1 w-4 h-4" />
+                            </>
+                          ) : (
+                            <>
+                              <Loader2 className="mr-2 w-4 h-4 animate-spin" />
+                              Searching…
+                            </>
+                          )}
+                        </Button>
                       </div>
-                      <div className="space-y-2">
-                        {canvasFlow.courseLinks.map(({ courseId, detected }) => {
-                          const result = canvasFlow.syllabiResults[courseId];
-                          const status = result?.status ?? 'searching';
-                          return (
-                            <div key={courseId} className="flex items-center gap-3 px-1">
-                              {status === 'searching' && (
-                                <Loader2 className="w-4 h-4 text-indigo-500 animate-spin shrink-0" />
-                              )}
-                              {status === 'found' && (
-                                <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
-                              )}
-                              {status === 'not_found' && (
-                                <XCircle className="w-4 h-4 text-amber-400 shrink-0" />
-                              )}
-                              {status === 'error' && (
-                                <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
-                              )}
-                              <span className="text-sm text-gray-700 truncate flex-1">
-                                {detected.editedName || detected.name}
-                              </span>
-                              {status === 'not_found' && (
-                                <span className="text-xs text-amber-500 shrink-0">Not found</span>
-                              )}
-                              {status === 'error' && (
-                                <span className="text-xs text-red-400 shrink-0">Error</span>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                      <Button
-                        className="w-full bg-emerald-600 hover:bg-emerald-700 rounded-lg"
-                        disabled={!allFindSettled}
-                        onClick={canvasFlow.downloadSyllabi}
-                      >
-                        {allFindSettled ? (
-                          <>
-                            {foundCount > 0 ? 'Download & Process Syllabi' : 'Continue'}
-                            <ChevronRight className="ml-1 w-4 h-4" />
-                          </>
-                        ) : (
-                          <>
-                            <Loader2 className="mr-2 w-4 h-4 animate-spin" />
-                            Searching…
-                          </>
-                        )}
-                      </Button>
-                    </div>
-                  );
-                })()}
+                    );
+                  })()}
                 {/* Step: downloading */}
-                {canvasFlow.step === 'downloading' && (() => {
-                  const dlStatuses = Object.values(canvasFlow.downloadResults);
-                  const allDlSettled = dlStatuses.length > 0 && dlStatuses.every(s => s !== 'downloading');
-                  return (
-                    <div className="space-y-4 py-2">
-                      <div className="space-y-2">
-                        {canvasFlow.courseLinks.map(({ courseId, detected }) => {
-                          const status = canvasFlow.downloadResults[courseId] ?? 'downloading';
-                          return (
-                            <div key={courseId} className="flex items-center gap-3 px-1">
-                              {status === 'downloading' && (
-                                <Loader2 className="w-4 h-4 text-emerald-500 animate-spin shrink-0" />
-                              )}
-                              {status === 'started' && (
-                                <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
-                              )}
-                              {status === 'error' && (
-                                <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
-                              )}
-                              {status === 'skipped' && (
-                                <XCircle className="w-4 h-4 text-amber-400 shrink-0" />
-                              )}
-                              <span className="text-sm text-gray-700 truncate flex-1">
-                                {detected.editedName || detected.name}
-                              </span>
-                              {status === 'started' && (
-                                <span className="text-xs text-emerald-600 shrink-0">Processing started</span>
-                              )}
-                              {status === 'error' && (
-                                <span className="text-xs text-red-400 shrink-0">Download failed</span>
-                              )}
-                              {status === 'skipped' && (
-                                <span className="text-xs text-amber-500 shrink-0">No syllabus found</span>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                      {allDlSettled && (
-                        <div className="flex items-start gap-3 p-4 bg-indigo-50 border border-indigo-200 rounded-xl">
-                          <CheckCircle2 className="w-5 h-5 text-indigo-600 shrink-0 mt-0.5" />
-                          <p className="text-sm text-indigo-900">
-                            Processing has started. You can track progress on the dashboard.
-                          </p>
+                {canvasFlow.step === 'downloading' &&
+                  (() => {
+                    const dlStatuses = Object.values(canvasFlow.downloadResults);
+                    const allDlSettled =
+                      dlStatuses.length > 0 && dlStatuses.every((s) => s !== 'downloading');
+                    return (
+                      <div className="space-y-4 py-2">
+                        <div className="space-y-2">
+                          {canvasFlow.courseLinks.map(({ courseId, detected }) => {
+                            const status = canvasFlow.downloadResults[courseId] ?? 'downloading';
+                            return (
+                              <div key={courseId} className="flex items-center gap-3 px-1">
+                                {status === 'downloading' && (
+                                  <Loader2 className="w-4 h-4 text-emerald-500 animate-spin shrink-0" />
+                                )}
+                                {status === 'started' && (
+                                  <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                                )}
+                                {status === 'error' && (
+                                  <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+                                )}
+                                {status === 'skipped' && (
+                                  <XCircle className="w-4 h-4 text-amber-400 shrink-0" />
+                                )}
+                                <span className="text-sm text-gray-700 truncate flex-1">
+                                  {detected.editedName || detected.name}
+                                </span>
+                                {status === 'started' && (
+                                  <span className="text-xs text-emerald-600 shrink-0">
+                                    Processing started
+                                  </span>
+                                )}
+                                {status === 'error' && (
+                                  <span className="text-xs text-red-400 shrink-0">
+                                    Download failed
+                                  </span>
+                                )}
+                                {status === 'skipped' && (
+                                  <span className="text-xs text-amber-500 shrink-0">
+                                    No syllabus found
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })}
                         </div>
-                      )}
-                      <Button
-                        variant="outline"
-                        className="w-full rounded-lg"
-                        // Pull the courses/events the Canvas downloads created
-                        // into state instead of reloading the whole page (SYL-42).
-                        onClick={() => {
-                          void refreshCourses();
-                          void refreshEvents();
-                          onClose();
-                        }}
-                      >
-                        Done
-                      </Button>
-                    </div>
-                  );
-                })()}
+                        {allDlSettled && (
+                          <div className="flex items-start gap-3 p-4 bg-indigo-50 border border-indigo-200 rounded-xl">
+                            <CheckCircle2 className="w-5 h-5 text-indigo-600 shrink-0 mt-0.5" />
+                            <p className="text-sm text-indigo-900">
+                              Processing has started. You can track progress on the dashboard.
+                            </p>
+                          </div>
+                        )}
+                        <Button
+                          variant="outline"
+                          className="w-full rounded-lg"
+                          // Pull the courses/events the Canvas downloads created
+                          // into state instead of reloading the whole page (SYL-42).
+                          onClick={() => {
+                            void refreshCourses();
+                            void refreshEvents();
+                            onClose();
+                          }}
+                        >
+                          Done
+                        </Button>
+                      </div>
+                    );
+                  })()}
               </>
             )}
           </>

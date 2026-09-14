@@ -17,7 +17,10 @@ interface ChatState {
   chats: Chat[];
   currentChatId: string | null;
   chatMessages: ChatMessage[];
-  addChatMessage: (message: Omit<ChatMessage, 'id' | 'timestamp'>, context?: { semesterId: string; courseIds: string[] }) => void;
+  addChatMessage: (
+    message: Omit<ChatMessage, 'id' | 'timestamp'>,
+    context?: { semesterId: string; courseIds: string[] }
+  ) => void;
   startNewChat: () => void;
   selectChat: (chatId: string) => Promise<void>;
   deleteChat: (chatId: string) => Promise<void>;
@@ -62,138 +65,162 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     fetchChats();
   }, [userId]);
 
-  const addChatMessage = useCallback((
-    message: Omit<ChatMessage, 'id' | 'timestamp'>,
-    context?: { semesterId: string; courseIds: string[] },
-  ) => {
-    // Capture conversation history before adding the new message
-    const conversationHistory = chatMessages.map(m => ({ role: m.role, content: m.content }));
-    const userSequence = chatMessages.length + 1;
-    const tempId = `temp-${Date.now()}`;
-    setChatMessages(prev => [...prev, { ...message, id: tempId, timestamp: new Date().toISOString(), sequence: userSequence }]);
+  const addChatMessage = useCallback(
+    (
+      message: Omit<ChatMessage, 'id' | 'timestamp'>,
+      context?: { semesterId: string; courseIds: string[] }
+    ) => {
+      // Capture conversation history before adding the new message
+      const conversationHistory = chatMessages.map((m) => ({ role: m.role, content: m.content }));
+      const userSequence = chatMessages.length + 1;
+      const tempId = `temp-${Date.now()}`;
+      setChatMessages((prev) => [
+        ...prev,
+        { ...message, id: tempId, timestamp: new Date().toISOString(), sequence: userSequence },
+      ]);
 
-    (async () => {
-      let chatId = currentChatId;
-      let semesterId = context?.semesterId;
+      (async () => {
+        let chatId = currentChatId;
+        let semesterId = context?.semesterId;
 
-      if (!chatId && user && context) {
-        const { data: newChat, error: chatError } = await chatApi.createChat(
-          user.id,
-          context.semesterId,
-          message.role === 'user' ? message.content.slice(0, 100) : null,
-          context.courseIds,
-        );
+        if (!chatId && user && context) {
+          const { data: newChat, error: chatError } = await chatApi.createChat(
+            user.id,
+            context.semesterId,
+            message.role === 'user' ? message.content.slice(0, 100) : null,
+            context.courseIds
+          );
 
-        if (chatError || !newChat) {
-          console.error('[chat] Error creating chat record:', chatError);
-          setChatMessages(prev => [...prev, {
-            id: `error-${Date.now()}`,
-            role: 'assistant' as const,
-            content: "Sorry, I couldn't start a new conversation. Please try again.",
-            timestamp: new Date().toISOString(),
-          }]);
-          return;
-        }
-
-        chatId = newChat.id;
-        setCurrentChatId(chatId);
-
-        if (context.courseIds.length > 0) {
-          await chatApi.linkChatCourses(newChat.id, context.courseIds);
-        }
-
-        setChats(prev => [newChat, ...prev]);
-      }
-
-      // For existing chats, look up semesterId from chats state
-      if (!semesterId && chatId) {
-        semesterId = chats.find(c => c.id === chatId)?.semesterId;
-      }
-
-      if (!chatId) return;
-
-      const { data: userMessage, error: msgError } = await chatApi.insertChatMessage(
-        chatId, userSequence, message.role, message.content,
-      );
-
-      if (msgError || !userMessage) {
-        console.error('[chat] Error saving user message to DB:', msgError);
-        return;
-      }
-
-      setChatMessages(prev => prev.map(m => m.id === tempId ? userMessage : m));
-
-      if (message.role === 'user' && aiEnabled && semesterId) {
-        const aiSequence = userSequence + 1;
-
-        const courseIds = context?.courseIds ?? chats.find(c => c.id === chatId)?.courseIds ?? [];
-
-        const { data: fnData, error: fnError } = await chatApi.sendChatQuery({
-          message: message.content,
-          semester_id: semesterId,
-          conversation_history: conversationHistory,
-          course_ids: courseIds,
-        });
-
-        const addErrorMessage = (text: string) => {
-          setChatMessages(prev => [...prev, {
-            id: `error-${Date.now()}`,
-            role: 'assistant' as const,
-            content: text,
-            timestamp: new Date().toISOString(),
-            sequence: aiSequence,
-          }]);
-        };
-
-        if (fnError) {
-          console.error('[chat] Edge function invocation error:', fnError);
-          if (await isClaudeKeyRejected(fnError)) {
-            toastClaudeKeyRejected();
-            addErrorMessage('Your Claude API key was rejected. Update it in Settings.');
+          if (chatError || !newChat) {
+            console.error('[chat] Error creating chat record:', chatError);
+            setChatMessages((prev) => [
+              ...prev,
+              {
+                id: `error-${Date.now()}`,
+                role: 'assistant' as const,
+                content: "Sorry, I couldn't start a new conversation. Please try again.",
+                timestamp: new Date().toISOString(),
+              },
+            ]);
             return;
           }
-          addErrorMessage("Sorry, I couldn't reach the assistant. Please check your connection and try again.");
-          return;
+
+          chatId = newChat.id;
+          setCurrentChatId(chatId);
+
+          if (context.courseIds.length > 0) {
+            await chatApi.linkChatCourses(newChat.id, context.courseIds);
+          }
+
+          setChats((prev) => [newChat, ...prev]);
         }
 
-        if (fnData?.error) {
-          console.error('[chat] Edge function returned error:', fnData.error);
-          const msg = fnData.error === 'AI features are disabled'
-            ? 'AI features are currently disabled by your administrator.'
-            : "Sorry, something went wrong on the server. Please try again in a moment.";
-          addErrorMessage(msg);
-          return;
+        // For existing chats, look up semesterId from chats state
+        if (!semesterId && chatId) {
+          semesterId = chats.find((c) => c.id === chatId)?.semesterId;
         }
 
+        if (!chatId) return;
 
-        const aiContent: string = fnData?.reply ?? '';
-
-        if (!aiContent) {
-          addErrorMessage("I received an empty response. Please try rephrasing your question.");
-          return;
-        }
-
-        const { data: aiMessage, error: aiMsgError } = await chatApi.insertChatMessage(
-          chatId, aiSequence, 'assistant', aiContent,
+        const { data: userMessage, error: msgError } = await chatApi.insertChatMessage(
+          chatId,
+          userSequence,
+          message.role,
+          message.content
         );
 
-        if (aiMsgError || !aiMessage) {
-          console.error('[chat] Error saving AI message to DB:', aiMsgError);
-          // Still show the reply to the user even if DB persistence fails
-          setChatMessages(prev => [...prev, {
-            id: `local-${Date.now()}`,
-            role: 'assistant' as const,
-            content: aiContent,
-            timestamp: new Date().toISOString(),
-            sequence: aiSequence,
-          }]);
+        if (msgError || !userMessage) {
+          console.error('[chat] Error saving user message to DB:', msgError);
           return;
         }
 
-        setChatMessages(prev => [...prev, aiMessage]);
-      }
-    })();
-  }, [user, chats, chatMessages, currentChatId, aiEnabled]);
+        setChatMessages((prev) => prev.map((m) => (m.id === tempId ? userMessage : m)));
+
+        if (message.role === 'user' && aiEnabled && semesterId) {
+          const aiSequence = userSequence + 1;
+
+          const courseIds =
+            context?.courseIds ?? chats.find((c) => c.id === chatId)?.courseIds ?? [];
+
+          const { data: fnData, error: fnError } = await chatApi.sendChatQuery({
+            message: message.content,
+            semester_id: semesterId,
+            conversation_history: conversationHistory,
+            course_ids: courseIds,
+          });
+
+          const addErrorMessage = (text: string) => {
+            setChatMessages((prev) => [
+              ...prev,
+              {
+                id: `error-${Date.now()}`,
+                role: 'assistant' as const,
+                content: text,
+                timestamp: new Date().toISOString(),
+                sequence: aiSequence,
+              },
+            ]);
+          };
+
+          if (fnError) {
+            console.error('[chat] Edge function invocation error:', fnError);
+            if (await isClaudeKeyRejected(fnError)) {
+              toastClaudeKeyRejected();
+              addErrorMessage('Your Claude API key was rejected. Update it in Settings.');
+              return;
+            }
+            addErrorMessage(
+              "Sorry, I couldn't reach the assistant. Please check your connection and try again."
+            );
+            return;
+          }
+
+          if (fnData?.error) {
+            console.error('[chat] Edge function returned error:', fnData.error);
+            const msg =
+              fnData.error === 'AI features are disabled'
+                ? 'AI features are currently disabled by your administrator.'
+                : 'Sorry, something went wrong on the server. Please try again in a moment.';
+            addErrorMessage(msg);
+            return;
+          }
+
+          const aiContent: string = fnData?.reply ?? '';
+
+          if (!aiContent) {
+            addErrorMessage('I received an empty response. Please try rephrasing your question.');
+            return;
+          }
+
+          const { data: aiMessage, error: aiMsgError } = await chatApi.insertChatMessage(
+            chatId,
+            aiSequence,
+            'assistant',
+            aiContent
+          );
+
+          if (aiMsgError || !aiMessage) {
+            console.error('[chat] Error saving AI message to DB:', aiMsgError);
+            // Still show the reply to the user even if DB persistence fails
+            setChatMessages((prev) => [
+              ...prev,
+              {
+                id: `local-${Date.now()}`,
+                role: 'assistant' as const,
+                content: aiContent,
+                timestamp: new Date().toISOString(),
+                sequence: aiSequence,
+              },
+            ]);
+            return;
+          }
+
+          setChatMessages((prev) => [...prev, aiMessage]);
+        }
+      })();
+    },
+    [user, chats, chatMessages, currentChatId, aiEnabled]
+  );
 
   const startNewChat = useCallback(() => {
     setCurrentChatId(null);
@@ -203,22 +230,28 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const selectChat = useCallback(async (chatId: string) => {
     setCurrentChatId(chatId);
     const { data, error } = await chatApi.fetchChatMessages(chatId);
-    if (error) { console.error('Error fetching chat messages:', error); return; }
+    if (error) {
+      console.error('Error fetching chat messages:', error);
+      return;
+    }
     setChatMessages(data);
   }, []);
 
-  const deleteChat = useCallback(async (chatId: string) => {
-    const { error } = await chatApi.deleteChat(chatId);
-    if (error) {
-      console.error('Error deleting chat:', error);
-      throw error;
-    }
-    setChats(prev => prev.filter(c => c.id !== chatId));
-    if (currentChatId === chatId) {
-      setCurrentChatId(null);
-      setChatMessages([]);
-    }
-  }, [currentChatId]);
+  const deleteChat = useCallback(
+    async (chatId: string) => {
+      const { error } = await chatApi.deleteChat(chatId);
+      if (error) {
+        console.error('Error deleting chat:', error);
+        throw error;
+      }
+      setChats((prev) => prev.filter((c) => c.id !== chatId));
+      if (currentChatId === chatId) {
+        setCurrentChatId(null);
+        setChatMessages([]);
+      }
+    },
+    [currentChatId]
+  );
 
   const renameChat = useCallback(async (chatId: string, title: string) => {
     const { error } = await chatApi.renameChat(chatId, title);
@@ -226,48 +259,61 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       console.error('Error renaming chat:', error);
       throw error;
     }
-    setChats(prev => prev.map(c => c.id === chatId ? { ...c, title } : c));
+    setChats((prev) => prev.map((c) => (c.id === chatId ? { ...c, title } : c)));
   }, []);
 
-  const submitFeedback = useCallback(async (description: string) => {
-    if (!user || !currentChatId) return;
+  const submitFeedback = useCallback(
+    async (description: string) => {
+      if (!user || !currentChatId) return;
 
-    const chat = chats.find(c => c.id === currentChatId);
-    const lastMessage = chatMessages[chatMessages.length - 1];
+      const chat = chats.find((c) => c.id === currentChatId);
+      const lastMessage = chatMessages[chatMessages.length - 1];
 
-    const { error } = await chatApi.insertChatFeedback({
-      userId: user.id,
-      chatId: currentChatId,
-      semesterId: chat?.semesterId ?? null,
-      courseIds: chat?.courseIds ?? [],
-      reportedAtSequence: lastMessage?.sequence ?? null,
-      description,
-      conversationSnapshot: chatMessages.map(m => ({
-        role: m.role,
-        content: m.content,
-        sequence: m.sequence,
-      })),
-    });
-    if (error) {
-      console.error('Error submitting feedback:', error);
-      throw error;
-    }
-  }, [user, chats, chatMessages, currentChatId]);
+      const { error } = await chatApi.insertChatFeedback({
+        userId: user.id,
+        chatId: currentChatId,
+        semesterId: chat?.semesterId ?? null,
+        courseIds: chat?.courseIds ?? [],
+        reportedAtSequence: lastMessage?.sequence ?? null,
+        description,
+        conversationSnapshot: chatMessages.map((m) => ({
+          role: m.role,
+          content: m.content,
+          sequence: m.sequence,
+        })),
+      });
+      if (error) {
+        console.error('Error submitting feedback:', error);
+        throw error;
+      }
+    },
+    [user, chats, chatMessages, currentChatId]
+  );
 
-  const value = useMemo<ChatState>(() => ({
-    chats,
-    currentChatId,
-    chatMessages,
-    addChatMessage,
-    startNewChat,
-    selectChat,
-    deleteChat,
-    renameChat,
-    submitFeedback,
-  }), [
-    chats, currentChatId, chatMessages,
-    addChatMessage, startNewChat, selectChat, deleteChat, renameChat, submitFeedback,
-  ]);
+  const value = useMemo<ChatState>(
+    () => ({
+      chats,
+      currentChatId,
+      chatMessages,
+      addChatMessage,
+      startNewChat,
+      selectChat,
+      deleteChat,
+      renameChat,
+      submitFeedback,
+    }),
+    [
+      chats,
+      currentChatId,
+      chatMessages,
+      addChatMessage,
+      startNewChat,
+      selectChat,
+      deleteChat,
+      renameChat,
+      submitFeedback,
+    ]
+  );
 
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;
 }

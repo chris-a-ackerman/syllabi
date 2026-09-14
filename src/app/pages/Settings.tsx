@@ -134,7 +134,9 @@ function ClaudeKeyCard({
       anthropic_key_last_tested_at: data.tested_at,
       anthropic_key_last_test_ok: data.ok,
     });
-    toast[data.ok ? 'success' : 'error'](data.ok ? 'Claude API key is working' : 'Claude API key was rejected');
+    toast[data.ok ? 'success' : 'error'](
+      data.ok ? 'Claude API key is working' : 'Claude API key was rejected'
+    );
     setTesting(false);
   };
 
@@ -260,10 +262,21 @@ function ClaudeKeyCard({
           </p>
 
           <div className="flex gap-3 mt-4">
-            <Button variant="outline" size="sm" className="rounded-lg" onClick={handleTest} disabled={testing}>
+            <Button
+              variant="outline"
+              size="sm"
+              className="rounded-lg"
+              onClick={handleTest}
+              disabled={testing}
+            >
               {testing ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Test'}
             </Button>
-            <Button variant="outline" size="sm" className="rounded-lg" onClick={() => setEditing(true)}>
+            <Button
+              variant="outline"
+              size="sm"
+              className="rounded-lg"
+              onClick={() => setEditing(true)}
+            >
               Replace
             </Button>
             <Button
@@ -293,7 +306,14 @@ function ClaudeKeyCard({
               disabled={removing}
               className="rounded-lg bg-red-600 hover:bg-red-700 text-white"
             >
-              {removing ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Removing…</> : 'Remove'}
+              {removing ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Removing…
+                </>
+              ) : (
+                'Remove'
+              )}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -472,14 +492,22 @@ function CanvasCard({
       ) : (
         <>
           <p className="text-sm text-gray-500 mb-1">Institution URL</p>
-          <p className="text-sm font-medium text-gray-800 mb-1 break-all">{status?.canvas_base_url}</p>
+          <p className="text-sm font-medium text-gray-800 mb-1 break-all">
+            {status?.canvas_base_url}
+          </p>
           {status?.canvas_token_last_tested_at && (
             <p className="text-sm text-gray-500 mb-6">
               Last tested {relativeTime(status.canvas_token_last_tested_at)}
             </p>
           )}
           <div className={status?.canvas_token_last_tested_at ? 'flex gap-3' : 'flex gap-3 mt-6'}>
-            <Button variant="outline" size="sm" className="rounded-lg" onClick={handleTest} disabled={testing}>
+            <Button
+              variant="outline"
+              size="sm"
+              className="rounded-lg"
+              onClick={handleTest}
+              disabled={testing}
+            >
               {testing ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Test connection'}
             </Button>
             <Button
@@ -510,7 +538,10 @@ function CanvasCard({
               className="rounded-lg bg-gray-900 hover:bg-gray-800 text-white"
             >
               {disconnecting ? (
-                <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Disconnecting…</>
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Disconnecting…
+                </>
               ) : (
                 'Disconnect'
               )}

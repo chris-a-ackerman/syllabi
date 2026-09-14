@@ -5,7 +5,8 @@ import { COURSE_COLORS } from '@/lib/courseColors';
 import { isClaudeKeyRejected, toastClaudeKeyRejected } from '@/lib/claudeKeyRejection';
 import type { CanvasSyllabusSourceType } from '@/lib/types';
 
-export type CanvasStep = 'dates' | 'detecting' | 'review' | 'processing' | 'syllabi' | 'downloading';
+export type CanvasStep =
+  'dates' | 'detecting' | 'review' | 'processing' | 'syllabi' | 'downloading';
 export type SyllabusSearchStatus = 'searching' | 'found' | 'not_found' | 'error';
 export type SyllabusDownloadStatus = 'downloading' | 'started' | 'error' | 'skipped';
 
@@ -54,10 +55,12 @@ export function useCanvasFlow() {
   const [createdSemesterId, setCreatedSemesterId] = useState<string | null>(null);
   const [courseLinks, setCourseLinks] = useState<CanvasCourseLink[]>([]);
   const [syllabiResults, setSyllabiResults] = useState<Record<string, SyllabusFindResult>>({});
-  const [downloadResults, setDownloadResults] = useState<Record<string, SyllabusDownloadStatus>>({});
+  const [downloadResults, setDownloadResults] = useState<Record<string, SyllabusDownloadStatus>>(
+    {}
+  );
   const [error, setError] = useState<string | null>(null);
 
-  const createdCourseIds = useMemo(() => courseLinks.map(l => l.courseId), [courseLinks]);
+  const createdCourseIds = useMemo(() => courseLinks.map((l) => l.courseId), [courseLinks]);
 
   const reset = useCallback(() => {
     setStep('dates');
@@ -101,22 +104,21 @@ export function useCanvasFlow() {
     setStep('review');
   }, [startDate, endDate]);
 
-  const updateCourse = useCallback((
-    index: number,
-    field: 'editedName' | 'editedCode',
-    value: string,
-  ) => {
-    setDetectedCourses(prev =>
-      prev.map((c, i) => (i === index ? { ...c, [field]: value } : c))
-    );
-  }, []);
+  const updateCourse = useCallback(
+    (index: number, field: 'editedName' | 'editedCode', value: string) => {
+      setDetectedCourses((prev) =>
+        prev.map((c, i) => (i === index ? { ...c, [field]: value } : c))
+      );
+    },
+    []
+  );
 
   const removeCourse = useCallback((index: number) => {
-    setDetectedCourses(prev => prev.filter((_, i) => i !== index));
+    setDetectedCourses((prev) => prev.filter((_, i) => i !== index));
   }, []);
 
   const toggleCourse = useCallback((index: number) => {
-    setDetectedCourses(prev =>
+    setDetectedCourses((prev) =>
       prev.map((c, i) => (i === index ? { ...c, selected: !c.selected } : c))
     );
   }, []);
@@ -139,7 +141,7 @@ export function useCanvasFlow() {
     }
     setCreatedSemesterId(semId);
 
-    const selectedCourses = detectedCourses.filter(dc => dc.selected);
+    const selectedCourses = detectedCourses.filter((dc) => dc.selected);
     const links: CanvasCourseLink[] = [];
 
     for (let i = 0; i < selectedCourses.length; i++) {
@@ -169,7 +171,9 @@ export function useCanvasFlow() {
 
     // Kick off parallel syllabus searches for all created courses
     const initialResults: Record<string, SyllabusFindResult> = {};
-    links.forEach(({ courseId }) => { initialResults[courseId] = { status: 'searching' }; });
+    links.forEach(({ courseId }) => {
+      initialResults[courseId] = { status: 'searching' };
+    });
     setSyllabiResults(initialResults);
 
     // Set once, even though multiple courses can hit this in parallel — a
@@ -178,7 +182,8 @@ export function useCanvasFlow() {
     let keyRejectedNotified = false;
 
     links.forEach(({ courseId, canvasCourseId }) => {
-      canvasApi.findCanvasSyllabus(courseId, canvasCourseId)
+      canvasApi
+        .findCanvasSyllabus(courseId, canvasCourseId)
         .then(async ({ data, error: fnError }) => {
           let result: SyllabusFindResult;
           if (fnError && (await isClaudeKeyRejected(fnError))) {
@@ -201,10 +206,10 @@ export function useCanvasFlow() {
               confidence: data.confidence,
             };
           }
-          setSyllabiResults(prev => ({ ...prev, [courseId]: result }));
+          setSyllabiResults((prev) => ({ ...prev, [courseId]: result }));
         })
         .catch(() => {
-          setSyllabiResults(prev => ({ ...prev, [courseId]: { status: 'error' } }));
+          setSyllabiResults((prev) => ({ ...prev, [courseId]: { status: 'error' } }));
         });
     });
   }, [semesterName, startDate, endDate, detectedCourses, addSemester, addCourse]);
@@ -224,21 +229,21 @@ export function useCanvasFlow() {
       const result = syllabiResults[courseId];
       if (result?.status !== 'found') return;
 
-      canvasApi.downloadCanvasSyllabus({
-        courseId,
-        // status === 'found' guarantees source_type was set when this result was recorded.
-        sourceType: result.source_type as CanvasSyllabusSourceType,
-        fileUrl: result.file_url,
-        fileName: result.file_name,
-        htmlContent: result.html_content,
-      })
+      canvasApi
+        .downloadCanvasSyllabus({
+          courseId,
+          // status === 'found' guarantees source_type was set when this result was recorded.
+          sourceType: result.source_type as CanvasSyllabusSourceType,
+          fileUrl: result.file_url,
+          fileName: result.file_name,
+          htmlContent: result.html_content,
+        })
         .then(({ data, error: fnError }) => {
-          const status: SyllabusDownloadStatus =
-            fnError || !data?.success ? 'error' : 'started';
-          setDownloadResults(prev => ({ ...prev, [courseId]: status }));
+          const status: SyllabusDownloadStatus = fnError || !data?.success ? 'error' : 'started';
+          setDownloadResults((prev) => ({ ...prev, [courseId]: status }));
         })
         .catch(() => {
-          setDownloadResults(prev => ({ ...prev, [courseId]: 'error' }));
+          setDownloadResults((prev) => ({ ...prev, [courseId]: 'error' }));
         });
     });
   }, [courseLinks, syllabiResults]);

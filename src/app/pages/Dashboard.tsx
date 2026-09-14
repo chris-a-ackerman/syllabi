@@ -27,9 +27,9 @@ export function Dashboard() {
   const [showCourseForm, setShowCourseForm] = useState(false);
   const [showBulkUpload, setShowBulkUpload] = useState(false);
   const [showEditSemester, setShowEditSemester] = useState(false);
-  const [selectedCourseForUpload, setSelectedCourseForUpload] = useState<CourseModalTarget | undefined>(
-    undefined,
-  );
+  const [selectedCourseForUpload, setSelectedCourseForUpload] = useState<
+    CourseModalTarget | undefined
+  >(undefined);
   const [showSettings, setShowSettings] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [selectedCourses, setSelectedCourses] = useState<string[]>([]);
@@ -68,7 +68,7 @@ export function Dashboard() {
 
   const toggleCourse = (courseId: string) => {
     setSelectedCourses((prev) =>
-      prev.includes(courseId) ? prev.filter((id) => id !== courseId) : [...prev, courseId],
+      prev.includes(courseId) ? prev.filter((id) => id !== courseId) : [...prev, courseId]
     );
   };
 
@@ -144,7 +144,9 @@ export function Dashboard() {
             onToggleAllCourses={toggleAllCourses}
             onSemesterChange={(id) => {
               setActiveSemester(id).catch(() => {
-                toast.error('Failed to switch semester.', { description: 'Please try again in a moment.' });
+                toast.error('Failed to switch semester.', {
+                  description: 'Please try again in a moment.',
+                });
               });
               setSelectedCourses([]);
             }}

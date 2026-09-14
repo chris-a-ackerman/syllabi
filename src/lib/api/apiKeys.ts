@@ -29,7 +29,9 @@ export async function fetchApiKeyStatus() {
  * throws: failures come back as `{ data: null, error }`.
  */
 async function postFunction<T>(path: string, body?: unknown) {
-  const { data: { session } } = await supabase.auth.getSession();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
   if (!session) return { data: null, error: { message: 'Not signed in' } };
 
   let res: Response;

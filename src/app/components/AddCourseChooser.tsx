@@ -10,14 +10,17 @@ interface AddCourseChooserProps {
 }
 
 /** The "how would you like to add your course?" card chooser (SYL-39). */
-export function AddCourseChooser({ onUpload, onCreateManually, onBulkUpload, onCancel }: AddCourseChooserProps) {
+export function AddCourseChooser({
+  onUpload,
+  onCreateManually,
+  onBulkUpload,
+  onCancel,
+}: AddCourseChooserProps) {
   return (
     <>
       <DialogHeader>
         <DialogTitle>Add Course</DialogTitle>
-        <DialogDescription>
-          How would you like to add your course?
-        </DialogDescription>
+        <DialogDescription>How would you like to add your course?</DialogDescription>
       </DialogHeader>
 
       <div className="py-6 space-y-4">
@@ -30,11 +33,10 @@ export function AddCourseChooser({ onUpload, onCreateManually, onBulkUpload, onC
               <FileText className="w-6 h-6 text-indigo-600" />
             </div>
             <div className="flex-1">
-              <h3 className="text-lg font-semibold text-gray-900 mb-1">
-                Upload Syllabus First
-              </h3>
+              <h3 className="text-lg font-semibold text-gray-900 mb-1">Upload Syllabus First</h3>
               <p className="text-sm text-gray-600">
-                Upload your syllabus PDF and we'll automatically extract course details, deadlines, and policies. You can review and edit before saving.
+                Upload your syllabus PDF and we'll automatically extract course details, deadlines,
+                and policies. You can review and edit before saving.
               </p>
             </div>
           </div>
@@ -49,11 +51,10 @@ export function AddCourseChooser({ onUpload, onCreateManually, onBulkUpload, onC
               <PenSquare className="w-6 h-6 text-violet-600" />
             </div>
             <div className="flex-1">
-              <h3 className="text-lg font-semibold text-gray-900 mb-1">
-                Create Manually
-              </h3>
+              <h3 className="text-lg font-semibold text-gray-900 mb-1">Create Manually</h3>
               <p className="text-sm text-gray-600">
-                Enter course details manually now. You can upload your syllabus later from the course page.
+                Enter course details manually now. You can upload your syllabus later from the
+                course page.
               </p>
             </div>
           </div>
@@ -68,11 +69,10 @@ export function AddCourseChooser({ onUpload, onCreateManually, onBulkUpload, onC
               <Layers className="w-6 h-6 text-teal-600" />
             </div>
             <div className="flex-1">
-              <h3 className="text-lg font-semibold text-gray-900 mb-1">
-                Upload Multiple Syllabi
-              </h3>
+              <h3 className="text-lg font-semibold text-gray-900 mb-1">Upload Multiple Syllabi</h3>
               <p className="text-sm text-gray-600">
-                Upload several PDFs at once — we'll detect course names and codes automatically. All courses go into your current semester.
+                Upload several PDFs at once — we'll detect course names and codes automatically. All
+                courses go into your current semester.
               </p>
             </div>
           </div>

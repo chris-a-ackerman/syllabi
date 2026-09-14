@@ -20,7 +20,10 @@ interface DataState {
   events: Event[];
   notes: Note[];
   addSemester: (semester: Omit<Semester, 'id'>) => Promise<string>;
-  updateSemester: (id: string, updates: { name: string; startDate: string; endDate: string; isActive: boolean }) => Promise<void>;
+  updateSemester: (
+    id: string,
+    updates: { name: string; startDate: string; endDate: string; isActive: boolean }
+  ) => Promise<void>;
   deleteSemester: (id: string) => Promise<void>;
   setActiveSemester: (id: string) => Promise<void>;
   addCourse: (course: Omit<Course, 'id'>) => Promise<string | undefined>;
@@ -79,116 +82,133 @@ export function DataProvider({ children }: { children: ReactNode }) {
     fetchData();
   }, [userId]);
 
-  const addSemester = useCallback(async (semester: Omit<Semester, 'id'>): Promise<string> => {
-    if (!user) return '';
+  const addSemester = useCallback(
+    async (semester: Omit<Semester, 'id'>): Promise<string> => {
+      if (!user) return '';
 
-    // Deactivate all existing semesters if the new one is active
-    if (semester.isActive) {
-      await semestersApi.deactivateSemesters(user.id);
-      setSemesters(prev => prev.map(s => ({ ...s, isActive: false })));
-    }
+      // Deactivate all existing semesters if the new one is active
+      if (semester.isActive) {
+        await semestersApi.deactivateSemesters(user.id);
+        setSemesters((prev) => prev.map((s) => ({ ...s, isActive: false })));
+      }
 
-    const { data: newSemester, error } = await semestersApi.upsertSemester(user.id, semester);
+      const { data: newSemester, error } = await semestersApi.upsertSemester(user.id, semester);
 
-    if (error || !newSemester) {
-      console.error('Error adding semester:', error);
-      return '';
-    }
+      if (error || !newSemester) {
+        console.error('Error adding semester:', error);
+        return '';
+      }
 
-    setSemesters(prev => {
-      if (prev.some(s => s.id === newSemester.id)) return prev;
-      return [newSemester, ...prev];
-    });
-    return newSemester.id;
-  }, [user]);
+      setSemesters((prev) => {
+        if (prev.some((s) => s.id === newSemester.id)) return prev;
+        return [newSemester, ...prev];
+      });
+      return newSemester.id;
+    },
+    [user]
+  );
 
-  const updateSemester = useCallback(async (
-    id: string,
-    updates: { name: string; startDate: string; endDate: string; isActive: boolean },
-  ) => {
-    if (!user) return;
-    const previous = semesters;
-    setSemesters(prev => prev.map(s => {
-      if (!updates.isActive) return s.id === id ? { ...s, ...updates } : s;
-      return s.id === id ? { ...s, ...updates } : { ...s, isActive: false };
-    }));
+  const updateSemester = useCallback(
+    async (
+      id: string,
+      updates: { name: string; startDate: string; endDate: string; isActive: boolean }
+    ) => {
+      if (!user) return;
+      const previous = semesters;
+      setSemesters((prev) =>
+        prev.map((s) => {
+          if (!updates.isActive) return s.id === id ? { ...s, ...updates } : s;
+          return s.id === id ? { ...s, ...updates } : { ...s, isActive: false };
+        })
+      );
 
-    if (updates.isActive) {
+      if (updates.isActive) {
+        const { error: deactivateError } = await semestersApi.deactivateSemesters(user.id);
+        if (deactivateError) {
+          setSemesters(previous);
+          console.error('Error updating semester:', deactivateError);
+          throw deactivateError;
+        }
+      }
+
+      const { error } = await semestersApi.updateSemester(id, updates);
+      if (error) {
+        setSemesters(previous);
+        console.error('Error updating semester:', error);
+        throw error;
+      }
+    },
+    [user, semesters]
+  );
+
+  const deleteSemester = useCallback(
+    async (id: string) => {
+      if (!user) return;
+      const courseIds = courses.filter((c) => c.semesterId === id).map((c) => c.id);
+      const { error } = await semestersApi.deleteSemesterWithCourses(id, courseIds);
+      if (error) {
+        console.error('Error deleting semester:', error);
+        throw error;
+      }
+
+      setCourses((prev) => prev.filter((c) => c.semesterId !== id));
+      setNotes((prev) => prev.filter((n) => !courseIds.includes(n.courseId)));
+      setEvents((prev) => prev.filter((e) => !courseIds.includes(e.courseId)));
+
+      const wasActive = semesters.find((s) => s.id === id)?.isActive;
+      const remaining = semesters.filter((s) => s.id !== id);
+
+      if (wasActive && remaining.length > 0) {
+        const next = remaining[0];
+        setSemesters(remaining.map((s) => ({ ...s, isActive: s.id === next.id })));
+        const { error: activateError } = await semestersApi.activateSemester(next.id);
+        if (activateError) console.error('Error activating next semester:', activateError);
+      } else {
+        setSemesters(remaining);
+      }
+    },
+    [user, courses, semesters]
+  );
+
+  const setActiveSemester = useCallback(
+    async (id: string) => {
+      if (!user) return;
+      const previous = semesters;
+      setSemesters((prev) => prev.map((s) => ({ ...s, isActive: s.id === id }))); // Optimistic update
+
       const { error: deactivateError } = await semestersApi.deactivateSemesters(user.id);
       if (deactivateError) {
         setSemesters(previous);
-        console.error('Error updating semester:', deactivateError);
+        console.error('Error activating semester:', deactivateError);
         throw deactivateError;
       }
-    }
 
-    const { error } = await semestersApi.updateSemester(id, updates);
-    if (error) {
-      setSemesters(previous);
-      console.error('Error updating semester:', error);
-      throw error;
-    }
-  }, [user, semesters]);
+      const { error } = await semestersApi.activateSemester(id);
+      if (error) {
+        setSemesters(previous);
+        console.error('Error activating semester:', error);
+        throw error;
+      }
+    },
+    [user, semesters]
+  );
 
-  const deleteSemester = useCallback(async (id: string) => {
-    if (!user) return;
-    const courseIds = courses.filter(c => c.semesterId === id).map(c => c.id);
-    const { error } = await semestersApi.deleteSemesterWithCourses(id, courseIds);
-    if (error) {
-      console.error('Error deleting semester:', error);
-      throw error;
-    }
+  const addCourse = useCallback(
+    async (course: Omit<Course, 'id'>): Promise<string | undefined> => {
+      if (!user) return undefined;
 
-    setCourses(prev => prev.filter(c => c.semesterId !== id));
-    setNotes(prev => prev.filter(n => !courseIds.includes(n.courseId)));
-    setEvents(prev => prev.filter(e => !courseIds.includes(e.courseId)));
+      const { data: newCourse, error } = await coursesApi.insertCourse(user.id, course);
 
-    const wasActive = semesters.find(s => s.id === id)?.isActive;
-    const remaining = semesters.filter(s => s.id !== id);
+      if (error || !newCourse) {
+        console.error('Error adding course:', error);
+        return undefined;
+      }
 
-    if (wasActive && remaining.length > 0) {
-      const next = remaining[0];
-      setSemesters(remaining.map(s => ({ ...s, isActive: s.id === next.id })));
-      const { error: activateError } = await semestersApi.activateSemester(next.id);
-      if (activateError) console.error('Error activating next semester:', activateError);
-    } else {
-      setSemesters(remaining);
-    }
-  }, [user, courses, semesters]);
-
-  const setActiveSemester = useCallback(async (id: string) => {
-    if (!user) return;
-    const previous = semesters;
-    setSemesters(prev => prev.map(s => ({ ...s, isActive: s.id === id }))); // Optimistic update
-
-    const { error: deactivateError } = await semestersApi.deactivateSemesters(user.id);
-    if (deactivateError) {
-      setSemesters(previous);
-      console.error('Error activating semester:', deactivateError);
-      throw deactivateError;
-    }
-
-    const { error } = await semestersApi.activateSemester(id);
-    if (error) {
-      setSemesters(previous);
-      console.error('Error activating semester:', error);
-      throw error;
-    }
-  }, [user, semesters]);
-
-  const addCourse = useCallback(async (course: Omit<Course, 'id'>): Promise<string | undefined> => {
-    if (!user) return undefined;
-
-    const { data: newCourse, error } = await coursesApi.insertCourse(user.id, course);
-
-    if (error || !newCourse) {
-      console.error('Error adding course:', error);
-      return undefined;
-    }
-
-    setCourses(prev => [newCourse, ...prev]);
-    return newCourse.id;
-  }, [user]);
+      setCourses((prev) => [newCourse, ...prev]);
+      return newCourse.id;
+    },
+    [user]
+  );
 
   const deleteCourse = useCallback(async (id: string) => {
     const { error } = await coursesApi.deleteCourse(id);
@@ -196,40 +216,50 @@ export function DataProvider({ children }: { children: ReactNode }) {
       console.error('Error deleting course:', error);
       throw error;
     }
-    setCourses(prev => prev.filter(c => c.id !== id));
-    setNotes(prev => prev.filter(n => n.courseId !== id));
-    setEvents(prev => prev.filter(e => e.courseId !== id));
+    setCourses((prev) => prev.filter((c) => c.id !== id));
+    setNotes((prev) => prev.filter((n) => n.courseId !== id));
+    setEvents((prev) => prev.filter((e) => e.courseId !== id));
   }, []);
 
   const updateCourse = useCallback((id: string, updates: Partial<Course>) => {
-    setCourses(prev => prev.map(c => c.id === id ? { ...c, ...updates } : c));
+    setCourses((prev) => prev.map((c) => (c.id === id ? { ...c, ...updates } : c)));
 
     // Persist subset of fields that map 1:1 to DB columns
-    coursesApi.updateCourse(id, updates)
-      .then(({ error }) => { if (error) console.error('Error updating course:', error); });
+    coursesApi.updateCourse(id, updates).then(({ error }) => {
+      if (error) console.error('Error updating course:', error);
+    });
   }, []);
 
   const refreshCourses = useCallback(async () => {
     const { data, error } = await coursesApi.fetchCourses();
-    if (error) { console.error('Error refreshing courses:', error); return; }
+    if (error) {
+      console.error('Error refreshing courses:', error);
+      return;
+    }
     setCourses(data);
   }, []);
 
   const refreshEvents = useCallback(async () => {
     const { data, error } = await eventsApi.fetchEvents();
-    if (error) { console.error('Error refreshing events:', error); return; }
+    if (error) {
+      console.error('Error refreshing events:', error);
+      return;
+    }
     setEvents(data);
   }, []);
 
-  const addNote = useCallback(async (note: Omit<Note, 'id' | 'createdAt'>) => {
-    if (!user) return;
-    const { data: newNote, error } = await notesApi.insertNote(user.id, note);
-    if (error || !newNote) {
-      console.error('Error adding note:', error);
-      return;
-    }
-    setNotes(prev => [newNote, ...prev]);
-  }, [user]);
+  const addNote = useCallback(
+    async (note: Omit<Note, 'id' | 'createdAt'>) => {
+      if (!user) return;
+      const { data: newNote, error } = await notesApi.insertNote(user.id, note);
+      if (error || !newNote) {
+        console.error('Error adding note:', error);
+        return;
+      }
+      setNotes((prev) => [newNote, ...prev]);
+    },
+    [user]
+  );
 
   const deleteNote = useCallback(async (id: string) => {
     const { error } = await notesApi.deleteNote(id);
@@ -237,31 +267,45 @@ export function DataProvider({ children }: { children: ReactNode }) {
       console.error('Error deleting note:', error);
       return;
     }
-    setNotes(prev => prev.filter(n => n.id !== id));
+    setNotes((prev) => prev.filter((n) => n.id !== id));
   }, []);
 
-  const value = useMemo<DataState>(() => ({
-    semesters,
-    courses,
-    events,
-    notes,
-    addSemester,
-    updateSemester,
-    deleteSemester,
-    setActiveSemester,
-    addCourse,
-    deleteCourse,
-    updateCourse,
-    refreshCourses,
-    refreshEvents,
-    addNote,
-    deleteNote,
-  }), [
-    semesters, courses, events, notes,
-    addSemester, updateSemester, deleteSemester, setActiveSemester,
-    addCourse, deleteCourse, updateCourse, refreshCourses, refreshEvents,
-    addNote, deleteNote,
-  ]);
+  const value = useMemo<DataState>(
+    () => ({
+      semesters,
+      courses,
+      events,
+      notes,
+      addSemester,
+      updateSemester,
+      deleteSemester,
+      setActiveSemester,
+      addCourse,
+      deleteCourse,
+      updateCourse,
+      refreshCourses,
+      refreshEvents,
+      addNote,
+      deleteNote,
+    }),
+    [
+      semesters,
+      courses,
+      events,
+      notes,
+      addSemester,
+      updateSemester,
+      deleteSemester,
+      setActiveSemester,
+      addCourse,
+      deleteCourse,
+      updateCourse,
+      refreshCourses,
+      refreshEvents,
+      addNote,
+      deleteNote,
+    ]
+  );
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>;
 }

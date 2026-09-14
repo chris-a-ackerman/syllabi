@@ -34,7 +34,7 @@ export function getRelativeLabel(daysUntil: number): string {
 export function selectUrgentDeadlines(
   events: Event[],
   courses: Course[],
-  today: Date,
+  today: Date
 ): UrgentDeadline[] {
   // Only upcoming events (today or later), within 14 days, excluding no_class.
   // getUpcomingEvents returns them date-sorted, so the cap below always keeps
@@ -42,8 +42,8 @@ export function selectUrgentDeadlines(
   const inWindow = getUpcomingEvents(events, { today, windowDays: 14 });
 
   // Selection rule: canvas-matched events first, fill remaining slots with syllabus-only
-  const canvasEvents = inWindow.filter(e => e.canvasAssignmentId != null);
-  const syllabusOnlyEvents = inWindow.filter(e => e.canvasAssignmentId == null);
+  const canvasEvents = inWindow.filter((e) => e.canvasAssignmentId != null);
+  const syllabusOnlyEvents = inWindow.filter((e) => e.canvasAssignmentId == null);
 
   // Take up to 3, canvas-first
   const chosen: typeof inWindow = [];
@@ -58,12 +58,12 @@ export function selectUrgentDeadlines(
 
   // Map to enriched shape, then sort by date ascending
   return chosen
-    .map(e => {
+    .map((e) => {
       const eventDate = startOfDay(parseISO(e.date!));
       const daysUntil = differenceInCalendarDays(eventDate, today);
       return {
         event: e,
-        course: courses.find(c => c.id === e.courseId),
+        course: courses.find((c) => c.id === e.courseId),
         daysUntil,
       };
     })

@@ -236,7 +236,10 @@ export function DashboardSidebar({
                         </>
                       ) : (
                         <div className="flex-1 flex items-start gap-2">
-                          <UploadExistingCourseCard course={course} onUploadSyllabus={onUploadSyllabus} />
+                          <UploadExistingCourseCard
+                            course={course}
+                            onUploadSyllabus={onUploadSyllabus}
+                          />
                           <Button
                             variant="ghost"
                             size="sm"

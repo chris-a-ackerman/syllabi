@@ -8,13 +8,7 @@ import {
   uploadAndProcess,
 } from '@/lib/api/syllabus';
 import { initialFormValues, type CourseFormValues } from '@/lib/courseForm';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from './ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Alert, AlertDescription } from './ui/alert';
@@ -43,7 +37,12 @@ export function UploadSyllabusModal({ open, ...props }: UploadSyllabusModalProps
   return <UploadSyllabusModalContent {...props} />;
 }
 
-function UploadSyllabusModalContent({ onClose, existingCourse, onCreateManually, onBulkUpload }: Omit<UploadSyllabusModalProps, 'open'>) {
+function UploadSyllabusModalContent({
+  onClose,
+  existingCourse,
+  onCreateManually,
+  onBulkUpload,
+}: Omit<UploadSyllabusModalProps, 'open'>) {
   const { addCourse, updateCourse, refreshCourses, refreshEvents, semesters, courses } = useData();
   const { user } = useAuth();
   const [step, setStep] = useState<Step>(existingCourse ? 'upload' : 'choose');
@@ -55,14 +54,19 @@ function UploadSyllabusModalContent({ onClose, existingCourse, onCreateManually,
   const [processingLog, setProcessingLog] = useState<string[]>([]);
   const [processingError, setProcessingError] = useState<string | null>(null);
 
-  const activeSemester = semesters.find(s => s.isActive);
+  const activeSemester = semesters.find((s) => s.isActive);
 
   // Review form state — seeded from the target course on a re-upload, or with
   // the next free colour in the active semester for a new course (SYL-62).
   const [values, setValues] = useState<CourseFormValues>(() =>
-    initialFormValues(existingCourse, courses.filter(c => c.semesterId === activeSemester?.id)),
+    initialFormValues(
+      existingCourse,
+      courses.filter((c) => c.semesterId === activeSemester?.id)
+    )
   );
-  const [extractionQuality, setExtractionQuality] = useState<'complete' | 'partial' | 'minimal'>('complete');
+  const [extractionQuality, setExtractionQuality] = useState<'complete' | 'partial' | 'minimal'>(
+    'complete'
+  );
   const [extractedCount, setExtractedCount] = useState(0);
 
   const handleContinue = async () => {
@@ -102,7 +106,7 @@ function UploadSyllabusModalContent({ onClose, existingCourse, onCreateManually,
         {
           awaitProcessing: true,
           onStage: (stage) =>
-            setProcessingLog(prev => [
+            setProcessingLog((prev) => [
               ...prev,
               stage === 'uploading'
                 ? 'Uploading syllabus file...'
@@ -113,7 +117,10 @@ function UploadSyllabusModalContent({ onClose, existingCourse, onCreateManually,
       if (result.path) setUploadedFilePath(result.path);
       if (pipelineError) throw new Error(pipelineError.message);
 
-      setProcessingLog(prev => [...prev, `Done! Extracted ${result.fnData?.events_created} events.`]);
+      setProcessingLog((prev) => [
+        ...prev,
+        `Done! Extracted ${result.fnData?.events_created} events.`,
+      ]);
 
       // 3. Pull updated courses and events into context so all data is visible immediately
       await Promise.all([refreshCourses(), refreshEvents()]);
@@ -122,7 +129,7 @@ function UploadSyllabusModalContent({ onClose, existingCourse, onCreateManually,
       const { data: updatedCourse } = await fetchCourse(courseId);
 
       if (updatedCourse) {
-        setValues(prev => ({
+        setValues((prev) => ({
           ...prev,
           name: updatedCourse.name || '',
           code: updatedCourse.code || '',
@@ -159,7 +166,6 @@ function UploadSyllabusModalContent({ onClose, existingCourse, onCreateManually,
     onClose();
   };
 
-
   const handleCancelAfterError = async () => {
     if (uploadedFilePath) {
       await removeSyllabusFile(uploadedFilePath);
@@ -177,10 +183,14 @@ function UploadSyllabusModalContent({ onClose, existingCourse, onCreateManually,
 
   const getQualityColor = (quality: string) => {
     switch (quality) {
-      case 'complete': return 'bg-green-100 text-green-800';
-      case 'partial': return 'bg-yellow-100 text-yellow-800';
-      case 'minimal': return 'bg-red-100 text-red-800';
-      default: return 'bg-gray-100 text-gray-800';
+      case 'complete':
+        return 'bg-green-100 text-green-800';
+      case 'partial':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'minimal':
+        return 'bg-red-100 text-red-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
     }
   };
 
@@ -205,8 +215,7 @@ function UploadSyllabusModalContent({ onClose, existingCourse, onCreateManually,
               <DialogDescription>
                 {existingCourse
                   ? `Upload a syllabus for ${existingCourse.name} to extract course information and enable AI chat.`
-                  : 'Upload your syllabus to automatically extract course information.'
-                }
+                  : 'Upload your syllabus to automatically extract course information.'}
               </DialogDescription>
             </DialogHeader>
 
@@ -224,7 +233,14 @@ function UploadSyllabusModalContent({ onClose, existingCourse, onCreateManually,
             <div className="flex gap-3 pt-4">
               <Button
                 variant="outline"
-                onClick={existingCourse ? onClose : () => { setSelectedFile(null); setStep('choose'); }}
+                onClick={
+                  existingCourse
+                    ? onClose
+                    : () => {
+                        setSelectedFile(null);
+                        setStep('choose');
+                      }
+                }
                 className="rounded-lg"
               >
                 {existingCourse ? 'Cancel' : 'Back'}
@@ -244,12 +260,8 @@ function UploadSyllabusModalContent({ onClose, existingCourse, onCreateManually,
           <div className="py-10 space-y-6">
             <div className="text-center">
               <Loader2 className="w-12 h-12 text-indigo-600 animate-spin mx-auto mb-4" />
-              <h3 className="text-xl font-semibold text-gray-900 mb-1">
-                Reading your syllabus...
-              </h3>
-              <p className="text-sm text-gray-500">
-                This usually takes 20–40 seconds.
-              </p>
+              <h3 className="text-xl font-semibold text-gray-900 mb-1">Reading your syllabus...</h3>
+              <p className="text-sm text-gray-500">This usually takes 20–40 seconds.</p>
             </div>
 
             {processingLog.length > 0 && (
@@ -261,7 +273,11 @@ function UploadSyllabusModalContent({ onClose, existingCourse, onCreateManually,
                     ) : (
                       <Loader2 className="w-4 h-4 text-indigo-500 animate-spin flex-shrink-0" />
                     )}
-                    <span className={i < processingLog.length - 1 ? 'text-gray-500' : 'text-gray-900 font-medium'}>
+                    <span
+                      className={
+                        i < processingLog.length - 1 ? 'text-gray-500' : 'text-gray-900 font-medium'
+                      }
+                    >
                       {msg}
                     </span>
                   </div>
@@ -287,7 +303,11 @@ function UploadSyllabusModalContent({ onClose, existingCourse, onCreateManually,
             </div>
 
             <div className="flex gap-3 pt-4">
-              <Button variant="outline" onClick={handleCancelAfterError} className="flex-1 rounded-lg">
+              <Button
+                variant="outline"
+                onClick={handleCancelAfterError}
+                className="flex-1 rounded-lg"
+              >
                 Cancel
               </Button>
               <Button
@@ -311,7 +331,10 @@ function UploadSyllabusModalContent({ onClose, existingCourse, onCreateManually,
             </DialogHeader>
 
             <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto">
-              <CourseFormFields values={values} onChange={(updates) => setValues(prev => ({ ...prev, ...updates }))} />
+              <CourseFormFields
+                values={values}
+                onChange={(updates) => setValues((prev) => ({ ...prev, ...updates }))}
+              />
 
               <div className="pt-4 border-t">
                 <h4 className="font-semibold text-gray-900 mb-3">Extraction Summary</h4>
@@ -329,7 +352,8 @@ function UploadSyllabusModalContent({ onClose, existingCourse, onCreateManually,
                   <Alert className="rounded-lg bg-yellow-50 border-yellow-200">
                     <AlertCircle className="h-4 w-4 text-yellow-600" />
                     <AlertDescription className="text-sm text-yellow-800">
-                      Some information could not be extracted. You may need to manually add missing details.
+                      Some information could not be extracted. You may need to manually add missing
+                      details.
                     </AlertDescription>
                   </Alert>
                 )}

@@ -23,7 +23,9 @@ export function AuthCallback() {
       if (session) doNavigate(session);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_IN' && session) {
         doNavigate(session);
       } else if (event === 'SIGNED_OUT' && !redirected.current) {

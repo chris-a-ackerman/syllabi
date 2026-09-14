@@ -38,10 +38,10 @@ Local services run at: API `54321`, DB `54322`, Studio `54323`, Email `54324`.
 
 ### Key Tables
 
-| Table | Purpose |
-|---|---|
-| `courses` | One row per course; holds `syllabus_file_path`, `analysis_status` (`processing`/`complete`/`failed`), `analysis_error`, and `syllabus_analysis` (full JSONB blob) |
-| `semesters` | Referenced by courses; provides `start_date`/`end_date` so Claude can resolve relative dates like "Week 5" |
+| Table           | Purpose                                                                                                                                                                                                                                                                                                                        |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `courses`       | One row per course; holds `syllabus_file_path`, `analysis_status` (`processing`/`complete`/`failed`), `analysis_error`, and `syllabus_analysis` (full JSONB blob)                                                                                                                                                              |
+| `semesters`     | Referenced by courses; provides `start_date`/`end_date` so Claude can resolve relative dates like "Week 5"                                                                                                                                                                                                                     |
 | `course_events` | Flattened, one-row-per-event output of the parse; includes `type` (NOT NULL), `category`, `date`, `time`, `confidence`, `is_recurring_instance`, plus Canvas-matching columns: `canvas_assignment_id`, `canvas_matched_at`, `canvas_only`, `source` (`syllabus`/`canvas_matched`/`canvas`/`canvas_deleted`), `canvas_metadata` |
 
 **`course_events.type` is NOT NULL** with `CHECK (type IN ('deadline', 'exam', 'quiz', 'presentation', 'project_due', 'no_class', 'other'))` — defaults to `"other"` in the function if Claude omits it.
@@ -49,6 +49,7 @@ Local services run at: API `54321`, DB `54322`, Studio `54323`, Email `54324`.
 ### Claude Prompt Contract
 
 The system prompt in `process-syllabus/index.ts` instructs Claude to output **raw JSON only** (no markdown fences). Events in the `events` array must have:
+
 - `date` — resolved to `YYYY-MM-DD` using the provided semester start date
 - `type` — always required (maps to the NOT NULL column)
 - `category` — must match a `grading_rules.components[].name` exactly
