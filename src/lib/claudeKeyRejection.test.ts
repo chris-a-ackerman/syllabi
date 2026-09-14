@@ -11,16 +11,20 @@ afterEach(() => {
 
 describe('isClaudeKeyRejected', () => {
   it('is true for a FunctionsHttpError-shaped error whose body is claude_key_rejected', async () => {
-    const error = { context: new Response(JSON.stringify({ error: 'claude_key_rejected' }), { status: 402 }) };
+    const error = {
+      context: new Response(JSON.stringify({ error: 'claude_key_rejected' }), { status: 402 }),
+    };
     expect(await isClaudeKeyRejected(error)).toBe(true);
   });
 
   it('is false for a FunctionsHttpError-shaped error with a different body', async () => {
-    const error = { context: new Response(JSON.stringify({ error: 'Internal server error' }), { status: 500 }) };
+    const error = {
+      context: new Response(JSON.stringify({ error: 'Internal server error' }), { status: 500 }),
+    };
     expect(await isClaudeKeyRejected(error)).toBe(false);
   });
 
-  it('is true for a plain { code } shape (lib/api/syllabus.ts\'s re-thrown form)', async () => {
+  it("is true for a plain { code } shape (lib/api/syllabus.ts's re-thrown form)", async () => {
     expect(await isClaudeKeyRejected({ code: 'claude_key_rejected' })).toBe(true);
     expect(await isClaudeKeyRejected({ code: 'something_else' })).toBe(false);
   });

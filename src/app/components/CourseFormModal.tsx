@@ -1,12 +1,6 @@
 import { useState } from 'react';
 import { useData } from '../context/DataProvider';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from './ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
 import { Button } from './ui/button';
 import { Alert, AlertDescription } from './ui/alert';
 import { Upload, CheckCircle, AlertCircle } from 'lucide-react';
@@ -32,15 +26,23 @@ export function CourseFormModal({ open, ...props }: CourseFormModalProps) {
   return <CourseFormModalContent {...props} />;
 }
 
-function CourseFormModalContent({ onClose, existingCourse, onBack, onUploadSyllabus }: Omit<CourseFormModalProps, 'open'>) {
+function CourseFormModalContent({
+  onClose,
+  existingCourse,
+  onBack,
+  onUploadSyllabus,
+}: Omit<CourseFormModalProps, 'open'>) {
   const { addCourse, updateCourse, semesters, courses } = useData();
-  const activeSemester = semesters.find(s => s.isActive);
+  const activeSemester = semesters.find((s) => s.isActive);
   const editMode = !!existingCourse;
 
   // Same seeding as the upload modal (SYL-62): edit keeps the course's colour,
   // create gets the next free colour in the active semester.
   const [values, setValues] = useState<CourseFormValues>(() =>
-    initialFormValues(existingCourse, courses.filter(c => c.semesterId === activeSemester?.id)),
+    initialFormValues(
+      existingCourse,
+      courses.filter((c) => c.semesterId === activeSemester?.id)
+    )
   );
   const [createdCourse, setCreatedCourse] = useState<CourseModalTarget | null>(null);
   const [saving, setSaving] = useState(false);
@@ -97,13 +99,17 @@ function CourseFormModalContent({ onClose, existingCourse, onBack, onUploadSylla
             </DialogHeader>
 
             <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto">
-              <CourseFormFields values={values} onChange={(updates) => setValues(prev => ({ ...prev, ...updates }))} />
+              <CourseFormFields
+                values={values}
+                onChange={(updates) => setValues((prev) => ({ ...prev, ...updates }))}
+              />
 
               {!editMode && (
                 <Alert className="rounded-lg bg-blue-50 border-blue-200">
                   <AlertCircle className="h-4 w-4 text-blue-600" />
                   <AlertDescription className="text-sm text-blue-800">
-                    After creating the course, you can upload your syllabus from the course details page to extract deadlines and events.
+                    After creating the course, you can upload your syllabus from the course details
+                    page to extract deadlines and events.
                   </AlertDescription>
                 </Alert>
               )}
@@ -138,7 +144,8 @@ function CourseFormModalContent({ onClose, existingCourse, onBack, onUploadSylla
               <Alert className="rounded-lg bg-yellow-50 border-yellow-200 text-left mb-6">
                 <AlertCircle className="h-4 w-4 text-yellow-600" />
                 <AlertDescription className="text-sm text-yellow-800">
-                  <strong>Next Step:</strong> Upload your syllabus to enable this course in the AI knowledge base and extract deadlines, exams, and policies.
+                  <strong>Next Step:</strong> Upload your syllabus to enable this course in the AI
+                  knowledge base and extract deadlines, exams, and policies.
                 </AlertDescription>
               </Alert>
             </div>

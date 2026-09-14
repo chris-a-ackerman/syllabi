@@ -19,7 +19,7 @@ export interface CourseFormValues {
  */
 export function initialFormValues(
   existingCourse?: CourseModalTarget,
-  existingCourses: ReadonlyArray<{ color: string }> = [],
+  existingCourses: ReadonlyArray<{ color: string }> = []
 ): CourseFormValues {
   if (existingCourse) {
     return {

@@ -31,7 +31,7 @@ describe('dbSemesterToApp', () => {
         start_date: '2026-08-24',
         end_date: '2026-12-18',
         is_active: true,
-      }),
+      })
     ).toEqual({
       id: 's1',
       name: 'Fall 2026',
@@ -42,7 +42,13 @@ describe('dbSemesterToApp', () => {
   });
 
   it('coerces a null is_active to false', () => {
-    const row = { id: 's2', name: 'Old', start_date: '2025-01-06', end_date: '2025-05-02', is_active: null };
+    const row = {
+      id: 's2',
+      name: 'Old',
+      start_date: '2025-01-06',
+      end_date: '2025-05-02',
+      is_active: null,
+    };
     expect(dbSemesterToApp(row).isActive).toBe(false);
   });
 });
@@ -74,7 +80,11 @@ describe('dbCourseToApp', () => {
   });
 
   it('maps a failed row with its analysis_error (SYL-66)', () => {
-    const course = dbCourseToApp({ ...baseRow, analysis_status: 'failed', analysis_error: 'Upload failed: boom' });
+    const course = dbCourseToApp({
+      ...baseRow,
+      analysis_status: 'failed',
+      analysis_error: 'Upload failed: boom',
+    });
     expect(course.status).toBe('failed');
     expect(course.analysisError).toBe('Upload failed: boom');
   });
@@ -131,7 +141,7 @@ describe('dbEventToApp', () => {
         canvas_assignment_id: '42',
         source: 'canvas_matched',
         canvas_only: false,
-      }),
+      })
     ).toEqual({
       id: 'e1',
       courseId: 'c1',
@@ -184,8 +194,8 @@ describe('dbChatToApp / dbChatMessageToApp', () => {
     expect(
       dbChatToApp(
         { id: 'ch1', semester_id: 's1', title: null, created_at: '2026-08-28T00:00:00Z' },
-        ['c1', 'c2'],
-      ),
+        ['c1', 'c2']
+      )
     ).toEqual({
       id: 'ch1',
       semesterId: 's1',
@@ -203,7 +213,7 @@ describe('dbChatToApp / dbChatMessageToApp', () => {
         content: 'Hello',
         created_at: '2026-08-28T00:00:01Z',
         sequence: 2,
-      }),
+      })
     ).toEqual({
       id: 'm1',
       role: 'assistant',

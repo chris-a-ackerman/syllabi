@@ -67,37 +67,43 @@ export function useBulkUpload({ fixedSemesterId }: BulkUploadOptions = {}) {
 
   // Marks the course failed locally (card) and on the row (poll) with the same
   // message, so the two never disagree about a course that never got a file.
-  const markFailed = useCallback(async (courseId: string, message: string) => {
-    updateCourse(courseId, { status: 'failed', analysisError: message });
-    const { error } = await markSyllabusFailed(courseId, message);
-    if (error) console.error('Error recording syllabus failure:', error);
-  }, [updateCourse]);
+  const markFailed = useCallback(
+    async (courseId: string, message: string) => {
+      updateCourse(courseId, { status: 'failed', analysisError: message });
+      const { error } = await markSyllabusFailed(courseId, message);
+      if (error) console.error('Error recording syllabus failure:', error);
+    },
+    [updateCourse]
+  );
 
   // Runs upload + process for one course and applies the outcome to state.
-  const uploadForCourse = useCallback(async (courseId: string, file: File) => {
-    if (!user) return;
-    const { data, error } = await uploadAndProcess(user.id, courseId, file);
-    if (!error) {
-      pendingUploads.current.delete(courseId);
-      return;
-    }
-    // data.path is null only when the file never reached Storage.
-    if (data.path === null) pendingUploads.current.set(courseId, file);
-    await markFailed(courseId, error.message);
-  }, [user, markFailed]);
+  const uploadForCourse = useCallback(
+    async (courseId: string, file: File) => {
+      if (!user) return;
+      const { data, error } = await uploadAndProcess(user.id, courseId, file);
+      if (!error) {
+        pendingUploads.current.delete(courseId);
+        return;
+      }
+      // data.path is null only when the file never reached Storage.
+      if (data.path === null) pendingUploads.current.set(courseId, file);
+      await markFailed(courseId, error.message);
+    },
+    [user, markFailed]
+  );
 
   const addFiles = useCallback((files: File[]) => {
     const MAX_SIZE = 50 * 1024 * 1024;
-    setFileItems(prev => [
+    setFileItems((prev) => [
       ...prev,
       ...files
-        .filter(f => f.size <= MAX_SIZE)
-        .map(file => ({ id: `${Date.now()}-${Math.random()}`, file })),
+        .filter((f) => f.size <= MAX_SIZE)
+        .map((file) => ({ id: `${Date.now()}-${Math.random()}`, file })),
     ]);
   }, []);
 
   const removeFile = useCallback((id: string) => {
-    setFileItems(prev => prev.filter(fi => fi.id !== id));
+    setFileItems((prev) => prev.filter((fi) => fi.id !== id));
   }, []);
 
   const reset = useCallback(() => {
@@ -124,9 +130,7 @@ export function useBulkUpload({ fixedSemesterId }: BulkUploadOptions = {}) {
     );
 
     // 2. Call detect-syllabi-info with all successfully uploaded paths
-    const successPaths = uploadResults
-      .filter(r => !r.uploadError)
-      .map(r => r.tempFilePath);
+    const successPaths = uploadResults.filter((r) => !r.uploadError).map((r) => r.tempFilePath);
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let detectResults: any[] = [];
@@ -181,12 +185,20 @@ export function useBulkUpload({ fixedSemesterId }: BulkUploadOptions = {}) {
     setStep('review');
   }, [user, fileItems]);
 
-  const updateDetectedCourse = useCallback((
-    id: string,
-    updates: Partial<Pick<DetectedCourse, 'courseName' | 'courseCode' | 'semesterName' | 'semesterStart' | 'semesterEnd'>>
-  ) => {
-    setDetectedCourses(prev => prev.map(dc => dc.id === id ? { ...dc, ...updates } : dc));
-  }, []);
+  const updateDetectedCourse = useCallback(
+    (
+      id: string,
+      updates: Partial<
+        Pick<
+          DetectedCourse,
+          'courseName' | 'courseCode' | 'semesterName' | 'semesterStart' | 'semesterEnd'
+        >
+      >
+    ) => {
+      setDetectedCourses((prev) => prev.map((dc) => (dc.id === id ? { ...dc, ...updates } : dc)));
+    },
+    []
+  );
 
   const confirm = useCallback(async () => {
     if (!user) return;
@@ -197,20 +209,22 @@ export function useBulkUpload({ fixedSemesterId }: BulkUploadOptions = {}) {
     //    in addSemester) — skipped entirely when the caller fixed the semester.
     const semesterMap = new Map<string, string>(); // semesterName → semesterId
     if (fixedSemesterId === undefined) {
-      const uniqueSemesterNames = [...new Set(
-        detectedCourses.map(dc => dc.semesterName.trim()).filter(Boolean)
-      )];
+      const uniqueSemesterNames = [
+        ...new Set(detectedCourses.map((dc) => dc.semesterName.trim()).filter(Boolean)),
+      ];
 
       for (const semName of uniqueSemesterNames) {
-        const semCourses = detectedCourses.filter(d => d.semesterName.trim() === semName);
-        const validStarts = semCourses.map(d => d.semesterStart).filter(Boolean);
-        const validEnds = semCourses.map(d => d.semesterEnd).filter(Boolean);
-        const startDate = validStarts.length > 0
-          ? validStarts.reduce((min, d) => d < min ? d : min)
-          : new Date().toISOString().split('T')[0];
-        const endDate = validEnds.length > 0
-          ? validEnds.reduce((max, d) => d > max ? d : max)
-          : new Date(Date.now() + 120 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+        const semCourses = detectedCourses.filter((d) => d.semesterName.trim() === semName);
+        const validStarts = semCourses.map((d) => d.semesterStart).filter(Boolean);
+        const validEnds = semCourses.map((d) => d.semesterEnd).filter(Boolean);
+        const startDate =
+          validStarts.length > 0
+            ? validStarts.reduce((min, d) => (d < min ? d : min))
+            : new Date().toISOString().split('T')[0];
+        const endDate =
+          validEnds.length > 0
+            ? validEnds.reduce((max, d) => (d > max ? d : max))
+            : new Date(Date.now() + 120 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
         const semId = await addSemester({
           name: semName,
           startDate,
@@ -225,9 +239,8 @@ export function useBulkUpload({ fixedSemesterId }: BulkUploadOptions = {}) {
     const createdIds: string[] = [];
 
     for (const dc of detectedCourses) {
-      const semId = fixedSemesterId !== undefined
-        ? fixedSemesterId
-        : semesterMap.get(dc.semesterName.trim());
+      const semId =
+        fixedSemesterId !== undefined ? fixedSemesterId : semesterMap.get(dc.semesterName.trim());
       if (!semId) continue;
 
       const color = courseColorAt(createdIds.length);
@@ -249,23 +262,34 @@ export function useBulkUpload({ fixedSemesterId }: BulkUploadOptions = {}) {
     }
 
     setCreatedCourseIds(createdIds);
-  }, [user, fixedSemesterId, detectedCourses, addSemester, addCourse, updateCourse, uploadForCourse]);
+  }, [
+    user,
+    fixedSemesterId,
+    detectedCourses,
+    addSemester,
+    addCourse,
+    updateCourse,
+    uploadForCourse,
+  ]);
 
   /**
    * Retry for a failed course: re-uploads when the file never reached Storage,
    * otherwise re-invokes process-syllabus. Either way the card goes back to
    * processing so the poll resumes and picks up the outcome.
    */
-  const retryProcessing = useCallback(async (courseId: string) => {
-    updateCourse(courseId, { status: 'processing', analysisError: undefined });
-    const file = pendingUploads.current.get(courseId);
-    if (file) {
-      await uploadForCourse(courseId, file);
-      return;
-    }
-    const { error } = await reprocessSyllabus(courseId);
-    if (error) updateCourse(courseId, { status: 'failed', analysisError: error.message });
-  }, [updateCourse, uploadForCourse]);
+  const retryProcessing = useCallback(
+    async (courseId: string) => {
+      updateCourse(courseId, { status: 'processing', analysisError: undefined });
+      const file = pendingUploads.current.get(courseId);
+      if (file) {
+        await uploadForCourse(courseId, file);
+        return;
+      }
+      const { error } = await reprocessSyllabus(courseId);
+      if (error) updateCourse(courseId, { status: 'failed', analysisError: error.message });
+    },
+    [updateCourse, uploadForCourse]
+  );
 
   return {
     step,

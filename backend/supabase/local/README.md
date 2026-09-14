@@ -42,11 +42,11 @@ care about. The script refuses hostnames containing `supabase.co`.
 
 ## What runs, in order
 
-| Step | File | Pushed to Supabase? |
-|---|---|---|
-| 1 | `00_bootstrap.sql` | **No** — local only |
-| 2 | `../migrations/*.sql` in filename order | Yes |
-| 3 | `99_verify.sql` | **No** — local only |
+| Step | File                                    | Pushed to Supabase? |
+| ---- | --------------------------------------- | ------------------- |
+| 1    | `00_bootstrap.sql`                      | **No** — local only |
+| 2    | `../migrations/*.sql` in filename order | Yes                 |
+| 3    | `99_verify.sql`                         | **No** — local only |
 
 **`00_bootstrap.sql`** recreates the parts of a Supabase project that live
 outside this repo: the `anon` / `authenticated` / `service_role` roles, the

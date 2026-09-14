@@ -98,7 +98,10 @@ describe('Settings', () => {
 
   it('shows an inline error and stores nothing when Anthropic rejects the key', async () => {
     fetchApiKeyStatus.mockResolvedValue({ data: NOT_SET_STATUS, error: null });
-    saveAnthropicKey.mockResolvedValue({ data: null, error: { message: 'Anthropic rejected this key' } });
+    saveAnthropicKey.mockResolvedValue({
+      data: null,
+      error: { message: 'Anthropic rejected this key' },
+    });
     render(<Settings />);
 
     await waitFor(() => expect(screen.getByLabelText('API Key')).toBeTruthy());

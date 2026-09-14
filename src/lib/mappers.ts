@@ -37,10 +37,8 @@ export function dbCourseToApp(row: any): Course {
   const analysis = row.syllabus_analysis as Record<string, any> | null;
   const gradingRules: GradingRules | undefined =
     row.grading_rules ?? analysis?.grading_rules ?? undefined;
-  const policies: Policies | undefined =
-    row.policies ?? analysis?.policies ?? undefined;
-  const schedule: CourseSchedule | undefined =
-    row.schedule ?? undefined;
+  const policies: Policies | undefined = row.policies ?? analysis?.policies ?? undefined;
+  const schedule: CourseSchedule | undefined = row.schedule ?? undefined;
   return {
     id: row.id,
     semesterId: row.semester_id,

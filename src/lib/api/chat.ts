@@ -12,7 +12,12 @@ export async function fetchChats() {
     .order('created_at', { ascending: false });
   const chats: Chat[] = (data ?? []).map(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (row: any) => dbChatToApp(row, (row.chat_courses ?? []).map((cc: any) => cc.course_id))
+    (row: any) =>
+      dbChatToApp(
+        row,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (row.chat_courses ?? []).map((cc: any) => cc.course_id)
+      )
   );
   return { data: chats, error };
 }
@@ -43,7 +48,7 @@ export async function createChat(
 export async function linkChatCourses(chatId: string, courseIds: string[]) {
   return supabase
     .from('chat_courses')
-    .insert(courseIds.map(cid => ({ chat_id: chatId, course_id: cid })));
+    .insert(courseIds.map((cid) => ({ chat_id: chatId, course_id: cid })));
 }
 
 export async function insertChatMessage(
@@ -62,10 +67,16 @@ export async function insertChatMessage(
 
 /** Stops at the first failing step so a partial failure never deletes the chat row. */
 export async function deleteChat(chatId: string) {
-  const { error: messagesError } = await supabase.from('chat_messages').delete().eq('chat_id', chatId);
+  const { error: messagesError } = await supabase
+    .from('chat_messages')
+    .delete()
+    .eq('chat_id', chatId);
   if (messagesError) return { error: messagesError };
 
-  const { error: courseLinksError } = await supabase.from('chat_courses').delete().eq('chat_id', chatId);
+  const { error: courseLinksError } = await supabase
+    .from('chat_courses')
+    .delete()
+    .eq('chat_id', chatId);
   if (courseLinksError) return { error: courseLinksError };
 
   return supabase.from('chats').delete().eq('id', chatId);

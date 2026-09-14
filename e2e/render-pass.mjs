@@ -97,12 +97,19 @@ async function handleRequestPaused(params) {
   const { requestId, request } = params;
   const corsHeaders = [
     { name: 'Access-Control-Allow-Origin', value: '*' },
-    { name: 'Access-Control-Allow-Headers', value: 'authorization, x-client-info, apikey, content-type' },
+    {
+      name: 'Access-Control-Allow-Headers',
+      value: 'authorization, x-client-info, apikey, content-type',
+    },
     { name: 'Access-Control-Allow-Methods', value: 'POST, OPTIONS' },
   ];
 
   if (request.method === 'OPTIONS') {
-    await send('Fetch.fulfillRequest', { requestId, responseCode: 204, responseHeaders: corsHeaders });
+    await send('Fetch.fulfillRequest', {
+      requestId,
+      responseCode: 204,
+      responseHeaders: corsHeaders,
+    });
     return;
   }
 
@@ -309,12 +316,7 @@ async function attemptBulkFromAddCourse() {
     return 'could not click Upload Multiple Syllabi';
   // Dialog content is rendered via a Radix Portal to document.body, not
   // inside #root, so these checks read the whole document's text.
-  if (
-    !(await pollFor(
-      `(document.body.innerText || '').includes('Drop PDF syllabi here')`,
-      5000
-    ))
-  )
+  if (!(await pollFor(`(document.body.innerText || '').includes('Drop PDF syllabi here')`, 5000)))
     return 'bulk upload modal did not open';
 
   const dropped = await evaluate(`(() => {
@@ -330,12 +332,7 @@ async function attemptBulkFromAddCourse() {
   })()`);
   if (dropped !== 'ok') return dropped;
 
-  if (
-    !(await pollFor(
-      `(document.body.innerText || '').includes('e2e-bulk.pdf')`,
-      5000
-    ))
-  )
+  if (!(await pollFor(`(document.body.innerText || '').includes('e2e-bulk.pdf')`, 5000)))
     return 'file did not appear in the upload list';
   if ((await clickByText('Analyze')) !== 'clicked') return 'could not click Analyze';
   if (!(await pollFor(hasControl('Confirm & Set Up'), 10000))) return 'review step never reached';
@@ -343,7 +340,8 @@ async function attemptBulkFromAddCourse() {
   // Fixed-semester rendering: shows the active semester by name, no
   // detection UI (Semester Name input / "Create new semester" option).
   const reviewText = await evaluate(`(document.body.innerText || '')`);
-  if (!reviewText.includes('Fall 2026')) return 'review step does not show the active semester name';
+  if (!reviewText.includes('Fall 2026'))
+    return 'review step does not show the active semester name';
   const hasSpringPlaceholder = await evaluate(
     `!!document.querySelector('input[placeholder="e.g. Spring 2026"]')`
   );
@@ -363,7 +361,9 @@ await send('Fetch.disable');
 if (bulkFromAddCourse === 'ok') {
   console.log('PASS  Bulk upload from Add Course targets the active semester (SYL-61)');
 } else {
-  console.log(`FAIL  Bulk upload from Add Course targets the active semester (SYL-61): ${bulkFromAddCourse}`);
+  console.log(
+    `FAIL  Bulk upload from Add Course targets the active semester (SYL-61): ${bulkFromAddCourse}`
+  );
   problems().forEach((e) => console.log(`        ${e.slice(0, 220)}`));
   failures++;
 }
@@ -479,7 +479,9 @@ const canvasRedirect = await evaluate(`(() => JSON.stringify({
 {
   const info = JSON.parse(canvasRedirect);
   const ok =
-    info.path === '/settings' && info.hash === '#canvas' && info.text.includes('Canvas Integration') &&
+    info.path === '/settings' &&
+    info.hash === '#canvas' &&
+    info.text.includes('Canvas Integration') &&
     problems().length === 0;
   if (ok) {
     console.log('PASS  /settings/canvas redirects to /settings#canvas');
@@ -547,7 +549,9 @@ if (removedKey === 'ok' && problems().length === 0) {
   console.log('PASS  Removing the Claude key through the UI shows the not-set state');
 } else {
   console.log(`FAIL  Removing the Claude key through the UI: ${removedKey}`);
-  const rootText = await evaluate(`(document.getElementById('root')?.innerText || '').slice(0, 300)`);
+  const rootText = await evaluate(
+    `(document.getElementById('root')?.innerText || '').slice(0, 300)`
+  );
   console.log(`        #root text at failure: ${JSON.stringify(rootText)}`);
   problems().forEach((e) => console.log(`        ${e.slice(0, 220)}`));
   failures++;

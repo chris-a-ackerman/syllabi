@@ -54,7 +54,7 @@ export function AdminPanel() {
   useEffect(() => {
     let cancelled = false;
     fetchAdminUsers(page, debouncedSearch)
-      .then(result => {
+      .then((result) => {
         if (cancelled) return;
         setUsersPage(result);
         setUsersError(null);
@@ -89,11 +89,7 @@ export function AdminPanel() {
       <header className="bg-white border-b border-gray-200 px-6 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Button
-              variant="ghost"
-              onClick={() => navigate('/dashboard')}
-              className="rounded-lg"
-            >
+            <Button variant="ghost" onClick={() => navigate('/dashboard')} className="rounded-lg">
               <ArrowLeft className="mr-2 h-4 w-4" />
               Back to Dashboard
             </Button>
@@ -144,7 +140,7 @@ export function AdminPanel() {
                 <div>
                   <p className="text-sm text-gray-600 mb-1">Total Users</p>
                   <p className="text-2xl font-bold text-gray-900">
-                    {usersError ? '—' : usersPage?.total ?? '…'}
+                    {usersError ? '—' : (usersPage?.total ?? '…')}
                   </p>
                 </div>
               </div>
@@ -155,9 +151,7 @@ export function AdminPanel() {
                 <h2 className="text-xl font-semibold text-gray-900 mb-2">System Status</h2>
                 <Badge
                   className={`text-lg px-4 py-2 ${
-                    aiEnabled
-                      ? 'bg-green-100 text-green-800'
-                      : 'bg-red-100 text-red-800'
+                    aiEnabled ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
                   }`}
                 >
                   {aiEnabled ? 'Active' : 'Disabled'}
@@ -176,9 +170,7 @@ export function AdminPanel() {
             <Card className="p-8 rounded-2xl shadow-sm">
               <div className="flex items-start justify-between mb-6">
                 <div>
-                  <h2 className="text-xl font-semibold text-gray-900 mb-2">
-                    AI Features
-                  </h2>
+                  <h2 className="text-xl font-semibold text-gray-900 mb-2">AI Features</h2>
                   <p className="text-sm text-gray-600">
                     Control whether users can access AI chat and syllabus processing
                   </p>
@@ -199,7 +191,8 @@ export function AdminPanel() {
               ) : (
                 <div className="bg-red-50 border border-red-200 rounded-xl p-4">
                   <p className="text-sm text-red-800">
-                    ⚠ AI features are disabled for all users. Students will lose access to chat and syllabus processing until you re-enable it.
+                    ⚠ AI features are disabled for all users. Students will lose access to chat and
+                    syllabus processing until you re-enable it.
                   </p>
                 </div>
               )}
@@ -209,13 +202,16 @@ export function AdminPanel() {
               <h3 className="font-semibold text-gray-900 mb-4">About Access Control</h3>
               <div className="space-y-3 text-sm text-gray-700">
                 <p>
-                  • When AI features are <strong>enabled</strong>, all users can upload syllabi, process them with AI, and chat with the assistant.
+                  • When AI features are <strong>enabled</strong>, all users can upload syllabi,
+                  process them with AI, and chat with the assistant.
                 </p>
                 <p>
-                  • When AI features are <strong>disabled</strong>, users can still view existing course data but cannot process new syllabi or use the chat feature.
+                  • When AI features are <strong>disabled</strong>, users can still view existing
+                  course data but cannot process new syllabi or use the chat feature.
                 </p>
                 <p>
-                  • This control is useful for maintenance periods or if you need to temporarily limit AI usage.
+                  • This control is useful for maintenance periods or if you need to temporarily
+                  limit AI usage.
                 </p>
               </div>
             </Card>
@@ -255,7 +251,7 @@ export function AdminPanel() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {(usersPage?.users ?? []).map(user => (
+                        {(usersPage?.users ?? []).map((user) => (
                           <TableRow key={user.id}>
                             <TableCell className="font-medium">
                               {user.display_name || 'Unnamed user'}
@@ -286,7 +282,7 @@ export function AdminPanel() {
                           size="sm"
                           className="rounded-lg"
                           disabled={page <= 1}
-                          onClick={() => setPage(p => Math.max(1, p - 1))}
+                          onClick={() => setPage((p) => Math.max(1, p - 1))}
                         >
                           Previous
                         </Button>
@@ -295,7 +291,7 @@ export function AdminPanel() {
                           size="sm"
                           className="rounded-lg"
                           disabled={page >= totalPages}
-                          onClick={() => setPage(p => p + 1)}
+                          onClick={() => setPage((p) => p + 1)}
                         >
                           Next
                         </Button>
@@ -315,7 +311,8 @@ export function AdminPanel() {
           <AlertDialogHeader>
             <AlertDialogTitle>Disable AI for all users?</AlertDialogTitle>
             <AlertDialogDescription>
-              Students will lose access to chat and syllabus processing until you re-enable it. Existing course data will remain accessible.
+              Students will lose access to chat and syllabus processing until you re-enable it.
+              Existing course data will remain accessible.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

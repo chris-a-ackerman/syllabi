@@ -53,7 +53,7 @@ export function CourseFormFields({ values, onChange }: CourseFormFieldsProps) {
       <div>
         <Label>Course Color *</Label>
         <div className="grid grid-cols-5 gap-2 mt-2">
-          {COURSE_COLORS.map(c => (
+          {COURSE_COLORS.map((c) => (
             <button
               key={c}
               type="button"

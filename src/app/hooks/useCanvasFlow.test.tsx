@@ -16,12 +16,13 @@ const { addSemester, addCourse, deleteSemester } = vi.hoisted(() => ({
   deleteSemester: vi.fn(),
 }));
 
-const { findCanvasCourses, findCanvasSyllabus, downloadCanvasSyllabus, linkCanvasCourse } = vi.hoisted(() => ({
-  findCanvasCourses: vi.fn(),
-  findCanvasSyllabus: vi.fn(),
-  downloadCanvasSyllabus: vi.fn(),
-  linkCanvasCourse: vi.fn(),
-}));
+const { findCanvasCourses, findCanvasSyllabus, downloadCanvasSyllabus, linkCanvasCourse } =
+  vi.hoisted(() => ({
+    findCanvasCourses: vi.fn(),
+    findCanvasSyllabus: vi.fn(),
+    downloadCanvasSyllabus: vi.fn(),
+    linkCanvasCourse: vi.fn(),
+  }));
 
 vi.mock('../context/DataProvider', () => ({
   useData: () => ({ addSemester, addCourse, deleteSemester }),
@@ -62,7 +63,10 @@ beforeEach(() => {
   addSemester.mockResolvedValue('sem-1');
   addCourse.mockImplementation(async ({ name }: { name: string }) => `course-${name}`);
   linkCanvasCourse.mockResolvedValue({ error: null });
-  findCanvasSyllabus.mockResolvedValue({ data: { success: true, found: false, course_id: 'x' }, error: null });
+  findCanvasSyllabus.mockResolvedValue({
+    data: { success: true, found: false, course_id: 'x' },
+    error: null,
+  });
   downloadCanvasSyllabus.mockResolvedValue({ data: { success: true }, error: null });
   deleteSemester.mockResolvedValue(undefined);
 });
@@ -83,22 +87,26 @@ describe('useCanvasFlow', () => {
     await detectThree(result);
 
     expect(result.current.detectedCourses).toHaveLength(3);
-    expect(result.current.detectedCourses.every(dc => dc.selected)).toBe(true);
+    expect(result.current.detectedCourses.every((dc) => dc.selected)).toBe(true);
   });
 
   it('toggleCourse flips only the targeted course', async () => {
     const { result } = renderHook(() => useCanvasFlow());
     await detectThree(result);
 
-    act(() => { result.current.toggleCourse(1); });
+    act(() => {
+      result.current.toggleCourse(1);
+    });
 
-    expect(result.current.detectedCourses.map(dc => dc.selected)).toEqual([true, false, true]);
+    expect(result.current.detectedCourses.map((dc) => dc.selected)).toEqual([true, false, true]);
   });
 
   it('confirm() creates only selected courses (deselecting one excludes it entirely)', async () => {
     const { result } = renderHook(() => useCanvasFlow());
     await detectThree(result);
-    act(() => { result.current.toggleCourse(1); }); // deselect Beta
+    act(() => {
+      result.current.toggleCourse(1);
+    }); // deselect Beta
 
     await act(async () => {
       await result.current.confirm();
@@ -106,7 +114,7 @@ describe('useCanvasFlow', () => {
 
     expect(addCourse).toHaveBeenCalledTimes(2);
     expect(result.current.createdCourseIds).toEqual(['course-Alpha', 'course-Gamma']);
-    expect(result.current.courseLinks.map(l => l.canvasCourseId)).toEqual(['c1', 'c3']);
+    expect(result.current.courseLinks.map((l) => l.canvasCourseId)).toEqual(['c1', 'c3']);
   });
 
   it('pairs syllabus searches by canvas_course_id, so a failed addCourse never misattributes a later course', async () => {
@@ -167,7 +175,9 @@ describe('useCanvasFlow', () => {
       await result.current.confirm();
     });
     await waitFor(() => {
-      expect(Object.values(result.current.syllabiResults).every(r => r.status !== 'searching')).toBe(true);
+      expect(
+        Object.values(result.current.syllabiResults).every((r) => r.status !== 'searching')
+      ).toBe(true);
     });
 
     await act(async () => {
@@ -177,7 +187,9 @@ describe('useCanvasFlow', () => {
     await waitFor(() => {
       expect(downloadCanvasSyllabus).toHaveBeenCalledTimes(1);
     });
-    expect(downloadCanvasSyllabus).toHaveBeenCalledWith(expect.objectContaining({ courseId: 'course-Alpha' }));
+    expect(downloadCanvasSyllabus).toHaveBeenCalledWith(
+      expect.objectContaining({ courseId: 'course-Alpha' })
+    );
     expect(result.current.downloadResults['course-Beta']).toBe('skipped');
     expect(result.current.downloadResults['course-Gamma']).toBe('skipped');
   });

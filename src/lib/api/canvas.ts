@@ -64,7 +64,9 @@ export async function linkCanvasCourse(courseId: string, canvasCourseId: string)
  * `{ data: null, error }` like the rest of this module.
  */
 async function postCanvasFunction<T>(path: string, body?: unknown) {
-  const { data: { session } } = await supabase.auth.getSession();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
   if (!session) return { data: null, error: { message: 'Not signed in' } };
 
   let res: Response;

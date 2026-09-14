@@ -34,7 +34,7 @@ export function EditSemesterModal({ open, onClose, semester }: EditSemesterModal
     setConfirmDelete(false);
   }, [semester.id]);
 
-  const courseCount = courses.filter(c => c.semesterId === semester.id).length;
+  const courseCount = courses.filter((c) => c.semesterId === semester.id).length;
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -65,9 +65,7 @@ export function EditSemesterModal({ open, onClose, semester }: EditSemesterModal
       <DialogContent className="rounded-2xl max-w-md">
         <DialogHeader>
           <DialogTitle>Edit Semester</DialogTitle>
-          <DialogDescription>
-            Update the semester name and dates.
-          </DialogDescription>
+          <DialogDescription>Update the semester name and dates.</DialogDescription>
         </DialogHeader>
 
         {!confirmDelete ? (
@@ -119,7 +117,12 @@ export function EditSemesterModal({ open, onClose, semester }: EditSemesterModal
                 Delete Semester
               </Button>
               <div className="flex gap-3">
-                <Button type="button" variant="outline" onClick={handleClose} className="rounded-lg">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleClose}
+                  className="rounded-lg"
+                >
                   Cancel
                 </Button>
                 <Button type="submit" className="bg-indigo-600 hover:bg-indigo-700 rounded-lg">
@@ -134,13 +137,15 @@ export function EditSemesterModal({ open, onClose, semester }: EditSemesterModal
               <p className="font-semibold mb-1">This cannot be undone.</p>
               {courseCount > 0 ? (
                 <p>
-                  This will permanently delete <span className="font-semibold">{semester.name}</span> along
-                  with {courseCount} {courseCount === 1 ? 'course' : 'courses'} and all their events,
-                  grading data, and notes.
+                  This will permanently delete{' '}
+                  <span className="font-semibold">{semester.name}</span> along with {courseCount}{' '}
+                  {courseCount === 1 ? 'course' : 'courses'} and all their events, grading data, and
+                  notes.
                 </p>
               ) : (
                 <p>
-                  This will permanently delete <span className="font-semibold">{semester.name}</span>.
+                  This will permanently delete{' '}
+                  <span className="font-semibold">{semester.name}</span>.
                 </p>
               )}
             </div>

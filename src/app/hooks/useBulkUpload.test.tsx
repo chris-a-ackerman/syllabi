@@ -19,7 +19,13 @@ const { courses, addSemester, addCourse, updateCourse } = vi.hoisted(() => ({
   updateCourse: vi.fn(),
 }));
 
-const { uploadTempSyllabus, detectSyllabiInfo, uploadAndProcess, reprocessSyllabus, markSyllabusFailed } = vi.hoisted(() => ({
+const {
+  uploadTempSyllabus,
+  detectSyllabiInfo,
+  uploadAndProcess,
+  reprocessSyllabus,
+  markSyllabusFailed,
+} = vi.hoisted(() => ({
   uploadTempSyllabus: vi.fn(),
   detectSyllabiInfo: vi.fn(),
   uploadAndProcess: vi.fn(),
@@ -46,19 +52,23 @@ vi.mock('@/lib/api/syllabus', () => ({
 const { toastError } = vi.hoisted(() => ({ toastError: vi.fn() }));
 vi.mock('sonner', () => ({ toast: { error: toastError } }));
 
-const courseById = (id: string) => courses.find(c => c.id === id);
+const courseById = (id: string) => courses.find((c) => c.id === id);
 
 function makeFile(name: string) {
-  return new File([new TextEncoder().encode('%PDF-1.4\n%e2e\n')], name, { type: 'application/pdf' });
+  return new File([new TextEncoder().encode('%PDF-1.4\n%e2e\n')], name, {
+    type: 'application/pdf',
+  });
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
 
-  uploadTempSyllabus.mockImplementation(async (_userId: string, _timestamp: number, file: File) => ({
-    data: { path: `temp/${file.name}` },
-    error: null,
-  }));
+  uploadTempSyllabus.mockImplementation(
+    async (_userId: string, _timestamp: number, file: File) => ({
+      data: { path: `temp/${file.name}` },
+      error: null,
+    })
+  );
 
   // Two files detecting two DIFFERENT semester names — this is exactly the
   // shape that used to flip is_active to a brand-new semester when launched
@@ -90,7 +100,7 @@ beforeEach(() => {
     return id;
   });
   updateCourse.mockImplementation((id: string, updates: Partial<Course>) => {
-    const i = courses.findIndex(c => c.id === id);
+    const i = courses.findIndex((c) => c.id === id);
     if (i >= 0) courses[i] = { ...courses[i], ...updates };
   });
 });
@@ -123,7 +133,7 @@ describe('useBulkUpload', () => {
     expect(result.current.step).toBe('review');
     // Detection still ran and still produced two distinct semester names —
     // fixedSemesterId ignores them rather than never detecting them.
-    expect(new Set(result.current.detectedCourses.map(dc => dc.semesterName)).size).toBe(2);
+    expect(new Set(result.current.detectedCourses.map((dc) => dc.semesterName)).size).toBe(2);
 
     await act(async () => {
       await result.current.confirm();
@@ -156,7 +166,7 @@ describe('useBulkUpload', () => {
     expect(addSemester).toHaveBeenCalledWith(expect.objectContaining({ name: 'Autumn 2099' }));
 
     expect(addCourse).toHaveBeenCalledTimes(2);
-    const semesterIdsUsed = addCourse.mock.calls.map(call => call[0].semesterId);
+    const semesterIdsUsed = addCourse.mock.calls.map((call) => call[0].semesterId);
     expect(semesterIdsUsed).toContain('sem-id-Fall 2026');
     expect(semesterIdsUsed).toContain('sem-id-Autumn 2099');
   });
@@ -210,7 +220,10 @@ describe('useBulkUpload', () => {
     });
     // The row is updated too, so the poll cannot flip the card back.
     expect(markSyllabusFailed).toHaveBeenCalledTimes(1);
-    expect(markSyllabusFailed).toHaveBeenCalledWith('course-2', 'Upload failed: bucket quota exceeded');
+    expect(markSyllabusFailed).toHaveBeenCalledWith(
+      'course-2',
+      'Upload failed: bucket quota exceeded'
+    );
   });
 
   it('counts failed courses as settled so allDone becomes reachable (AC2)', async () => {
@@ -249,7 +262,10 @@ describe('useBulkUpload', () => {
     expect(uploadAndProcess.mock.calls[0][1]).toBe('course-2');
     expect((uploadAndProcess.mock.calls[0][2] as File).name).toBe('b.pdf');
     expect(reprocessSyllabus).not.toHaveBeenCalled();
-    expect(courseById('course-2')).toMatchObject({ status: 'processing', analysisError: undefined });
+    expect(courseById('course-2')).toMatchObject({
+      status: 'processing',
+      analysisError: undefined,
+    });
 
     // a's file is stored; a later processing failure (reported by the poll)
     // retries through process-syllabus alone.
@@ -259,7 +275,10 @@ describe('useBulkUpload', () => {
     });
     expect(reprocessSyllabus).toHaveBeenCalledWith('course-1');
     expect(uploadAndProcess).toHaveBeenCalledTimes(1);
-    expect(courseById('course-1')).toMatchObject({ status: 'processing', analysisError: undefined });
+    expect(courseById('course-1')).toMatchObject({
+      status: 'processing',
+      analysisError: undefined,
+    });
   });
 
   // ── SYL-72: a rejected BYOK key surfaces distinctly, not as a generic failure ──
@@ -267,7 +286,9 @@ describe('useBulkUpload', () => {
   it('analyze: a claude_key_rejected error from detect-syllabi-info toasts and shows a specific message', async () => {
     detectSyllabiInfo.mockResolvedValue({
       data: null,
-      error: { context: new Response(JSON.stringify({ error: 'claude_key_rejected' }), { status: 402 }) },
+      error: {
+        context: new Response(JSON.stringify({ error: 'claude_key_rejected' }), { status: 402 }),
+      },
     });
     const { result } = renderHook(() => useBulkUpload({ fixedSemesterId: 'sem-active' }));
 
@@ -279,7 +300,9 @@ describe('useBulkUpload', () => {
     });
 
     expect(result.current.step).toBe('upload');
-    expect(result.current.globalError).toBe('Your Claude API key was rejected. Update it in Settings.');
+    expect(result.current.globalError).toBe(
+      'Your Claude API key was rejected. Update it in Settings.'
+    );
     expect(toastError).toHaveBeenCalledTimes(1);
   });
 
@@ -291,6 +314,9 @@ describe('useBulkUpload', () => {
     await act(async () => {
       await result.current.retryProcessing('course-1');
     });
-    expect(courseById('course-1')).toMatchObject({ status: 'failed', analysisError: 'Processing failed: 429' });
+    expect(courseById('course-1')).toMatchObject({
+      status: 'failed',
+      analysisError: 'Processing failed: 429',
+    });
   });
 });

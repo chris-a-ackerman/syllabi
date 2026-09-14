@@ -40,9 +40,11 @@ export function CourseDetail() {
 
   const from = searchParams.get('from');
   const backLabel =
-    from === 'dashboard' ? 'Back to Dashboard'
-    : from === 'agenda' ? 'Back to Agenda'
-    : 'Back to Courses';
+    from === 'dashboard'
+      ? 'Back to Dashboard'
+      : from === 'agenda'
+        ? 'Back to Agenda'
+        : 'Back to Courses';
   const handleBack = () => {
     if (from === 'dashboard') {
       navigate('/dashboard');
@@ -62,20 +64,20 @@ export function CourseDetail() {
   const [downloadingIcs, setDownloadingIcs] = useState(false);
   const [expandedEventId, setExpandedEventId] = useState<string | null>(null);
 
-  const course = courses.find(c => c.id === id);
+  const course = courses.find((c) => c.id === id);
   // Narrowed via a type predicate so the date-formatting call sites below
   // typecheck without a redundant runtime guard.
   const courseEvents = events.filter(
     (e): e is typeof e & { date: string } => e.courseId === id && !!e.date
   );
-  const undatedCourseEvents = events.filter(e => e.courseId === id && !e.date);
-  const courseNotes = notes.filter(n => n.courseId === id);
+  const undatedCourseEvents = events.filter((e) => e.courseId === id && !e.date);
+  const courseNotes = notes.filter((n) => n.courseId === id);
 
   useEffect(() => {
     const match = location.hash.match(/^#event-(.+)$/);
     if (!match) return;
     const targetId = match[1];
-    const target = [...courseEvents, ...undatedCourseEvents].find(e => e.id === targetId);
+    const target = [...courseEvents, ...undatedCourseEvents].find((e) => e.id === targetId);
     if (!target) return;
 
     if (target.canvasMetadata) {
@@ -124,11 +126,7 @@ export function CourseDetail() {
           className="border-b border-gray-200 px-6 py-6"
           style={{ borderLeftWidth: '4px', borderLeftColor: course.color }}
         >
-          <Button
-            variant="ghost"
-            onClick={handleBack}
-            className="mb-4 rounded-lg"
-          >
+          <Button variant="ghost" onClick={handleBack} className="mb-4 rounded-lg">
             <ArrowLeft className="mr-2 h-4 w-4" />
             {backLabel}
           </Button>
@@ -157,9 +155,7 @@ export function CourseDetail() {
               <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
                 <FileText className="w-8 h-8 text-gray-400" />
               </div>
-              <h2 className="text-xl font-semibold text-gray-900 mb-2">
-                No Syllabus Uploaded
-              </h2>
+              <h2 className="text-xl font-semibold text-gray-900 mb-2">No Syllabus Uploaded</h2>
               <p className="text-gray-600 mb-6">
                 Upload your syllabus to see course details, assignments, grading policies, and more.
               </p>
@@ -209,12 +205,15 @@ export function CourseDetail() {
   // events get a trailing bucket instead of being dropped from the tab.
   const UNDATED_GROUP = 'Date TBD';
 
-  const eventsByMonth = courseEvents.reduce((acc, event) => {
-    const month = format(parseISO(event.date), 'MMMM yyyy');
-    if (!acc[month]) acc[month] = [];
-    acc[month].push(event);
-    return acc;
-  }, {} as Record<string, typeof events>);
+  const eventsByMonth = courseEvents.reduce(
+    (acc, event) => {
+      const month = format(parseISO(event.date), 'MMMM yyyy');
+      if (!acc[month]) acc[month] = [];
+      acc[month].push(event);
+      return acc;
+    },
+    {} as Record<string, typeof events>
+  );
 
   if (undatedCourseEvents.length > 0) eventsByMonth[UNDATED_GROUP] = undatedCourseEvents;
 
@@ -242,11 +241,7 @@ export function CourseDetail() {
         className="border-b border-gray-200 px-6 py-6"
         style={{ borderLeftWidth: '4px', borderLeftColor: course.color }}
       >
-        <Button
-          variant="ghost"
-          onClick={handleBack}
-          className="mb-4 rounded-lg -ml-2"
-        >
+        <Button variant="ghost" onClick={handleBack} className="mb-4 rounded-lg -ml-2">
           <ArrowLeft className="mr-2 h-4 w-4" />
           {backLabel}
         </Button>
@@ -314,11 +309,21 @@ export function CourseDetail() {
       <div className="px-4 pb-6 md:px-6 md:pb-8 max-w-7xl mx-auto">
         <Tabs defaultValue="events" className="w-full">
           <TabsList className="mb-6 rounded-lg w-full overflow-x-auto flex">
-            <TabsTrigger value="events" className="rounded-lg flex-1">Events</TabsTrigger>
-            <TabsTrigger value="grading" className="rounded-lg flex-1">Grading</TabsTrigger>
-            <TabsTrigger value="schedule" className="rounded-lg flex-1">Schedule</TabsTrigger>
-            <TabsTrigger value="policies" className="rounded-lg flex-1">Policies</TabsTrigger>
-            <TabsTrigger value="notes" className="rounded-lg flex-1">Notes</TabsTrigger>
+            <TabsTrigger value="events" className="rounded-lg flex-1">
+              Events
+            </TabsTrigger>
+            <TabsTrigger value="grading" className="rounded-lg flex-1">
+              Grading
+            </TabsTrigger>
+            <TabsTrigger value="schedule" className="rounded-lg flex-1">
+              Schedule
+            </TabsTrigger>
+            <TabsTrigger value="policies" className="rounded-lg flex-1">
+              Policies
+            </TabsTrigger>
+            <TabsTrigger value="notes" className="rounded-lg flex-1">
+              Notes
+            </TabsTrigger>
           </TabsList>
 
           {/* Events Tab */}
@@ -327,11 +332,15 @@ export function CourseDetail() {
               <div key={month}>
                 <h3 className="text-lg font-semibold text-gray-900 mb-3">{month}</h3>
                 <div className="space-y-2">
-                  {monthEvents.map(event => {
+                  {monthEvents.map((event) => {
                     const meta = event.canvasMetadata ?? null;
                     const isExpanded = expandedEventId === event.id;
                     return (
-                      <Card id={`event-${event.id}`} key={event.id} className="p-4 rounded-xl shadow-sm hover:shadow-md transition-shadow">
+                      <Card
+                        id={`event-${event.id}`}
+                        key={event.id}
+                        className="p-4 rounded-xl shadow-sm hover:shadow-md transition-shadow"
+                      >
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-3 mb-2">
@@ -349,7 +358,9 @@ export function CourseDetail() {
                               )}
                             </div>
                             <p className="text-gray-900 mb-2">{event.title}</p>
-                            <Badge className={`${getEventTypeColor(event.type)} rounded-full text-xs`}>
+                            <Badge
+                              className={`${getEventTypeColor(event.type)} rounded-full text-xs`}
+                            >
                               {getEventTypeLabel(event.type)}
                             </Badge>
                           </div>
@@ -359,7 +370,11 @@ export function CourseDetail() {
                               className="shrink-0 p-1 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
                               aria-label={isExpanded ? 'Collapse details' : 'Expand details'}
                             >
-                              {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                              {isExpanded ? (
+                                <ChevronUp className="w-4 h-4" />
+                              ) : (
+                                <ChevronDown className="w-4 h-4" />
+                              )}
                             </button>
                           )}
                         </div>
@@ -368,7 +383,9 @@ export function CourseDetail() {
                           <div className="border-t border-gray-100 mt-3 pt-3 space-y-2 text-sm text-gray-700">
                             {meta.description_summary && (
                               <div>
-                                <span className="font-medium text-gray-500 text-xs uppercase tracking-wide">What to submit</span>
+                                <span className="font-medium text-gray-500 text-xs uppercase tracking-wide">
+                                  What to submit
+                                </span>
                                 <p className="mt-0.5">{meta.description_summary}</p>
                               </div>
                             )}
@@ -453,7 +470,8 @@ export function CourseDetail() {
 
                         {!!component.drop_lowest && component.drop_lowest > 0 && (
                           <div className="text-sm text-gray-600">
-                            <span className="font-medium">Drop Policy:</span> Drops lowest {component.drop_lowest}
+                            <span className="font-medium">Drop Policy:</span> Drops lowest{' '}
+                            {component.drop_lowest}
                           </div>
                         )}
                       </Card>
@@ -529,7 +547,9 @@ export function CourseDetail() {
                       {s.meeting_days && s.meeting_days.length > 0 && (
                         <div className="flex items-center gap-4">
                           <span className="text-gray-500 w-24 text-sm">Days</span>
-                          <span className="font-medium text-gray-900">{s.meeting_days.join(', ')}</span>
+                          <span className="font-medium text-gray-900">
+                            {s.meeting_days.join(', ')}
+                          </span>
                         </div>
                       )}
                       {meetingTimeStr && (
@@ -560,7 +580,8 @@ export function CourseDetail() {
                         )}
                         {s.instructor.office_hours && (
                           <p className="text-sm text-gray-600">
-                            <span className="font-medium">Office Hours:</span> {s.instructor.office_hours}
+                            <span className="font-medium">Office Hours:</span>{' '}
+                            {s.instructor.office_hours}
                           </p>
                         )}
                         {s.instructor.office && (
@@ -617,7 +638,8 @@ export function CourseDetail() {
                           <div key={i} className="flex items-center gap-4">
                             <span className="text-gray-500 w-32 text-sm shrink-0">{b.name}</span>
                             <span className="font-medium text-gray-900">
-                              {format(parseISO(b.start_date), 'MMM d')} – {format(parseISO(b.end_date), 'MMM d, yyyy')}
+                              {format(parseISO(b.start_date), 'MMM d')} –{' '}
+                              {format(parseISO(b.end_date), 'MMM d, yyyy')}
                             </span>
                           </div>
                         ))}
@@ -659,8 +681,7 @@ export function CourseDetail() {
               ];
 
               const hasAny =
-                namedPolicies.some(({ value }) => value) ||
-                (p.other && p.other.length > 0);
+                namedPolicies.some(({ value }) => value) || (p.other && p.other.length > 0);
 
               if (!hasAny) {
                 return (
@@ -712,9 +733,7 @@ export function CourseDetail() {
                   maxLength={1000}
                 />
                 <div className="flex items-center justify-between">
-                  <span className="text-xs text-gray-500">
-                    {noteText.length}/1000 characters
-                  </span>
+                  <span className="text-xs text-gray-500">{noteText.length}/1000 characters</span>
                   <div className="flex gap-2">
                     <Button
                       variant="outline"
@@ -749,7 +768,7 @@ export function CourseDetail() {
             )}
 
             <div className="space-y-3">
-              {courseNotes.map(note => (
+              {courseNotes.map((note) => (
                 <Card key={note.id} className="p-4 rounded-xl shadow-sm">
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1">

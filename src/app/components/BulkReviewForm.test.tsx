@@ -43,12 +43,15 @@ describe('BulkReviewForm', () => {
 
   it('keeps focus in the semester-name input while typing renames the group', () => {
     function Harness() {
-      const [courses, setCourses] = useState([makeDetected({ id: 'a' }), makeDetected({ id: 'b' })]);
+      const [courses, setCourses] = useState([
+        makeDetected({ id: 'a' }),
+        makeDetected({ id: 'b' }),
+      ]);
       return (
         <BulkReviewForm
           detectedCourses={courses}
           updateDetectedCourse={(id, updates) =>
-            setCourses(prev => prev.map(dc => (dc.id === id ? { ...dc, ...updates } : dc)))
+            setCourses((prev) => prev.map((dc) => (dc.id === id ? { ...dc, ...updates } : dc)))
           }
         />
       );

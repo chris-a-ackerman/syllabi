@@ -11,7 +11,15 @@ interface RecordedUpdate {
   filters: Array<[string, unknown]>;
 }
 
-const { uploadResult, updateResult, invokeResult, selectResult, updates, uploadCalls, invokeCalls } = vi.hoisted(() => ({
+const {
+  uploadResult,
+  updateResult,
+  invokeResult,
+  selectResult,
+  updates,
+  uploadCalls,
+  invokeCalls,
+} = vi.hoisted(() => ({
   uploadResult: vi.fn(),
   updateResult: vi.fn(),
   invokeResult: vi.fn(),
@@ -61,7 +69,9 @@ vi.mock('@/lib/supabase', () => ({
 
 import { markSyllabusFailed, reprocessSyllabus, uploadAndProcess } from './syllabus';
 
-const file = new File([new TextEncoder().encode('%PDF-1.4\n')], 'syllabus.pdf', { type: 'application/pdf' });
+const file = new File([new TextEncoder().encode('%PDF-1.4\n')], 'syllabus.pdf', {
+  type: 'application/pdf',
+});
 const STORAGE_PATH = 'u1/c1/syllabus.pdf';
 
 const flush = () => new Promise((r) => setTimeout(r, 0));
@@ -73,13 +83,19 @@ beforeEach(() => {
   invokeCalls.length = 0;
   uploadResult.mockReturnValue({ error: null });
   updateResult.mockReturnValue({ error: null });
-  invokeResult.mockReturnValue({ data: { success: true, events_created: 3, completeness: 'complete' }, error: null });
+  invokeResult.mockReturnValue({
+    data: { success: true, events_created: 3, completeness: 'complete' },
+    error: null,
+  });
   selectResult.mockReturnValue({ data: { canvas_course_id: null } });
 });
 
 describe('uploadAndProcess', () => {
   it('reports an unreadable file before anything is uploaded', async () => {
-    const unreadable = { name: 'cloud.pdf', arrayBuffer: () => Promise.reject(new Error('EIO')) } as unknown as File;
+    const unreadable = {
+      name: 'cloud.pdf',
+      arrayBuffer: () => Promise.reject(new Error('EIO')),
+    } as unknown as File;
     const result = await uploadAndProcess('u1', 'c1', unreadable);
     expect(result.data.path).toBeNull();
     expect(result.error?.message).toMatch(/Could not read file/);
@@ -90,7 +106,10 @@ describe('uploadAndProcess', () => {
   it('returns no path and touches nothing else when the Storage upload fails', async () => {
     uploadResult.mockReturnValue({ error: { message: 'bucket quota exceeded' } });
     const result = await uploadAndProcess('u1', 'c1', file);
-    expect(result).toEqual({ data: { path: null }, error: { message: 'Upload failed: bucket quota exceeded' } });
+    expect(result).toEqual({
+      data: { path: null },
+      error: { message: 'Upload failed: bucket quota exceeded' },
+    });
     expect(updates).toHaveLength(0);
     expect(invokeCalls).toHaveLength(0);
   });
@@ -130,18 +149,29 @@ describe('uploadAndProcess', () => {
   });
 
   it('awaitProcessing: returns the path with the transport error when the invoke fails', async () => {
-    invokeResult.mockReturnValue({ data: null, error: { message: 'Edge Function returned a non-2xx status code' } });
+    invokeResult.mockReturnValue({
+      data: null,
+      error: { message: 'Edge Function returned a non-2xx status code' },
+    });
     const result = await uploadAndProcess('u1', 'c1', file, { awaitProcessing: true });
     expect(result.data.path).toBe(STORAGE_PATH);
-    expect(result.error?.message).toBe('Processing failed: Edge Function returned a non-2xx status code');
+    expect(result.error?.message).toBe(
+      'Processing failed: Edge Function returned a non-2xx status code'
+    );
     // The single-course flow owns the failure here; nothing is written back.
     expect(updates).toHaveLength(1);
   });
 
   it("awaitProcessing: returns the path, fnData and the function's own error when success is false", async () => {
-    invokeResult.mockReturnValue({ data: { success: false, error: 'Failed to save course events' }, error: null });
+    invokeResult.mockReturnValue({
+      data: { success: false, error: 'Failed to save course events' },
+      error: null,
+    });
     const result = await uploadAndProcess('u1', 'c1', file, { awaitProcessing: true });
-    expect(result.data).toEqual({ path: STORAGE_PATH, fnData: { success: false, error: 'Failed to save course events' } });
+    expect(result.data).toEqual({
+      path: STORAGE_PATH,
+      fnData: { success: false, error: 'Failed to save course events' },
+    });
     expect(result.error?.message).toBe('Failed to save course events');
   });
 
@@ -154,9 +184,15 @@ describe('uploadAndProcess', () => {
     expect(updates).toHaveLength(2);
     expect(updates[1]).toEqual({
       table: 'courses',
-      payload: { analysis_status: 'failed', analysis_error: 'Processing failed: FunctionsFetchError' },
+      payload: {
+        analysis_status: 'failed',
+        analysis_error: 'Processing failed: FunctionsFetchError',
+      },
       // Compare-and-set: a row the function already settled keeps its own status/message.
-      filters: [['id', 'c1'], ['analysis_status', 'processing']],
+      filters: [
+        ['id', 'c1'],
+        ['analysis_status', 'processing'],
+      ],
     });
   });
 
@@ -183,7 +219,10 @@ describe('markSyllabusFailed', () => {
 
   it('adds the processing guard when asked', async () => {
     await markSyllabusFailed('c9', 'x', { onlyIfProcessing: true });
-    expect(updates[0].filters).toEqual([['id', 'c9'], ['analysis_status', 'processing']]);
+    expect(updates[0].filters).toEqual([
+      ['id', 'c9'],
+      ['analysis_status', 'processing'],
+    ]);
   });
 
   it('surfaces the write error', async () => {
@@ -214,7 +253,10 @@ describe('reprocessSyllabus', () => {
     expect(updates[1]).toEqual({
       table: 'courses',
       payload: { analysis_status: 'failed', analysis_error: 'Processing failed: 429' },
-      filters: [['id', 'c1'], ['analysis_status', 'processing']],
+      filters: [
+        ['id', 'c1'],
+        ['analysis_status', 'processing'],
+      ],
     });
   });
 });

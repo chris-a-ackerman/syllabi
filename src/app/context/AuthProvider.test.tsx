@@ -50,7 +50,11 @@ function makeSessionUser(id: string, email: string): SupabaseUser {
   return { id, email, user_metadata: {} } as unknown as SupabaseUser;
 }
 
-type LogEntry = { isAdmin: boolean | undefined; profileLoaded: boolean; user: ReturnType<typeof useAuth>['user'] };
+type LogEntry = {
+  isAdmin: boolean | undefined;
+  profileLoaded: boolean;
+  user: ReturnType<typeof useAuth>['user'];
+};
 let renderLog: LogEntry[] = [];
 
 function Probe() {
@@ -69,7 +73,10 @@ function renderProvider() {
 
 let authChangeCallback: AuthChangeCallback | null = null;
 let sessionForGetSession: SessionEvent = null;
-let pendingProfileCalls: Array<{ userId: string; resolve: (value: { data: ProfileRow | null }) => void }> = [];
+let pendingProfileCalls: Array<{
+  userId: string;
+  resolve: (value: { data: ProfileRow | null }) => void;
+}> = [];
 
 /** Resolves the current test's captured onAuthStateChange callback, inside act. */
 async function emit(event: string, session: SessionEvent) {
@@ -98,8 +105,16 @@ async function resolvePendingProfile(profile: ProfileRow | null) {
   });
 }
 
-const ADMIN_PROFILE: ProfileRow = { display_name: 'Admin', is_admin: true, onboarding_completed: true };
-const STUDENT_PROFILE: ProfileRow = { display_name: 'Student', is_admin: false, onboarding_completed: true };
+const ADMIN_PROFILE: ProfileRow = {
+  display_name: 'Admin',
+  is_admin: true,
+  onboarding_completed: true,
+};
+const STUDENT_PROFILE: ProfileRow = {
+  display_name: 'Student',
+  is_admin: false,
+  onboarding_completed: true,
+};
 
 beforeEach(() => {
   renderLog = [];
@@ -110,13 +125,15 @@ beforeEach(() => {
   mockFetchProfile.mockReset();
   mockFetchProfile.mockImplementation(
     (userId: string) =>
-      new Promise<{ data: ProfileRow | null }>(resolve => {
+      new Promise<{ data: ProfileRow | null }>((resolve) => {
         pendingProfileCalls.push({ userId, resolve });
       })
   );
 
   mockGetSession.mockReset();
-  mockGetSession.mockImplementation(() => Promise.resolve({ data: { session: sessionForGetSession } }));
+  mockGetSession.mockImplementation(() =>
+    Promise.resolve({ data: { session: sessionForGetSession } })
+  );
 
   mockOnAuthStateChange.mockReset();
   mockOnAuthStateChange.mockImplementation((cb: AuthChangeCallback) => {
@@ -189,7 +206,7 @@ describe('AuthProvider session-id gating (SYL-59)', () => {
     expect(after.isAdmin).toBe(true);
     // No render anywhere in the log ever pairs profileLoaded=true with
     // isAdmin=false for this user — the exact SYL-59 race.
-    expect(renderLog.some(r => r.profileLoaded && !r.isAdmin)).toBe(false);
+    expect(renderLog.some((r) => r.profileLoaded && !r.isAdmin)).toBe(false);
     // Bonus: the user object identity survived untouched.
     expect(after.user).toBe(userBefore);
   });

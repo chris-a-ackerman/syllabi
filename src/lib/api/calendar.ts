@@ -8,9 +8,11 @@ import { supabase, supabaseUrl, supabaseAnonKey } from '@/lib/supabase';
 export async function downloadCalendar(
   semesterId: string,
   courseId?: string,
-  fileName = 'schedule.ics',
+  fileName = 'schedule.ics'
 ): Promise<void> {
-  const { data: { session } } = await supabase.auth.getSession();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
   if (!session) throw new Error('Not signed in');
 
   const url = new URL(`${supabaseUrl}/functions/v1/generate-ics`);

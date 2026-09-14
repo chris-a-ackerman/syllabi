@@ -67,7 +67,9 @@ export async function uploadAndProcess(
   } catch {
     return {
       data: { path: null },
-      error: { message: 'Could not read file — make sure it is stored locally and not still syncing' },
+      error: {
+        message: 'Could not read file — make sure it is stored locally and not still syncing',
+      },
     };
   }
 
@@ -91,7 +93,10 @@ export async function uploadAndProcess(
     })
     .eq('id', courseId);
   if (updateError) {
-    return { data: { path }, error: { message: `Failed to save file path: ${updateError.message}` } };
+    return {
+      data: { path },
+      error: { message: `Failed to save file path: ${updateError.message}` },
+    };
   }
 
   opts.onStage?.('processing');
@@ -116,7 +121,10 @@ export async function uploadAndProcess(
   const { data: fnData, error: fnError } = await invokeProcessSyllabus(courseId);
   if (fnError) {
     if (await toastIfClaudeKeyRejected(fnError)) {
-      return { data: { path }, error: { message: KEY_REJECTED_MESSAGE, code: 'claude_key_rejected' } };
+      return {
+        data: { path },
+        error: { message: KEY_REJECTED_MESSAGE, code: 'claude_key_rejected' },
+      };
     }
     return { data: { path }, error: { message: `Processing failed: ${fnError.message}` } };
   }
@@ -164,7 +172,15 @@ export async function uploadTempSyllabus(
     buffer = await Promise.race([
       file.arrayBuffer(),
       new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('Could not read file — make sure it is stored locally and not still syncing')), 15_000)
+        setTimeout(
+          () =>
+            reject(
+              new Error(
+                'Could not read file — make sure it is stored locally and not still syncing'
+              )
+            ),
+          15_000
+        )
       ),
     ]);
   } catch (e: unknown) {
@@ -187,7 +203,9 @@ export async function detectSyllabiInfo(filePaths: string[]) {
  * waits for it. A transport/HTTP failure is recorded on the row the same way
  * `uploadAndProcess` does and returned to the caller.
  */
-export async function reprocessSyllabus(courseId: string): Promise<{ error: { message: string } | null }> {
+export async function reprocessSyllabus(
+  courseId: string
+): Promise<{ error: { message: string } | null }> {
   // Flip the row back to 'processing' first so the poll agrees with the
   // retrying card, and so the compare-and-set below can record a transport
   // failure that happens before the function's own status write.

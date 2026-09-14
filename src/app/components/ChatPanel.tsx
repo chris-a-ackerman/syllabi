@@ -68,7 +68,7 @@ export function ChatPanel({
     if (!activeSemester) return;
     addChatMessage(
       { role: 'user', content },
-      currentChatId ? undefined : { semesterId: activeSemester.id, courseIds: selectedCourses },
+      currentChatId ? undefined : { semesterId: activeSemester.id, courseIds: selectedCourses }
     );
   };
 
@@ -149,7 +149,8 @@ export function ChatPanel({
                 Hi {user?.displayName?.split(' ')[0]}! 👋
               </h2>
               <p className="text-gray-600 mb-8">
-                I'm here to help you stay on top of your courses. Ask me anything about your syllabi!
+                I'm here to help you stay on top of your courses. Ask me anything about your
+                syllabi!
               </p>
 
               {aiEnabled && selectedCourses.length > 0 && (

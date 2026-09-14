@@ -18,7 +18,9 @@ export interface AdminUsersPage {
 }
 
 export async function fetchAdminUsers(page = 1, search = ''): Promise<AdminUsersPage> {
-  const { data: { session } } = await supabase.auth.getSession();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
   if (!session) throw new Error('Not signed in');
 
   const url = new URL(`${supabaseUrl}/functions/v1/admin-get-users`);
