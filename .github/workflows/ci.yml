@@ -21,6 +21,7 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm run lint
+      - run: npm run format:check
       - run: npm test
       # Build smoke: catches broken imports/exports Vite would only surface at build time
       - run: npm run build
@@ -34,6 +35,13 @@ jobs:
           deno-version: v2.x # matches backend/supabase/config.toml deno_version
       - run: deno task test:unit
         working-directory: backend/supabase
+      - name: Assert deno.lock didn't drift
+        run: |
+          if ! git diff --quiet -- backend/supabase/deno.lock; then
+            echo "::error::backend/supabase/deno.lock changed after deno task test:unit — commit the refreshed lockfile."
+            git diff -- backend/supabase/deno.lock
+            exit 1
+          fi
 
   contract:
     runs-on: ubuntu-latest
