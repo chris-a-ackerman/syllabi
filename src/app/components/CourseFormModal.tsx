@@ -12,14 +12,7 @@ import { Alert, AlertDescription } from './ui/alert';
 import { Upload, CheckCircle, AlertCircle } from 'lucide-react';
 import { CourseFormFields, type CourseFormValues } from './CourseFormFields';
 import { COURSE_COLORS } from '@/lib/courseColors';
-
-export interface CourseModalTarget {
-  id: string;
-  name: string;
-  code: string;
-  color: string;
-  professor?: string;
-}
+import type { CourseModalTarget } from '@/lib/types';
 
 interface CourseFormModalProps {
   open: boolean;
@@ -47,7 +40,7 @@ function CourseFormModalContent({ onClose, existingCourse, onBack, onUploadSylla
     ? {
         name: existingCourse.name,
         code: existingCourse.code,
-        professor: existingCourse.professor ?? '',
+        professor: existingCourse.professor,
         color: existingCourse.color,
       }
     : EMPTY_VALUES);

@@ -22,7 +22,7 @@ import { Loader2, CheckCircle, AlertCircle } from 'lucide-react';
 import { AddCourseChooser } from './AddCourseChooser';
 import { SyllabusDropzone } from './SyllabusDropzone';
 import { CourseFormFields, type CourseFormValues } from './CourseFormFields';
-import type { CourseModalTarget } from './CourseFormModal';
+import type { CourseModalTarget } from '@/lib/types';
 
 interface UploadSyllabusModalProps {
   open: boolean;

@@ -1,5 +1,5 @@
 import { useNavigate, useLocation } from 'react-router';
-import type { UploadTarget } from '@/lib/types';
+import type { CourseModalTarget } from '@/lib/types';
 import { useData } from '../context/DataProvider';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
@@ -40,7 +40,7 @@ export function Courses() {
   const [showAddCourse, setShowAddCourse] = useState(false);
   const [showBulkUpload, setShowBulkUpload] = useState(false);
   const [showCourseForm, setShowCourseForm] = useState(false);
-  const [selectedCourseForUpload, setSelectedCourseForUpload] = useState<UploadTarget | undefined>(undefined);
+  const [selectedCourseForUpload, setSelectedCourseForUpload] = useState<CourseModalTarget | undefined>(undefined);
   const [courseToDelete, setCourseToDelete] = useState<string | null>(null);
   const [showEditSemester, setShowEditSemester] = useState(false);
 
@@ -230,12 +230,7 @@ export function Courses() {
                           className="w-full rounded-lg"
                           onClick={(e) => {
                             e.stopPropagation();
-                            setSelectedCourseForUpload({
-                              id: course.id,
-                              name: course.name,
-                              code: course.code,
-                              color: course.color,
-                            });
+                            setSelectedCourseForUpload(course);
                             setShowAddCourse(true);
                           }}
                         >

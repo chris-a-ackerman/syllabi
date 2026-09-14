@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router';
 import { toast } from 'sonner';
 import { Calendar, Plus } from 'lucide-react';
-import type { UploadTarget } from '@/lib/types';
+import type { CourseModalTarget } from '@/lib/types';
 import { useData } from '../context/DataProvider';
 import { Button } from '../components/ui/button';
 import { AppHeader } from '../components/AppHeader';
@@ -27,7 +27,7 @@ export function Dashboard() {
   const [showCourseForm, setShowCourseForm] = useState(false);
   const [showBulkUpload, setShowBulkUpload] = useState(false);
   const [showEditSemester, setShowEditSemester] = useState(false);
-  const [selectedCourseForUpload, setSelectedCourseForUpload] = useState<UploadTarget | undefined>(
+  const [selectedCourseForUpload, setSelectedCourseForUpload] = useState<CourseModalTarget | undefined>(
     undefined,
   );
   const [showSettings, setShowSettings] = useState(true);
@@ -149,12 +149,7 @@ export function Dashboard() {
             onAddCourse={() => setShowAddCourse(true)}
             onEditSemester={() => setShowEditSemester(true)}
             onUploadSyllabus={(course) => {
-              setSelectedCourseForUpload({
-                id: course.id,
-                name: course.name,
-                code: course.code,
-                color: course.color,
-              });
+              setSelectedCourseForUpload(course);
               setShowAddCourse(true);
             }}
           />
