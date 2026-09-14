@@ -152,5 +152,14 @@ if [ "$TOTAL_SEMESTER_COUNT" != "3" ]; then
   exit 1
 fi
 echo "PASS  bulk upload from Add Course created the course in the active semester and no new semester (SYL-61)"
+
+echo ""
+echo "Checking the Claude key removed through the Settings UI cleared the ciphertext (SYL-72)..."
+KEY_CLEARED="$(psql "$DB_URL" -At -c "SELECT anthropic_key_encrypted IS NULL FROM profiles WHERE id='$UID1'")"
+if [ "$KEY_CLEARED" != "t" ]; then
+  echo "FAIL  expected anthropic_key_encrypted to be NULL after removing it through the UI, found NULL=$KEY_CLEARED"
+  exit 1
+fi
+echo "PASS  removing the Claude key through the UI cleared anthropic_key_encrypted (SYL-72)"
 echo ""
 echo "Authenticated E2E pass succeeded."
