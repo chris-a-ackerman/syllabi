@@ -27,7 +27,7 @@ export function dbSemesterToApp(row: any): Semester {
     name: row.name,
     startDate: row.start_date,
     endDate: row.end_date,
-    isActive: row.is_active,
+    isActive: row.is_active === true, // column is nullable; treat null as inactive
   };
 }
 
@@ -49,7 +49,8 @@ export function dbCourseToApp(row: any): Course {
     professor: row.professor ?? '',
     color: row.color ?? '#6366f1',
     status: mapAnalysisStatus(row.analysis_status),
-    syllabusUrl: row.syllabus_file_path ?? undefined,
+    analysisError: row.analysis_error ?? undefined,
+    syllabusPath: row.syllabus_file_path ?? undefined,
     extractionQuality: analysis?.extraction_quality ?? undefined,
     grading_rules: gradingRules,
     policies,
@@ -64,12 +65,16 @@ export function dbEventToApp(row: any): Event {
     courseId: row.course_id,
     title: row.title,
     date: row.date ?? null,
+    dateUnresolved: row.date_unresolved ?? null,
     time: row.time ?? null,
     type: row.type as Event['type'],
     category: row.category ?? null,
     confidence: row.confidence as Event['confidence'],
     canvasMetadata: row.canvas_metadata ?? null,
     canvasAssignmentId: row.canvas_assignment_id ?? null,
+    // Canvas sync columns (SYL-69): the DB defaults are 'syllabus' / false.
+    source: (row.source ?? 'syllabus') as Event['source'],
+    canvasOnly: row.canvas_only === true,
   };
 }
 

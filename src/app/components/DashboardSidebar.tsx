@@ -8,14 +8,12 @@ import {
   MessageSquare,
   Pencil,
   Plus,
-  Upload,
   X,
 } from 'lucide-react';
 import type { Course, Semester } from '@/lib/types';
 import { useData } from '../context/DataProvider';
 import { useChat } from '../context/ChatProvider';
 import { Button } from '../components/ui/button';
-import { Badge } from '../components/ui/badge';
 import { Checkbox } from '../components/ui/checkbox';
 import {
   Select,
@@ -25,12 +23,15 @@ import {
   SelectValue,
 } from '../components/ui/select';
 import { ChatHistoryList } from './ChatHistoryList';
+import { UploadExistingCourseCard } from './UploadExistingCourseCard';
 import type { ChatRenameControls } from '../hooks/useChatRename';
 
 interface DashboardSidebarProps {
   activeSemester?: Semester;
   activeCourses: Course[];
   selectedCourses: string[];
+  /** Every ready course is selected (set semantics; computed once in Dashboard, SYL-68). */
+  allReadySelected: boolean;
   onToggleCourse: (courseId: string) => void;
   onToggleAllCourses: () => void;
   onSemesterChange: (semesterId: string) => void;
@@ -51,6 +52,7 @@ export function DashboardSidebar({
   activeSemester,
   activeCourses,
   selectedCourses,
+  allReadySelected,
   onToggleCourse,
   onToggleAllCourses,
   onSemesterChange,
@@ -67,10 +69,7 @@ export function DashboardSidebar({
   const { startNewChat } = useChat();
   const [sidebarTab, setSidebarTab] = useState<'knowledge-base' | 'chat'>('knowledge-base');
 
-  const readyCourses = activeCourses.filter((c) => c.status === 'ready');
   const processingCourses = activeCourses.filter((c) => c.status === 'processing');
-  const allReadySelected =
-    readyCourses.length > 0 && selectedCourses.length === readyCourses.length;
 
   return (
     <div
@@ -237,29 +236,7 @@ export function DashboardSidebar({
                         </>
                       ) : (
                         <div className="flex-1 flex items-start gap-2">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-2">
-                              <div className="text-sm font-medium text-gray-500">{course.code}</div>
-                              <Badge
-                                variant="outline"
-                                className="text-xs text-gray-500 border-gray-300"
-                              >
-                                No syllabus
-                              </Badge>
-                            </div>
-                            <div className="text-xs text-gray-500 line-clamp-1 mb-2">
-                              {course.name}
-                            </div>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-7 text-xs rounded-lg w-full"
-                              onClick={() => onUploadSyllabus(course)}
-                            >
-                              <Upload className="h-3 w-3 mr-1" />
-                              Upload Syllabus
-                            </Button>
-                          </div>
+                          <UploadExistingCourseCard course={course} onUploadSyllabus={onUploadSyllabus} />
                           <Button
                             variant="ghost"
                             size="sm"

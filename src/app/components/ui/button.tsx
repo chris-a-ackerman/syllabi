@@ -34,25 +34,27 @@ const buttonVariants = cva(
   },
 );
 
-const Button = React.forwardRef<
-  HTMLButtonElement,
-  React.ComponentProps<"button"> &
-    VariantProps<typeof buttonVariants> & {
-      asChild?: boolean;
-    }
->(({ className, variant, size, asChild = false, ...props }, ref) => {
+// React 19 passes `ref` as an ordinary prop, so this matches the other
+// primitives in this directory instead of wrapping in forwardRef (SYL-69).
+function Button({
+  className,
+  variant,
+  size,
+  asChild = false,
+  ...props
+}: React.ComponentProps<"button"> &
+  VariantProps<typeof buttonVariants> & {
+    asChild?: boolean;
+  }) {
   const Comp = asChild ? Slot : "button";
 
   return (
     <Comp
       data-slot="button"
       className={cn(buttonVariants({ variant, size, className }))}
-      ref={ref}
       {...props}
     />
   );
-});
-
-Button.displayName = "Button";
+}
 
 export { Button, buttonVariants };

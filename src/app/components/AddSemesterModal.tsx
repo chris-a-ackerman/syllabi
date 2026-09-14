@@ -1,7 +1,8 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { useData } from '../context/DataProvider';
 import { BulkReviewForm } from './BulkReviewForm';
+import { SyllabusDropzone } from './SyllabusDropzone';
 import { useBulkUpload } from '../hooks/useBulkUpload';
 import { useCanvasFlow } from '../hooks/useCanvasFlow';
 import { supabase } from '../../lib/supabase';
@@ -18,7 +19,6 @@ import { Label } from '../components/ui/label';
 import { Card } from '../components/ui/card';
 import { Alert, AlertDescription } from '../components/ui/alert';
 import {
-  Upload,
   Loader2,
   AlertCircle,
   ChevronRight,
@@ -62,9 +62,6 @@ export function AddSemesterModal({ open, onClose }: AddSemesterModalProps) {
 
   const canvasFlow = useCanvasFlow();
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const dropRef = useRef<HTMLDivElement>(null);
-
   // Reset everything when modal opens
   useEffect(() => {
     if (open) {
@@ -94,18 +91,6 @@ export function AddSemesterModal({ open, onClose }: AddSemesterModalProps) {
     onClose();
   }, [modalStep, bulkStep, createdCourseIds.length, onClose]);
 
-
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    if (dropRef.current) dropRef.current.dataset.dragging = 'false';
-    const files = Array.from(e.dataTransfer.files).filter(f => f.type === 'application/pdf');
-    addFiles(files);
-  }, [addFiles]);
-
-  const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) addFiles(Array.from(e.target.files));
-    e.target.value = '';
-  };
 
   const handleManualSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -277,26 +262,7 @@ export function AddSemesterModal({ open, onClose }: AddSemesterModalProps) {
             {/* Step 1: Upload */}
             {bulkStep === 'upload' && (
               <div className="space-y-3 overflow-hidden">
-                <div
-                  ref={dropRef}
-                  className="border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors border-gray-300 hover:border-indigo-400 bg-white data-[dragging=true]:border-indigo-500 data-[dragging=true]:bg-indigo-50"
-                  onDragOver={(e) => { e.preventDefault(); if (dropRef.current) dropRef.current.dataset.dragging = 'true'; }}
-                  onDragLeave={() => { if (dropRef.current) dropRef.current.dataset.dragging = 'false'; }}
-                  onDrop={handleDrop}
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  <Upload className="w-8 h-8 text-gray-400 mx-auto mb-3" />
-                  <p className="text-sm font-medium text-gray-700 mb-1">Drop PDF syllabi here</p>
-                  <p className="text-xs text-gray-500">or click to browse</p>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".pdf"
-                    multiple
-                    className="hidden"
-                    onChange={handleFileInput}
-                  />
-                </div>
+                <SyllabusDropzone multiple onFiles={addFiles} />
 
                 {fileItems.length > 0 && (
                   <Card className="p-2 rounded-lg divide-y divide-gray-100">

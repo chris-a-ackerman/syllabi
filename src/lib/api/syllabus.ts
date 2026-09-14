@@ -13,12 +13,21 @@ export interface ProcessSyllabusResponse {
 
 export type UploadStage = 'uploading' | 'processing';
 
+function errorMessage(e: unknown): string {
+  return e instanceof Error ? e.message : String(e);
+}
+
+function invokeProcessSyllabus(courseId: string) {
+  return supabase.functions.invoke('process-syllabus', { body: { course_id: courseId } });
+}
+
 /**
- * Uploads a syllabus PDF to its permanent path, records it on the course row,
- * and invokes process-syllabus. The invoke is fire-and-forget unless
- * `awaitProcessing` is set (the single-course flow blocks on it and reads the
- * response). `data.path` is set as soon as the file is in Storage — even when
- * a later stage errors — so callers can roll the upload back.
+ * Uploads a syllabus PDF to its permanent path, records it on the course row
+ * (flipping `analysis_status` to 'processing'), and invokes process-syllabus.
+ * The invoke is fire-and-forget unless `awaitProcessing` is set (the
+ * single-course flow blocks on it and reads the response). `data.path` is set
+ * as soon as the file is in Storage — even when a later stage errors — so
+ * callers can roll the upload back.
  */
 export async function uploadAndProcess(
   userId: string,
@@ -51,9 +60,17 @@ export async function uploadAndProcess(
     return { data: { path: null }, error: { message: `Upload failed: ${uploadError.message}` } };
   }
 
+  // Newly inserted rows sit at the DB default 'pending' (which the app shows
+  // as ready); mark the row 'processing' here so a poll that runs before the
+  // function's own status write cannot flip the card back to done (SYL-66).
   const { error: updateError } = await supabase
     .from('courses')
-    .update({ syllabus_file_path: path, syllabus_file_name: file.name })
+    .update({
+      syllabus_file_path: path,
+      syllabus_file_name: file.name,
+      analysis_status: 'processing',
+      analysis_error: null,
+    })
     .eq('id', courseId);
   if (updateError) {
     return { data: { path }, error: { message: `Failed to save file path: ${updateError.message}` } };
@@ -61,13 +78,20 @@ export async function uploadAndProcess(
 
   opts.onStage?.('processing');
   if (!opts.awaitProcessing) {
-    supabase.functions.invoke('process-syllabus', { body: { course_id: courseId } });
+    // Fire-and-forget for the UI, but a transport/HTTP failure (network, 401,
+    // 429 quota) would otherwise leave the row 'processing' forever and the
+    // poll never settles. Mark it failed unless the function got far enough
+    // to settle the row itself.
+    void invokeProcessSyllabus(courseId)
+      .then(({ error }) => (error ? `Processing failed: ${error.message}` : null))
+      .catch((e: unknown) => `Processing failed: ${errorMessage(e)}`)
+      .then((message) => {
+        if (message) return markSyllabusFailed(courseId, message, { onlyIfProcessing: true });
+      });
     return { data: { path }, error: null };
   }
 
-  const { data: fnData, error: fnError } = await supabase.functions.invoke('process-syllabus', {
-    body: { course_id: courseId },
-  });
+  const { data: fnData, error: fnError } = await invokeProcessSyllabus(courseId);
   if (fnError) {
     return { data: { path }, error: { message: `Processing failed: ${fnError.message}` } };
   }
@@ -75,6 +99,26 @@ export async function uploadAndProcess(
     return { data: { path, fnData }, error: { message: fnData?.error || 'Processing failed' } };
   }
   return { data: { path, fnData }, error: null };
+}
+
+/**
+ * Records a failed syllabus stage on the course row so the status the poll
+ * reads back agrees with the failed card the UI shows (SYL-66). With
+ * `onlyIfProcessing` the write is a compare-and-set that leaves a row
+ * process-syllabus has already settled ('complete' / 'failed') untouched.
+ */
+export async function markSyllabusFailed(
+  courseId: string,
+  message: string,
+  opts: { onlyIfProcessing?: boolean } = {}
+) {
+  let query = supabase
+    .from('courses')
+    .update({ analysis_status: 'failed', analysis_error: message })
+    .eq('id', courseId);
+  if (opts.onlyIfProcessing) query = query.eq('analysis_status', 'processing');
+  const { error } = await query;
+  return { error };
 }
 
 /**
@@ -113,10 +157,27 @@ export async function detectSyllabiInfo(filePaths: string[]) {
   return supabase.functions.invoke('detect-syllabi-info', { body: { file_paths: filePaths } });
 }
 
-/** Re-runs syllabus processing for a course (the bulk-flow retry button). */
-export async function reprocessSyllabus(courseId: string) {
-  await supabase.functions.invoke('process-syllabus', { body: { course_id: courseId } });
+/**
+ * Re-runs syllabus processing for a course (the bulk-flow retry button) and
+ * waits for it. A transport/HTTP failure is recorded on the row the same way
+ * `uploadAndProcess` does and returned to the caller.
+ */
+export async function reprocessSyllabus(courseId: string): Promise<{ error: { message: string } | null }> {
+  // Flip the row back to 'processing' first so the poll agrees with the
+  // retrying card, and so the compare-and-set below can record a transport
+  // failure that happens before the function's own status write.
+  await supabase
+    .from('courses')
+    .update({ analysis_status: 'processing', analysis_error: null })
+    .eq('id', courseId);
+  const { error } = await invokeProcessSyllabus(courseId);
+  if (error) {
+    const message = `Processing failed: ${error.message}`;
+    await markSyllabusFailed(courseId, message, { onlyIfProcessing: true });
+    return { error: { message } };
+  }
   await matchCanvasAssignmentsIfLinked(courseId);
+  return { error: null };
 }
 
 /**

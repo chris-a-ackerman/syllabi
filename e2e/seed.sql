@@ -25,16 +25,24 @@ INSERT INTO public.courses (id, semester_id, user_id, name, code, professor, col
    '{"attendance":"Labs are mandatory."}',
    '{"meeting_days":["Tuesday","Thursday"],"meeting_times":{"start":"09:30","end":"11:00"},"location":"4-270"}');
 
--- Dated events across two months, plus undated events (date IS NULL with the raw
--- text kept in date_unresolved) which must surface in the "Date TBD" group.
+-- Dated events spread over the next three months, plus undated events (date IS
+-- NULL with the raw text kept in date_unresolved) which must surface in the
+-- "Date TBD" group.
+--
+-- Dates are relative to CURRENT_DATE, not literal: the Agenda shows only
+-- events dated today or later and the dashboard banner only the next 14 days,
+-- so a literal fixture silently expired (the Agenda check started failing on
+-- 2026-09-12, the day after the original 'Problem Set 1 due'). Offsets keep
+-- three deadlines inside the banner window with margin for the DB (UTC) and
+-- the browser (local time) disagreeing about today's date, and one past event.
 INSERT INTO public.course_events (course_id, user_id, date, date_unresolved, time, title, type, confidence) VALUES
-  ('aaaaaaaa-0000-0000-0000-000000000001', :'uid1', '2026-09-11', NULL, '23:59', 'Problem Set 1 due',       'deadline', 'high'),
-  ('aaaaaaaa-0000-0000-0000-000000000001', :'uid1', '2026-09-25', NULL, '23:59', 'Problem Set 2 due',       'deadline', 'high'),
-  ('aaaaaaaa-0000-0000-0000-000000000001', :'uid1', '2026-10-15', NULL, '19:00', 'Midterm Exam',            'exam',     'high'),
+  ('aaaaaaaa-0000-0000-0000-000000000001', :'uid1', CURRENT_DATE + 3,  NULL, '23:59', 'Problem Set 1 due',       'deadline', 'high'),
+  ('aaaaaaaa-0000-0000-0000-000000000001', :'uid1', CURRENT_DATE + 10, NULL, '23:59', 'Problem Set 2 due',       'deadline', 'high'),
+  ('aaaaaaaa-0000-0000-0000-000000000001', :'uid1', CURRENT_DATE + 31, NULL, '19:00', 'Midterm Exam',            'exam',     'high'),
   ('aaaaaaaa-0000-0000-0000-000000000001', :'uid1', NULL, 'TBD - see course website', NULL, 'Guest Lecture Response', 'other', 'low'),
-  ('aaaaaaaa-0000-0000-0000-000000000002', :'uid1', '2026-09-03', NULL, '09:30', 'Quiz 1',                  'quiz',     'high'),
-  ('aaaaaaaa-0000-0000-0000-000000000002', :'uid1', '2026-09-17', NULL, NULL,    'Lab Report 1 due',        'deadline', 'medium'),
-  ('aaaaaaaa-0000-0000-0000-000000000002', :'uid1', '2026-11-26', NULL, NULL,    'No class - Thanksgiving', 'no_class', 'high'),
+  ('aaaaaaaa-0000-0000-0000-000000000002', :'uid1', CURRENT_DATE - 11, NULL, '09:30', 'Quiz 1',                  'quiz',     'high'),
+  ('aaaaaaaa-0000-0000-0000-000000000002', :'uid1', CURRENT_DATE + 5,  NULL, NULL,    'Lab Report 1 due',        'deadline', 'medium'),
+  ('aaaaaaaa-0000-0000-0000-000000000002', :'uid1', CURRENT_DATE + 73, NULL, NULL,    'No class - Thanksgiving', 'no_class', 'high'),
   ('aaaaaaaa-0000-0000-0000-000000000002', :'uid1', NULL, 'Week of finals',      NULL, 'Final Exam (date TBD)',  'exam', 'low');
 
 INSERT INTO public.course_notes (course_id, user_id, body) VALUES
