@@ -10,7 +10,8 @@ import type {
 } from '@/lib/types';
 
 // Data access for the Canvas integration (SYL-63). Queries/fetches moved
-// verbatim from AddSemesterModal, CanvasSettings and useCanvasFlow.
+// verbatim from AddSemesterModal, the old CanvasSettings page (now folded
+// into Settings.tsx, SYL-72) and useCanvasFlow.
 
 export async function fetchCanvasProfile() {
   const { data, error } = await supabase

@@ -6,7 +6,7 @@ import { Courses } from './pages/Courses';
 import { CourseDetail } from './pages/CourseDetail';
 import { AdminPanel } from './pages/AdminPanel';
 import { Onboarding } from './pages/Onboarding';
-import { CanvasSettings } from './pages/CanvasSettings';
+import { Settings } from './pages/Settings';
 import { Agenda } from './pages/Agenda';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { useAuth } from './context/AuthProvider';
@@ -63,7 +63,8 @@ export const router = createBrowserRouter([
           { path: '/dashboard', Component: Dashboard },
           { path: '/courses', Component: Courses },
           { path: '/course/:id', Component: CourseDetail },
-          { path: '/settings/canvas', Component: CanvasSettings },
+          { path: '/settings', Component: Settings },
+          { path: '/settings/canvas', element: <Navigate to="/settings#canvas" replace /> },
           { path: '/agenda', Component: Agenda },
         ],
       },
