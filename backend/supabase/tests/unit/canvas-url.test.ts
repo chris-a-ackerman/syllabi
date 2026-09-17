@@ -133,7 +133,7 @@ Deno.test(
   }
 );
 
-Deno.test('safeCanvasFetch rejects every other 3xx status too', async () => {
+Deno.test('safeCanvasFetch gives up after MAX_CANVAS_REDIRECTS consecutive redirects', async () => {
   for (const status of [301, 303, 307, 308]) {
     const fetchStub = stub(globalThis, 'fetch', () =>
       Promise.resolve(
@@ -148,10 +148,77 @@ Deno.test('safeCanvasFetch rejects every other 3xx status too', async () => {
         () => safeCanvasFetch('https://canvas.instructure.com/api/v1/courses'),
         CanvasRedirectError
       );
-      assertSpyCalls(fetchStub, 1);
+      // Initial fetch + 5 followed hops = 6 calls, then the 6th consecutive
+      // 3xx fails closed without a further fetch.
+      assertSpyCalls(fetchStub, 6);
     } finally {
       fetchStub.restore();
     }
+  }
+});
+
+Deno.test(
+  'safeCanvasFetch follows a short redirect chain (matching Instructure inst-fs), stripping Authorization from the first hop onward',
+  async () => {
+    let call = 0;
+    const fetchStub = stub(globalThis, 'fetch', (_input, init) => {
+      call += 1;
+      if (call === 1) {
+        // Canvas host → per-file cluster storage host.
+        return Promise.resolve(
+          new Response(null, {
+            status: 302,
+            headers: { Location: 'https://a1-123.cluster1.canvas-user-content.com/files/1?verifier=secret' },
+          })
+        );
+      }
+      // Every hop from here on is a storage host: it must never receive the
+      // original bearer token.
+      const headers = new Headers((init as RequestInit).headers);
+      assertEquals(headers.has('Authorization'), false);
+      if (call === 2) {
+        // Cluster storage host → inst-fs backend.
+        return Promise.resolve(
+          new Response(null, {
+            status: 302,
+            headers: { Location: 'https://inst-fs-iad-prod.inscloudgate.net/files/1?token=secret' },
+          })
+        );
+      }
+      return Promise.resolve(new Response('%PDF-1.4', { status: 200 }));
+    });
+    try {
+      const res = await safeCanvasFetch(
+        'https://canvas.school.edu/files/1/download',
+        { headers: { Authorization: 'Bearer secret-token' } },
+        'canvas.school.edu'
+      );
+      assertEquals(res.status, 200);
+      assertEquals(await res.text(), '%PDF-1.4');
+      assertSpyCalls(fetchStub, 3);
+    } finally {
+      fetchStub.restore();
+    }
+  }
+);
+
+Deno.test('safeCanvasFetch rejects a redirect whose Location is unsafe', async () => {
+  const fetchStub = stub(globalThis, 'fetch', () =>
+    Promise.resolve(
+      new Response(null, {
+        status: 302,
+        headers: { Location: 'https://169.254.169.254/latest/meta-data/' },
+      })
+    )
+  );
+  try {
+    await assertRejects(
+      () => safeCanvasFetch('https://canvas.instructure.com/files/1/download'),
+      CanvasRedirectError
+    );
+    assertSpyCalls(fetchStub, 1);
+  } finally {
+    fetchStub.restore();
   }
 });
 

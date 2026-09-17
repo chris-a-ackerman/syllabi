@@ -144,7 +144,17 @@ export async function assertSafeCanvasUrl(
 // Deno's fetch follows redirects by default, so a Canvas host under attacker
 // control can 3xx the request to a blocked address (e.g. cloud metadata) and
 // have the response body read and stored. Canvas API endpoints do not redirect
-// in normal use, so any 3xx is treated as an error rather than followed.
+// in normal use, so any 3xx there is treated as an error. Canvas file downloads
+// are the one legitimate exception: Instructure serves them through its inst-fs
+// storage layer, which chains multiple 302s (observed: the Canvas host, to a
+// per-file *.canvas-user-content.com cluster host, to an inst-fs-*.inscloudgate.net
+// backend) before the final signed, self-authenticating response. safeCanvasFetch
+// follows a small bounded number of such redirects — each Location revalidated
+// with assertSafeCanvasUrl (unpinned, since these storage hosts legitimately
+// differ from the original Canvas host) and with Authorization stripped from the
+// second hop onward, since forwarding our bearer token to a storage host is
+// unnecessary and would leak it outside the user's own Canvas instance.
+// Exceeding the hop limit fails closed.
 export class CanvasRedirectError extends UnsafeCanvasUrlError {
   constructor(message: string) {
     super(message);
@@ -166,24 +176,60 @@ export function redactUrl(url: string): string {
   }
 }
 
+// Generous enough for Instructure's observed inst-fs chain (Canvas host →
+// cluster storage host → inst-fs backend, i.e. 2 hops) with headroom, while
+// still bounding how many revalidated fetches a single call can trigger.
+const MAX_CANVAS_REDIRECTS = 5;
+
 /**
  * Validates `rawUrl` with assertSafeCanvasUrl, then fetches it with
- * `redirect: "manual"` so a 3xx response is surfaced (not followed). Any
- * 3xx status throws CanvasRedirectError without the body being read.
+ * `redirect: "manual"` so 3xx responses are surfaced rather than auto-followed.
+ * Up to MAX_CANVAS_REDIRECTS hops are allowed (see the CanvasRedirectError
+ * comment above): each Location is revalidated with assertSafeCanvasUrl and
+ * re-fetched with Authorization stripped from the second hop onward. Exceeding
+ * the limit, or any redirect that fails revalidation, throws CanvasRedirectError
+ * without an unread body being left dangling.
  */
 export async function safeCanvasFetch(
   rawUrl: string,
   init: RequestInit = {},
   allowedHost?: string | null,
 ): Promise<Response> {
-  const url = await assertSafeCanvasUrl(rawUrl, allowedHost);
-  const res = await fetch(url, { ...init, redirect: "manual" });
+  let url = await assertSafeCanvasUrl(rawUrl, allowedHost);
+  let currentInit = init;
+  let res = await fetch(url, { ...currentInit, redirect: "manual" });
 
-  if (res.status >= 300 && res.status < 400) {
+  for (let hop = 0; res.status >= 300 && res.status < 400; hop++) {
     await res.body?.cancel();
-    throw new CanvasRedirectError(
-      `Canvas host returned a redirect (${res.status}); redirects are not followed.`,
-    );
+
+    if (hop >= MAX_CANVAS_REDIRECTS) {
+      throw new CanvasRedirectError(
+        `Canvas host redirected more than ${MAX_CANVAS_REDIRECTS} times; giving up.`,
+      );
+    }
+
+    const location = res.headers.get("location");
+    if (!location) {
+      throw new CanvasRedirectError(
+        `Canvas host returned a redirect (${res.status}) with no Location header; redirects are not followed.`,
+      );
+    }
+
+    try {
+      url = await assertSafeCanvasUrl(location);
+    } catch (err) {
+      if (err instanceof UnsafeCanvasUrlError) {
+        throw new CanvasRedirectError(
+          `Canvas host returned a redirect (${res.status}) to a disallowed URL: ${err.message}`,
+        );
+      }
+      throw err;
+    }
+
+    const redirectHeaders = new Headers(currentInit.headers);
+    redirectHeaders.delete("Authorization");
+    currentInit = { ...currentInit, headers: redirectHeaders };
+    res = await fetch(url, { ...currentInit, redirect: "manual" });
   }
 
   return res;
