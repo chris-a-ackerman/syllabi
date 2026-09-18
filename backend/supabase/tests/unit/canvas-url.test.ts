@@ -168,7 +168,9 @@ Deno.test(
         return Promise.resolve(
           new Response(null, {
             status: 302,
-            headers: { Location: 'https://a1-123.cluster1.canvas-user-content.com/files/1?verifier=secret' },
+            headers: {
+              Location: 'https://a1-123.cluster1.canvas-user-content.com/files/1?verifier=secret',
+            },
           })
         );
       }
