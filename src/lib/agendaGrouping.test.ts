@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { startOfDay, parseISO } from 'date-fns';
 import { enrichAndSortEvents, groupEventsByWeek } from './agendaGrouping';
-import type { Event, Course } from '@/app/context/AppContext';
+import type { Event, Course } from '@/lib/types';
 
 // Fixed clock for every test: Tuesday, Sep 1 2026.
 const TODAY = startOfDay(parseISO('2026-09-01'));
@@ -42,18 +42,18 @@ describe('enrichAndSortEvents', () => {
         makeEvent({ id: 'no-date', date: null }),
       ],
       courses,
-      TODAY,
+      TODAY
     );
-    expect(result.map(r => r.event.id)).toEqual(['today', 'future']);
+    expect(result.map((r) => r.event.id)).toEqual(['today', 'future']);
   });
 
   it('drops events belonging to courses outside the active set', () => {
     const result = enrichAndSortEvents(
       [makeEvent({ id: 'mine' }), makeEvent({ id: 'other', courseId: 'c-other' })],
       courses,
-      TODAY,
+      TODAY
     );
-    expect(result.map(r => r.event.id)).toEqual(['mine']);
+    expect(result.map((r) => r.event.id)).toEqual(['mine']);
   });
 
   it('normalizes dateKey to YYYY-MM-DD even when the date carries a time component (SYL-13 regression)', () => {
@@ -63,10 +63,10 @@ describe('enrichAndSortEvents', () => {
         makeEvent({ id: 'b', date: '2026-09-08' }),
       ],
       courses,
-      TODAY,
+      TODAY
     );
     // Same day → one dateKey, so a later grouping step keeps them together
-    expect(result.map(r => r.dateKey)).toEqual(['2026-09-08', '2026-09-08']);
+    expect(result.map((r) => r.dateKey)).toEqual(['2026-09-08', '2026-09-08']);
   });
 
   it('sorts by date ascending, then by type priority within a day', () => {
@@ -79,10 +79,14 @@ describe('enrichAndSortEvents', () => {
         makeEvent({ id: 'no-class', date: '2026-09-08', type: 'no_class' }),
       ],
       courses,
-      TODAY,
+      TODAY
     );
-    expect(result.map(r => r.event.id)).toEqual([
-      'exam', 'quiz', 'deadline', 'no-class', 'later-day',
+    expect(result.map((r) => r.event.id)).toEqual([
+      'exam',
+      'quiz',
+      'deadline',
+      'no-class',
+      'later-day',
     ]);
   });
 
@@ -116,10 +120,10 @@ describe('groupEventsByWeek', () => {
         makeEvent({ id: 'tue', date: '2026-09-08' }),
         makeEvent({ id: 'sun', date: '2026-09-13' }),
         makeEvent({ id: 'next-mon', date: '2026-09-14' }),
-      ]),
+      ])
     );
-    expect(weeks.map(w => w.weekKey)).toEqual(['2026-09-07', '2026-09-14']);
-    expect(weeks[0].days.map(d => d.dateKey)).toEqual(['2026-09-08', '2026-09-13']);
+    expect(weeks.map((w) => w.weekKey)).toEqual(['2026-09-07', '2026-09-14']);
+    expect(weeks[0].days.map((d) => d.dateKey)).toEqual(['2026-09-08', '2026-09-13']);
   });
 
   it('keeps events with time-suffixed dates in the same day group', () => {
@@ -127,7 +131,7 @@ describe('groupEventsByWeek', () => {
       enrich([
         makeEvent({ id: 'a', date: '2026-09-08T09:00:00' }),
         makeEvent({ id: 'b', date: '2026-09-08' }),
-      ]),
+      ])
     );
     expect(weeks).toHaveLength(1);
     expect(weeks[0].days).toHaveLength(1);
@@ -140,10 +144,10 @@ describe('groupEventsByWeek', () => {
         makeEvent({ id: 'late', date: '2026-10-06' }),
         makeEvent({ id: 'early', date: '2026-09-02' }),
         makeEvent({ id: 'mid', date: '2026-09-04' }),
-      ]),
+      ])
     );
-    expect(weeks.map(w => w.weekKey)).toEqual(['2026-08-31', '2026-10-05']);
-    expect(weeks[0].days.map(d => d.dateKey)).toEqual(['2026-09-02', '2026-09-04']);
+    expect(weeks.map((w) => w.weekKey)).toEqual(['2026-08-31', '2026-10-05']);
+    expect(weeks[0].days.map((d) => d.dateKey)).toEqual(['2026-09-02', '2026-09-04']);
   });
 
   it('returns an empty array for no events', () => {

@@ -1,28 +1,9 @@
 import { useNavigate, useLocation } from 'react-router';
-import { useApp } from '../context/AppContext';
+import type { CourseModalTarget } from '@/lib/types';
+import { useData } from '../context/DataProvider';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
-import { Badge } from '../components/ui/badge';
-import {
-  ArrowLeft,
-  BookOpen,
-  Calendar,
-  Upload,
-  AlertCircle,
-  MoreHorizontal,
-  Trash2,
-  Pencil,
-} from 'lucide-react';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '../components/ui/alert-dialog';
+import { BookOpen, Calendar, Upload, MoreHorizontal, Trash2, Pencil } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -36,86 +17,46 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../components/ui/select';
-import { Avatar, AvatarFallback } from '../components/ui/avatar';
-import { LogOut } from 'lucide-react';
 import { useState } from 'react';
-import { AddCourseModal } from '../components/AddCourseModal';
+import { AppHeader } from '../components/AppHeader';
+import { UploadSyllabusModal } from '../components/UploadSyllabusModal';
+import { CourseFormModal } from '../components/CourseFormModal';
+import { ConfirmDeleteDialog } from '../components/ConfirmDeleteDialog';
 import { BulkUploadModal } from '../components/BulkUploadModal';
 import { EditSemesterModal } from '../components/EditSemesterModal';
+import { NoSyllabusBadge, UploadSyllabusButton } from '../components/UploadExistingCourseCard';
 
 export function Courses() {
-  const { user, semesters, courses, events, deleteCourse, signOut } = useApp();
+  const { semesters, courses, events, deleteCourse } = useData();
   const navigate = useNavigate();
   const location = useLocation();
   const [showAddCourse, setShowAddCourse] = useState(false);
   const [showBulkUpload, setShowBulkUpload] = useState(false);
-  const [selectedCourseForUpload, setSelectedCourseForUpload] = useState<{
-    id: string;
-    name: string;
-    code: string;
-    color: string;
-  } | undefined>(undefined);
+  const [showCourseForm, setShowCourseForm] = useState(false);
+  const [selectedCourseForUpload, setSelectedCourseForUpload] = useState<
+    CourseModalTarget | undefined
+  >(undefined);
   const [courseToDelete, setCourseToDelete] = useState<string | null>(null);
   const [showEditSemester, setShowEditSemester] = useState(false);
 
-  const activeSemester = semesters.find(s => s.isActive);
+  const activeSemester = semesters.find((s) => s.isActive);
   // Restore from navigation state (e.g. back from CourseDetail), otherwise fall back to active semester
   const [selectedSemesterId, setSelectedSemesterId] = useState<string>(
     (location.state as { semesterId?: string } | null)?.semesterId ?? ''
   );
   const effectiveSemesterId = selectedSemesterId || activeSemester?.id || '';
 
-  const displayedCourses = courses.filter(c => c.semesterId === effectiveSemesterId);
+  const displayedCourses = courses.filter((c) => c.semesterId === effectiveSemesterId);
 
   return (
     <div className="min-h-screen bg-white">
-      {/* Header */}
-      <header className="border-b border-gray-200 px-6 py-4">
-        <div className="flex items-center justify-between max-w-7xl mx-auto">
-          <div className="flex items-center gap-4">
-            <Button
-              variant="ghost"
-              onClick={() => navigate('/dashboard')}
-              className="rounded-lg"
-            >
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back
-            </Button>
-            <h1 className="text-xl font-bold text-indigo-600">Syllabi</h1>
-          </div>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="rounded-full p-0 h-10 w-10">
-                <Avatar>
-                  <AvatarFallback className="bg-indigo-100 text-indigo-600">
-                    {user?.avatar}
-                  </AvatarFallback>
-                </Avatar>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="rounded-lg">
-              <div className="px-2 py-1.5 text-sm font-medium">
-                {user?.displayName}
-              </div>
-              <div className="px-2 py-1.5 text-xs text-gray-500">
-                {user?.email}
-              </div>
-              <DropdownMenuItem onClick={signOut}>
-                <LogOut className="mr-2 h-4 w-4" />
-                Sign Out
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </header>
+      <AppHeader onBack={() => navigate('/dashboard')} contentClassName="max-w-7xl mx-auto" />
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-6 py-8">
         <div className="mb-8 flex items-start justify-between gap-4">
           <div className="flex-1">
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">
-              Course Details
-            </h2>
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">Course Details</h2>
             <p className="text-gray-600">
               Select a course to view details, deadlines, and policies
             </p>
@@ -141,7 +82,7 @@ export function Courses() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="rounded-lg">
-                    {semesters.map(semester => (
+                    {semesters.map((semester) => (
                       <SelectItem key={semester.id} value={semester.id}>
                         {semester.name}
                       </SelectItem>
@@ -166,12 +107,8 @@ export function Courses() {
         {displayedCourses.length === 0 ? (
           <Card className="p-12 text-center rounded-2xl">
             <Calendar className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">
-              No courses yet
-            </h3>
-            <p className="text-gray-600 mb-6">
-              Add your first course to get started
-            </p>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">No courses yet</h3>
+            <p className="text-gray-600 mb-6">Add your first course to get started</p>
             <Button
               onClick={() => setShowAddCourse(true)}
               className="bg-indigo-600 hover:bg-indigo-700 rounded-lg"
@@ -181,7 +118,7 @@ export function Courses() {
           </Card>
         ) : (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {displayedCourses.map(course => {
+            {displayedCourses.map((course) => {
               const hasSyllabus = course.status === 'ready';
               return (
                 <Card
@@ -205,11 +142,7 @@ export function Courses() {
                         {course.code.substring(0, 2).toUpperCase()}
                       </div>
                       <div className="flex items-center gap-2">
-                        {!hasSyllabus && (
-                          <Badge variant="outline" className="text-xs text-gray-500 border-gray-300">
-                            No syllabus
-                          </Badge>
-                        )}
+                        {!hasSyllabus && <NoSyllabusBadge />}
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button
@@ -237,17 +170,11 @@ export function Courses() {
                       </div>
                     </div>
 
-                    <h3 className="font-semibold text-gray-900 mb-1">
-                      {course.code}
-                    </h3>
-                    <p className="text-sm text-gray-600 mb-3 line-clamp-2">
-                      {course.name}
-                    </p>
+                    <h3 className="font-semibold text-gray-900 mb-1">{course.code}</h3>
+                    <p className="text-sm text-gray-600 mb-3 line-clamp-2">{course.name}</p>
 
                     {course.professor && (
-                      <p className="text-xs text-gray-500 mb-4">
-                        {course.professor}
-                      </p>
+                      <p className="text-xs text-gray-500 mb-4">{course.professor}</p>
                     )}
 
                     {hasSyllabus ? (
@@ -255,7 +182,7 @@ export function Courses() {
                         <div className="flex items-center gap-2 text-xs text-gray-500">
                           <BookOpen className="w-4 h-4" />
                           <span>
-                            {events.filter(e => e.courseId === course.id).length} events extracted
+                            {events.filter((e) => e.courseId === course.id).length} events extracted
                           </span>
                         </div>
                         <Button
@@ -272,24 +199,14 @@ export function Courses() {
                       </div>
                     ) : (
                       <div className="pt-4 border-t border-gray-100">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="w-full rounded-lg"
+                        <UploadSyllabusButton
+                          className="w-full"
                           onClick={(e) => {
                             e.stopPropagation();
-                            setSelectedCourseForUpload({
-                              id: course.id,
-                              name: course.name,
-                              code: course.code,
-                              color: course.color,
-                            });
+                            setSelectedCourseForUpload(course);
                             setShowAddCourse(true);
                           }}
-                        >
-                          <Upload className="mr-2 h-3 w-3" />
-                          Upload Syllabus
-                        </Button>
+                        />
                       </div>
                     )}
                   </div>
@@ -300,53 +217,67 @@ export function Courses() {
         )}
       </main>
 
-      <AddCourseModal
+      <UploadSyllabusModal
         open={showAddCourse}
         onClose={() => {
           setShowAddCourse(false);
           setSelectedCourseForUpload(undefined);
         }}
         existingCourse={selectedCourseForUpload}
+        onCreateManually={() => {
+          setShowAddCourse(false);
+          setShowCourseForm(true);
+        }}
+        onBulkUpload={() => {
+          setShowAddCourse(false);
+          setShowBulkUpload(true);
+        }}
+      />
+
+      <CourseFormModal
+        open={showCourseForm}
+        onClose={() => setShowCourseForm(false)}
+        onBack={() => {
+          setShowCourseForm(false);
+          setShowAddCourse(true);
+        }}
+        onUploadSyllabus={(course) => {
+          setShowCourseForm(false);
+          setSelectedCourseForUpload(course);
+          setShowAddCourse(true);
+        }}
       />
 
       <BulkUploadModal
         open={showBulkUpload}
         onClose={() => setShowBulkUpload(false)}
+        fixedSemesterId={activeSemester?.id ?? ''}
       />
 
-      {showEditSemester && effectiveSemesterId && (() => {
-        const sem = semesters.find(s => s.id === effectiveSemesterId);
-        return sem ? (
-          <EditSemesterModal
-            open={showEditSemester}
-            onClose={() => setShowEditSemester(false)}
-            semester={sem}
-          />
-        ) : null;
-      })()}
+      {showEditSemester &&
+        effectiveSemesterId &&
+        (() => {
+          const sem = semesters.find((s) => s.id === effectiveSemesterId);
+          return sem ? (
+            <EditSemesterModal
+              open={showEditSemester}
+              onClose={() => setShowEditSemester(false)}
+              semester={sem}
+            />
+          ) : null;
+        })()}
 
-      <AlertDialog open={!!courseToDelete} onOpenChange={() => setCourseToDelete(null)}>
-        <AlertDialogContent className="rounded-2xl">
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete this course?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will permanently delete the course and all its extracted events. This cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel className="rounded-lg">Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-red-600 hover:bg-red-700 rounded-lg"
-              onClick={async () => {
-                if (courseToDelete) await deleteCourse(courseToDelete);
-                setCourseToDelete(null);
-              }}
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ConfirmDeleteDialog
+        open={!!courseToDelete}
+        onOpenChange={(open) => {
+          if (!open) setCourseToDelete(null);
+        }}
+        title="Delete this course?"
+        description="This will permanently delete the course and all its extracted events. This cannot be undone."
+        onConfirm={async () => {
+          if (courseToDelete) await deleteCourse(courseToDelete);
+        }}
+      />
     </div>
   );
 }

@@ -2,18 +2,16 @@
 // local `supabase start` stack; env comes from `supabase status -o env`:
 //   SUPABASE_URL (defaults to the local API), SUPABASE_ANON_KEY,
 //   SUPABASE_SERVICE_ROLE_KEY.
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
-export const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "http://127.0.0.1:54321";
-const ANON_KEY = requireEnv("SUPABASE_ANON_KEY");
-const SERVICE_ROLE_KEY = requireEnv("SUPABASE_SERVICE_ROLE_KEY");
+export const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? 'http://127.0.0.1:54321';
+const ANON_KEY = requireEnv('SUPABASE_ANON_KEY');
+const SERVICE_ROLE_KEY = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
 
 function requireEnv(name: string): string {
   const value = Deno.env.get(name);
   if (!value) {
-    throw new Error(
-      `${name} not set — export the local stack keys first (supabase status -o env)`,
-    );
+    throw new Error(`${name} not set — export the local stack keys first (supabase status -o env)`);
   }
   return value;
 }
@@ -23,7 +21,21 @@ const clientOpts = { auth: { persistSession: false, autoRefreshToken: false } };
 export const admin: SupabaseClient = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, clientOpts);
 const anon: SupabaseClient = createClient(SUPABASE_URL, ANON_KEY, clientOpts);
 
-const PASSWORD = "contract-tests-Password1!";
+/**
+ * A PostgREST client authenticated as a fixture user via their access token
+ * (same pattern the edge functions use internally). Needed to read
+ * `profiles_safe` — it's filtered by `auth.uid()`, which is null under the
+ * service-role `admin` client, so `admin.from("profiles_safe")` always
+ * returns zero rows.
+ */
+export function userClient(token: string): SupabaseClient {
+  return createClient(SUPABASE_URL, ANON_KEY, {
+    ...clientOpts,
+    global: { headers: { Authorization: `Bearer ${token}` } },
+  });
+}
+
+const PASSWORD = 'contract-tests-Password1!';
 
 export interface FixtureUser {
   id: string;
@@ -60,74 +72,71 @@ async function tokenFor(email: string): Promise<string> {
   return data.session.access_token;
 }
 
-async function insertOne(
-  table: string,
-  row: Record<string, unknown>,
-): Promise<string> {
-  const { data, error } = await admin.from(table).insert(row).select("id").single();
+async function insertOne(table: string, row: Record<string, unknown>): Promise<string> {
+  const { data, error } = await admin.from(table).insert(row).select('id').single();
   if (error) throw new Error(`seed insert into ${table} failed: ${error.message}`);
   return data.id;
 }
 
 async function setup(): Promise<Fixtures> {
   const [idA, idB] = await Promise.all([
-    ensureUser("contract-user-a@test.local"),
-    ensureUser("contract-user-b@test.local"),
+    ensureUser('contract-user-a@test.local'),
+    ensureUser('contract-user-b@test.local'),
   ]);
 
   // Idempotent reseed: wipe both users' semesters (courses/events cascade).
-  const { error: wipeError } = await admin.from("semesters").delete().in("user_id", [idA, idB]);
+  const { error: wipeError } = await admin.from('semesters').delete().in('user_id', [idA, idB]);
   if (wipeError) throw new Error(`fixture wipe failed: ${wipeError.message}`);
 
-  const semesterA = await insertOne("semesters", {
+  const semesterA = await insertOne('semesters', {
     user_id: idA,
-    name: "Contract Fall 2026",
-    start_date: "2026-08-24",
-    end_date: "2026-12-18",
+    name: 'Contract Fall 2026',
+    start_date: '2026-08-24',
+    end_date: '2026-12-18',
     is_active: true,
   });
-  const courseA = await insertOne("courses", {
+  const courseA = await insertOne('courses', {
     user_id: idA,
     semester_id: semesterA,
-    name: "Contract Course A",
-    code: "CTA101",
+    name: 'Contract Course A',
+    code: 'CTA101',
   });
-  await insertOne("course_events", {
+  await insertOne('course_events', {
     user_id: idA,
     course_id: courseA,
-    title: "Contract Midterm",
-    type: "exam",
-    date: "2026-10-12",
+    title: 'Contract Midterm',
+    type: 'exam',
+    date: '2026-10-12',
   });
 
-  const semesterB = await insertOne("semesters", {
+  const semesterB = await insertOne('semesters', {
     user_id: idB,
-    name: "Contract Fall 2026 (B)",
-    start_date: "2026-08-24",
-    end_date: "2026-12-18",
+    name: 'Contract Fall 2026 (B)',
+    start_date: '2026-08-24',
+    end_date: '2026-12-18',
     is_active: true,
   });
-  const courseB = await insertOne("courses", {
+  const courseB = await insertOne('courses', {
     user_id: idB,
     semester_id: semesterB,
-    name: "Contract Course B",
-    code: "CTB101",
+    name: 'Contract Course B',
+    code: 'CTB101',
   });
 
   // The chat kill-switch test relies on this row existing and starting enabled.
   const { error: settingsError } = await admin
-    .from("app_settings")
-    .upsert({ id: "global", ai_enabled: true });
+    .from('app_settings')
+    .upsert({ id: 'global', ai_enabled: true });
   if (settingsError) throw new Error(`app_settings seed failed: ${settingsError.message}`);
 
   const [tokenA, tokenB] = await Promise.all([
-    tokenFor("contract-user-a@test.local"),
-    tokenFor("contract-user-b@test.local"),
+    tokenFor('contract-user-a@test.local'),
+    tokenFor('contract-user-b@test.local'),
   ]);
 
   return {
-    userA: { id: idA, email: "contract-user-a@test.local", token: tokenA },
-    userB: { id: idB, email: "contract-user-b@test.local", token: tokenB },
+    userA: { id: idA, email: 'contract-user-a@test.local', token: tokenA },
+    userB: { id: idB, email: 'contract-user-b@test.local', token: tokenB },
     semesterA,
     courseA,
     courseB,
@@ -155,14 +164,14 @@ export async function callFn(
     body?: unknown;
     method?: string;
     query?: string;
-  } = {},
+  } = {}
 ): Promise<FnResponse> {
   const headers: Record<string, string> = {};
-  if (opts.body !== undefined) headers["Content-Type"] = "application/json";
-  if (opts.token) headers["Authorization"] = `Bearer ${opts.token}`;
+  if (opts.body !== undefined) headers['Content-Type'] = 'application/json';
+  if (opts.token) headers['Authorization'] = `Bearer ${opts.token}`;
 
-  const res = await fetch(`${SUPABASE_URL}/functions/v1/${name}${opts.query ?? ""}`, {
-    method: opts.method ?? "POST",
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/${name}${opts.query ?? ''}`, {
+    method: opts.method ?? 'POST',
     headers,
     body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
   });

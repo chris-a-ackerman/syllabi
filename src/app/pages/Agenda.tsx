@@ -1,30 +1,26 @@
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router';
-import { useApp } from '../context/AppContext';
+import { useData } from '../context/DataProvider';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { Card } from '../components/ui/card';
 import { ArrowLeft, Calendar } from 'lucide-react';
 import { startOfDay } from 'date-fns';
 import { getEventTypeColor, getEventTypeLabel } from '@/lib/eventHelpers';
-import {
-  enrichAndSortEvents,
-  groupEventsByWeek,
-  type EnrichedEvent,
-} from '@/lib/agendaGrouping';
+import { enrichAndSortEvents, groupEventsByWeek, type EnrichedEvent } from '@/lib/agendaGrouping';
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function Agenda() {
-  const { semesters, courses, events } = useApp();
+  const { semesters, courses, events } = useData();
   const navigate = useNavigate();
 
-  const activeSemester = semesters.find(s => s.isActive);
+  const activeSemester = semesters.find((s) => s.isActive);
 
   // Courses in active semester
   const activeCourses = useMemo(
-    () => courses.filter(c => c.semesterId === activeSemester?.id),
-    [courses, activeSemester?.id],
+    () => courses.filter((c) => c.semesterId === activeSemester?.id),
+    [courses, activeSemester?.id]
   );
 
   // All events for active semester courses — future only (date >= today)
@@ -76,7 +72,9 @@ export function Agenda() {
           <Card className="p-12 text-center rounded-2xl">
             <Calendar className="w-12 h-12 text-gray-300 mx-auto mb-4" />
             <h3 className="text-lg font-semibold text-gray-900 mb-2">No courses this semester</h3>
-            <p className="text-gray-600 mb-6">Add courses and upload syllabi to populate your agenda.</p>
+            <p className="text-gray-600 mb-6">
+              Add courses and upload syllabi to populate your agenda.
+            </p>
             <Button
               onClick={() => navigate('/dashboard')}
               className="bg-indigo-600 hover:bg-indigo-700 rounded-lg"

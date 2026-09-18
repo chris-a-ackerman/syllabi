@@ -1,22 +1,20 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.24.3";
-import { mapAnalysisToCourseUpdate, mapEventsToRows, stripJsonFences } from "./parse.ts";
+import { countPdfPagesHeuristic, mapAnalysisToCourseUpdate, mapEventsToRows, stripJsonFences } from "./parse.ts";
+import { type CourseEventsClient, type ReplaceCourseEventsResult, replaceCourseEvents } from "./events.ts";
+import { enforceAiQuota } from "../_shared/ai-quota.ts";
+import { MAX_SYLLABUS_BYTES, MAX_SYLLABUS_PAGES } from "../_shared/ai-limits.ts";
+import {
+  claudeKeyRejectedResponse,
+  isAnthropicAuthError,
+  resolveAnthropicClient,
+} from "../_shared/anthropic-client.ts";
+import { CORS_HEADERS as corsHeaders } from "../_shared/cors.ts";
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
   Deno.env.get("SERVICE_ROLE_KEY")!
 );
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
-
-const anthropic = new Anthropic({
-  apiKey: Deno.env.get("ANTHROPIC_API_KEY")!,
-});
 
 // The full prompt from Syllabus_Agent_Instructions_v2.md
 const SYLLABUS_SYSTEM_PROMPT = `You are a syllabus parsing agent. Extract structured information from the provided course syllabus and return it as valid JSON matching the schema exactly. Do not wrap your response in markdown code fences. Output raw JSON only, starting with { and ending with }
@@ -145,6 +143,9 @@ serve(async (req) => {
     return new Response(null, { status: 204, headers: corsHeaders });
   }
 
+  // Visible to the outer catch's error body (SYL-72), set once resolved below.
+  let source: "user" | "project" | undefined;
+
   try {
     // Verify JWT manually (since verify_jwt = false to allow OPTIONS through)
     const authHeader = req.headers.get("Authorization");
@@ -184,6 +185,33 @@ serve(async (req) => {
       });
     }
 
+    // Resolve which Anthropic key this request uses (SYL-72).
+    const encKey = Deno.env.get("SECRETS_ENCRYPTION_KEY");
+    if (!encKey) {
+      console.error("SECRETS_ENCRYPTION_KEY is not set");
+      return new Response(JSON.stringify({ error: "Server misconfiguration." }), {
+        status: 500,
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      });
+    }
+    const resolved = await resolveAnthropicClient(supabase, user.id, encKey);
+    const anthropic = resolved.client;
+    source = resolved.source;
+
+    // BYOK requests bypass the project's cost-control quota entirely; a
+    // separate, unenforced counter still records volume for the admin panel.
+    if (source === "user") {
+      const { error: byokError } = await supabase.rpc("record_byok_usage", {
+        p_user_id: user.id,
+        p_endpoint: "process-syllabus",
+        p_amount: 1,
+      });
+      if (byokError) console.error("[process-syllabus] record_byok_usage failed:", byokError.message);
+    } else {
+      const quotaResponse = await enforceAiQuota(supabase, user.id, "process-syllabus", corsHeaders);
+      if (quotaResponse) return quotaResponse;
+    }
+
     // 1. Fetch course + semester data.
     // Scoped to the caller: this is a service-role client, so without the
     // user_id filter any authenticated user could reprocess anyone's course.
@@ -211,7 +239,41 @@ serve(async (req) => {
       .update({ analysis_status: "processing" })
       .eq("id", course_id);
 
-    // 3. Download syllabus file from Storage
+    // 3. Check the Storage object's size via metadata before downloading it
+    // (SYL-67) — the previous code downloaded the whole object just to
+    // compare its length against MAX_SYLLABUS_BYTES.
+    const lastSlash = course.syllabus_file_path.lastIndexOf("/");
+    const storageFolder = lastSlash >= 0 ? course.syllabus_file_path.slice(0, lastSlash) : "";
+    const storageFileName = lastSlash >= 0 ? course.syllabus_file_path.slice(lastSlash + 1) : course.syllabus_file_path;
+
+    const { data: listData, error: listError } = await supabase.storage
+      .from("syllabi")
+      .list(storageFolder, { search: storageFileName, limit: 1 });
+
+    if (listError || !listData || listData.length === 0) {
+      await supabase
+        .from("courses")
+        .update({ analysis_status: "failed", analysis_error: "Could not retrieve syllabus file" })
+        .eq("id", course_id);
+      return new Response(JSON.stringify({ error: "File not found" }), { status: 404, headers: corsHeaders });
+    }
+
+    const objectSize = listData[0]?.metadata?.size;
+    if (typeof objectSize === "number" && objectSize > MAX_SYLLABUS_BYTES) {
+      await supabase
+        .from("courses")
+        .update({
+          analysis_status: "failed",
+          analysis_error: "Syllabus file exceeds the maximum size for analysis",
+        })
+        .eq("id", course_id);
+      return new Response(JSON.stringify({ error: "Syllabus file is too large to analyze" }), {
+        status: 413,
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      });
+    }
+
+    // 4. Download syllabus file from Storage
     const { data: fileData, error: fileError } = await supabase.storage
       .from("syllabi")
       .download(course.syllabus_file_path);
@@ -224,12 +286,48 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: "File not found" }), { status: 404, headers: corsHeaders });
     }
 
-    // 4. Convert file for Claude
+    // 5. Convert file for Claude
     const fileBuffer = await fileData.arrayBuffer();
+
+    // Backstop (SYL-29): the metadata check above should already have caught
+    // this — kept in case Storage ever reports no/stale size metadata.
+    if (fileBuffer.byteLength > MAX_SYLLABUS_BYTES) {
+      await supabase
+        .from("courses")
+        .update({
+          analysis_status: "failed",
+          analysis_error: "Syllabus file exceeds the maximum size for analysis",
+        })
+        .eq("id", course_id);
+      return new Response(JSON.stringify({ error: "Syllabus file is too large to analyze" }), {
+        status: 413,
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      });
+    }
+
     const uint8Array = new Uint8Array(fileBuffer);
     const fileNameForCheck = course.syllabus_file_name ?? course.syllabus_file_path ?? "";
     const isPDF = fileNameForCheck.toLowerCase().endsWith(".pdf") || fileData.type === "application/pdf";
     console.log(`[process-syllabus][file] downloaded OK | bytes=${fileBuffer.byteLength} | isPDF=${isPDF} | name_check="${fileNameForCheck}" | blob_type="${fileData.type}"`);
+
+    // Cost cap (SYL-67): reject PDFs with too many pages before the model
+    // call — Claude rejects them anyway, but only after an API round trip.
+    if (isPDF) {
+      const pageCount = countPdfPagesHeuristic(uint8Array);
+      if (pageCount > MAX_SYLLABUS_PAGES) {
+        await supabase
+          .from("courses")
+          .update({
+            analysis_status: "failed",
+            analysis_error: `Syllabus PDF has too many pages to analyze (${pageCount} > ${MAX_SYLLABUS_PAGES})`,
+          })
+          .eq("id", course_id);
+        return new Response(JSON.stringify({ error: "Syllabus PDF exceeds the maximum page count for analysis" }), {
+          status: 413,
+          headers: { "Content-Type": "application/json", ...corsHeaders },
+        });
+      }
+    }
 
     // 5. Build user message with context
     const userMessage = `Parse this syllabus for course_id: "${course_id}".
@@ -269,24 +367,43 @@ Return the complete JSON analysis as specified.`;
     console.log(`[process-syllabus][claude] sending | isPDF=${isPDF} | content_blocks=${contentBlocks.length} | user_message_preview=${userMessage.slice(0, 200)}`);
 
     // 6. Call Claude with the document
-    const response = await anthropic.messages.create({
-      model: "claude-sonnet-4-6",
-      max_tokens: 16000,
-      temperature: 0,
-      system: SYLLABUS_SYSTEM_PROMPT_NEW,
-      messages: [
-        {
-          role: "user",
-          // deno-lint-ignore no-explicit-any
-          content: contentBlocks as any,
-        },
-      ],
-    });
+    let response;
+    try {
+      response = await anthropic.messages.create({
+        model: "claude-sonnet-4-6",
+        max_tokens: 16000,
+        temperature: 0,
+        system: SYLLABUS_SYSTEM_PROMPT_NEW,
+        messages: [
+          {
+            role: "user",
+            // deno-lint-ignore no-explicit-any
+            content: contentBlocks as any,
+          },
+        ],
+      });
+    } catch (err) {
+      if (source === "user" && isAnthropicAuthError(err)) {
+        await supabase.rpc("record_key_test", { p_user_id: user.id, p_provider: "anthropic", p_ok: false });
+        // Mark failed like every other early-exit path (SYL-66): a course
+        // left on "processing" never resolves for the poll. Retry after
+        // fixing the key in Settings re-invokes this function with the file
+        // already in Storage — no re-upload needed.
+        await supabase
+          .from("courses")
+          .update({
+            analysis_status: "failed",
+            analysis_error: "Your Claude API key was rejected. Update it in Settings.",
+          })
+          .eq("id", course_id);
+        return claudeKeyRejectedResponse(corsHeaders);
+      }
+      throw err;
+    }
 
     // 7. Parse Claude's response
     const rawOutput = response.content[0].type === "text" ? response.content[0].text : "";
     console.log(`[process-syllabus][claude] response | model=${response.model} | input_tokens=${response.usage?.input_tokens} | output_tokens=${response.usage?.output_tokens} | stop_reason=${response.stop_reason}`);
-    console.log("RAW OUTPUT:", rawOutput);
 
     let analysisJson;
     try {
@@ -305,7 +422,75 @@ Return the complete JSON analysis as specified.`;
       return new Response(JSON.stringify({ error: "Failed to parse Claude response" }), { status: 500, headers: corsHeaders });
     }
 
-    // 8. Store full analysis on course, update basic fields + extracted columns
+    // 8. Replace course_events — insert the new rows first, delete the stale
+    // ones only once that succeeds (SYL-60). The old delete-then-insert order
+    // let one rejected row (e.g. an unnormalised time) fail the insert *after*
+    // the prior events were already gone, leaving the course with zero events
+    // while the response still reported success. The course row (analysis
+    // blob + analysis_status = "complete") is written only after this step
+    // succeeds, so a failed rewrite never pairs a new grading_rules blob with
+    // old events or leaves a course reporting "complete" with events it never
+    // received.
+    const events = analysisJson.events || [];
+    let replaceResult: ReplaceCourseEventsResult;
+    try {
+      const eventRows = mapEventsToRows(events, course_id, course.user_id);
+
+      const nullDateCount = eventRows.filter((e: any) => !e.date).length;
+      console.log(`[process-syllabus][events] mapped ${eventRows.length} rows | null_dates=${nullDateCount}`);
+      if (eventRows.length > 0) {
+        console.log(`[process-syllabus][events] first_3=${JSON.stringify(eventRows.slice(0, 3).map((e: any) => ({ title: e.title, date: e.date, type: e.type })))}`);
+      }
+
+      const replaceStart = Date.now();
+      // Cast: structurally checking the real (deeply generic) SupabaseClient
+      // type against the minimal CourseEventsClient interface blows up
+      // TypeScript's instantiation depth (TS2589). The real client already
+      // satisfies the few methods this module calls.
+      replaceResult = await replaceCourseEvents(supabase as unknown as CourseEventsClient, course_id, eventRows);
+      console.log(`[process-syllabus][events] replaceCourseEvents ok=${replaceResult.ok} inserted=${replaceResult.inserted} deleted=${replaceResult.deleted ?? "n/a"} stage=${replaceResult.stage ?? "n/a"} | ${Date.now() - replaceStart}ms`);
+    } catch (err) {
+      // e.g. a null entry in analysisJson.events. Anything thrown here must
+      // surface as a failed analysis, not fall through to the generic 500
+      // with the course left on "processing".
+      replaceResult = { ok: false, stage: "map", inserted: 0, error: err };
+    }
+
+    if (!replaceResult.ok) {
+      const errObj = replaceResult.error as { message?: string } | null | undefined;
+      const errorMessage = errObj?.message ?? JSON.stringify(replaceResult.error);
+      console.error(`[process-syllabus][events] course_events ${replaceResult.stage} failed:`, replaceResult.error);
+
+      await supabase
+        .from("courses")
+        .update({
+          analysis_status: "failed",
+          analysis_error: `course_events ${replaceResult.stage} failed: ${errorMessage}`,
+        })
+        .eq("id", course_id);
+
+      const { error: logError } = await supabase.from("claude_api_logs").insert({
+        user_id: course.user_id,
+        course_id,
+        model: response.model,
+        status: "error",
+        output: rawOutput,
+        error_message: `course_events ${replaceResult.stage} failed: ${errorMessage}`,
+        input_tokens: response.usage?.input_tokens ?? null,
+        output_tokens: response.usage?.output_tokens ?? null,
+      });
+      if (logError) {
+        console.error("[process-syllabus][db] Log insert error:", logError);
+      }
+
+      return new Response(
+        JSON.stringify({ success: false, error: "Failed to save course events" }),
+        { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } },
+      );
+    }
+
+    // 9. Store full analysis on course, update basic fields + extracted
+    // columns, and mark the analysis complete — only now that the events are in.
     const {
       name: courseName,
       code: courseCode,
@@ -330,37 +515,14 @@ Return the complete JSON analysis as specified.`;
 
     console.log(`[process-syllabus][db] course updated | name="${courseName}" | code="${courseCode}" | professor="${courseProfessor}"`);
 
-    // 9. Populate course_events — delete existing, insert fresh
-    await supabase.from("course_events").delete().eq("course_id", course_id);
-
-    const events = analysisJson.events || [];
-    let insertError = null;
-    if (events.length > 0) {
-      const eventRows = mapEventsToRows(events, course_id, course.user_id);
-
-      const nullDateCount = eventRows.filter((e: any) => !e.date).length;
-      console.log(`[process-syllabus][events] mapped ${eventRows.length} rows | null_dates=${nullDateCount}`);
-      if (eventRows.length > 0) {
-        console.log(`[process-syllabus][events] first_3=${JSON.stringify(eventRows.slice(0, 3).map((e: any) => ({ title: e.title, date: e.date, type: e.type })))}`);
-      }
-
-      const { error } = await supabase.from("course_events").insert(eventRows);
-      insertError = error;
-      if (insertError) {
-        console.error("Insert error:", insertError);
-      }
-    }
-
-    console.log(`[process-syllabus][db] events inserted=${events.length} | insert_error=${insertError ? JSON.stringify(insertError) : "none"}`);
-
-    // 10. Log the Claude API call and event insert result
+    // 10. Log the Claude API call
     const { error: logError } = await supabase.from("claude_api_logs").insert({
       user_id: course.user_id,
       course_id,
       model: response.model,
-      status: insertError ? "error" : "success",
+      status: "success",
       output: rawOutput,
-      error_message: insertError ? JSON.stringify(insertError) : null,
+      error_message: null,
       input_tokens: response.usage?.input_tokens ?? null,
       output_tokens: response.usage?.output_tokens ?? null,
     });
@@ -372,15 +534,16 @@ Return the complete JSON analysis as specified.`;
       JSON.stringify({
         success: true,
         course_id,
-        events_created: events.length,
+        events_created: replaceResult.inserted,
         parse_successful: analysisJson.parse_successful,
         completeness: analysisJson.extraction_quality?.completeness,
       }),
       { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
     );
   } catch (err) {
+    // Detail stays server-side (SYL-31); clients get a generic message.
     console.error("process-syllabus error:", err);
-    return new Response(JSON.stringify({ error: err.message }), {
+    return new Response(JSON.stringify({ error: "Internal server error", source }), {
       status: 500,
       headers: { "Content-Type": "application/json", ...corsHeaders },
     });

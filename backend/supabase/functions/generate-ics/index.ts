@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { escapeICS, formatICSDate } from "./ics.ts";
+import { CORS_HEADERS } from "../_shared/cors.ts";
 
 const supabaseAdmin = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -8,9 +9,14 @@ const supabaseAdmin = createClient(
 );
 
 serve(async (req) => {
+  // verify_jwt is false so the CORS preflight passes; auth is enforced here.
+  if (req.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: CORS_HEADERS });
+  }
+
   const authHeader = req.headers.get("Authorization");
   if (!authHeader) {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
+    return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: CORS_HEADERS });
   }
 
   const supabaseUser = createClient(
@@ -19,13 +25,18 @@ serve(async (req) => {
     { global: { headers: { Authorization: authHeader } } }
   );
 
+  const { data: { user }, error: authError } = await supabaseUser.auth.getUser();
+  if (authError || !user) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: CORS_HEADERS });
+  }
+
   try {
     const url = new URL(req.url);
     const semesterId = url.searchParams.get("semester_id");
     const courseId = url.searchParams.get("course_id"); // optional: filter to one course
 
     if (!semesterId) {
-      return new Response(JSON.stringify({ error: "semester_id required" }), { status: 400 });
+      return new Response(JSON.stringify({ error: "semester_id required" }), { status: 400, headers: CORS_HEADERS });
     }
 
     // Fetch events with course info
@@ -79,8 +90,7 @@ serve(async (req) => {
     const icsContent = icsLines.join("\r\n");
 
     // Store ICS in Supabase Storage
-    const { data: { user } } = await supabaseUser.auth.getUser();
-    const storagePath = `calendars/${user?.id}/${courseId ?? semesterId}.ics`;
+    const storagePath = `calendars/${user.id}/${courseId ?? semesterId}.ics`;
     const { error: storageError } = await supabaseAdmin.storage
       .from("syllabi")
       .upload(storagePath, new Blob([icsContent], { type: "text/calendar" }), {
@@ -94,11 +104,14 @@ serve(async (req) => {
     return new Response(icsContent, {
       status: 200,
       headers: {
+        ...CORS_HEADERS,
         "Content-Type": "text/calendar; charset=utf-8",
         "Content-Disposition": `attachment; filename="schedule.ics"`,
       },
     });
   } catch (err) {
-    return new Response(JSON.stringify({ error: err.message }), { status: 500 });
+    // Detail stays server-side (SYL-31); clients get a generic message.
+    console.error("generate-ics error:", err);
+    return new Response(JSON.stringify({ error: "Internal server error" }), { status: 500, headers: CORS_HEADERS });
   }
 });

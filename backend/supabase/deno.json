@@ -6,7 +6,7 @@
     "@supabase/supabase-js": "npm:@supabase/supabase-js@^2"
   },
   "tasks": {
-    "test:unit": "deno test --allow-read=. tests/unit",
+    "test:unit": "deno test --allow-read=. --allow-env tests/unit",
     "test:contract": "deno test --allow-net --allow-env --allow-read=. tests/contract"
   }
 }

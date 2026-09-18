@@ -1,17 +1,13 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.24.3";
 import { buildCourseContext, detectQueryType, extractDateRange } from "./query.ts";
-
-const anthropic = new Anthropic({
-  apiKey: Deno.env.get("ANTHROPIC_API_KEY")!,
-});
-
-const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+import { enforceAiQuota } from "../_shared/ai-quota.ts";
+import {
+  claudeKeyRejectedResponse,
+  isAnthropicAuthError,
+  resolveAnthropicClient,
+} from "../_shared/anthropic-client.ts";
+import { CORS_HEADERS } from "../_shared/cors.ts";
 
 // Service-role client for reading app_settings (not user-scoped)
 const supabaseAdmin = createClient(
@@ -41,6 +37,15 @@ serve(async (req) => {
     return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } });
   }
 
+  // ── 0. Resolve the caller before any other work (SYL-29) ────────────────
+  // A garbage bearer token used to sail through to the Anthropic call; now it
+  // stops here with a 401 and Claude is never invoked.
+  const token = authHeader.replace("Bearer ", "");
+  const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
+  if (authError || !user) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } });
+  }
+
   // ── 1. Kill switch check (server-side enforcement) ──────────────────────
   const { data: settings } = await supabaseAdmin
     .from("app_settings")
@@ -54,6 +59,14 @@ serve(async (req) => {
       { status: 503, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
     );
   }
+
+  // ── 2. Resolve which Anthropic key this request uses (SYL-72) ───────────
+  const encKey = Deno.env.get("SECRETS_ENCRYPTION_KEY");
+  if (!encKey) {
+    console.error("SECRETS_ENCRYPTION_KEY is not set");
+    return new Response(JSON.stringify({ error: "Server misconfiguration." }), { status: 500, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } });
+  }
+  const { client: anthropic, source } = await resolveAnthropicClient(supabaseAdmin, user.id, encKey);
 
   // User-scoped client (respects RLS)
   const supabaseUser = createClient(
@@ -76,6 +89,20 @@ serve(async (req) => {
         JSON.stringify({ error: "message and semester_id required" }),
         { status: 400, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
       );
+    }
+
+    // BYOK requests bypass the project's cost-control quota entirely; a
+    // separate, unenforced counter still records volume for the admin panel.
+    if (source === "user") {
+      const { error: byokError } = await supabaseAdmin.rpc("record_byok_usage", {
+        p_user_id: user.id,
+        p_endpoint: "chat",
+        p_amount: 1,
+      });
+      if (byokError) console.error("[chat] record_byok_usage failed:", byokError.message);
+    } else {
+      const quotaResponse = await enforceAiQuota(supabaseAdmin, user.id, "chat", CORS_HEADERS);
+      if (quotaResponse) return quotaResponse;
     }
 
     const queryType = detectQueryType(message);
@@ -126,9 +153,6 @@ serve(async (req) => {
         dateRange = { start: today, end: thirtyDaysOut };
       }
 
-      console.log("[chat] effectiveCourseIds:", effectiveCourseIds);
-      console.log("[chat] dateRange:", dateRange);
-
       const { data: eventsData, error: eventsError } = await supabaseUser
         .from("course_events")
         .select("date, time, title, type, category, confidence, courses(name, code)")
@@ -139,7 +163,6 @@ serve(async (req) => {
         .order("time");
 
       if (eventsError) console.error("[chat] events query error:", eventsError);
-      console.log("[chat] eventsData count:", eventsData?.length ?? 0);
 
       events = eventsData || [];
     }
@@ -167,22 +190,29 @@ serve(async (req) => {
       },
     ];
 
-    const { data: { user } } = await supabaseUser.auth.getUser();
-
-    const response = await anthropic.messages.create({
-      //model: "claude-haiku-4-5-20251001",
-      model: "claude-sonnet-4-6",
-      max_tokens: 512,
-      temperature: 0, // extraction task — deterministic output
-      system: CHAT_SYSTEM_PROMPT,
-      messages,
-    });
+    let response;
+    try {
+      response = await anthropic.messages.create({
+        //model: "claude-haiku-4-5-20251001",
+        model: "claude-sonnet-4-6",
+        max_tokens: 512,
+        temperature: 0, // extraction task — deterministic output
+        system: CHAT_SYSTEM_PROMPT,
+        messages,
+      });
+    } catch (err) {
+      if (source === "user" && isAnthropicAuthError(err)) {
+        await supabaseAdmin.rpc("record_key_test", { p_user_id: user.id, p_provider: "anthropic", p_ok: false });
+        return claudeKeyRejectedResponse(CORS_HEADERS);
+      }
+      throw err;
+    }
 
     const reply = response.content[0].type === "text" ? response.content[0].text : "";
 
     // Log the API call (mirrors process-syllabus pattern)
     const { error: logError } = await supabaseAdmin.from("claude_api_logs").insert({
-      user_id: user?.id ?? null,
+      user_id: user.id,
       course_id: null,
       model: response.model,
       status: "success",
@@ -203,8 +233,9 @@ serve(async (req) => {
       { status: 200, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
     );
   } catch (err) {
+    // Detail stays server-side (SYL-31); clients get a generic message.
     console.error("chat error:", err);
-    return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ error: "Internal server error", source }), { status: 500, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } });
   }
 });
 

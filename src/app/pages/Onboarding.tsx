@@ -1,91 +1,52 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect } from 'react';
 import { useNavigate } from 'react-router';
-import { useApp } from '../context/AppContext';
+import { useAuth } from '../context/AuthProvider';
+import { useData } from '../context/DataProvider';
+import { BulkReviewForm } from '../components/BulkReviewForm';
+import { ProcessingCourseList } from '../components/ProcessingCourseList';
+import { SyllabusDropzone } from '../components/SyllabusDropzone';
 import { useBulkUpload } from '../hooks/useBulkUpload';
+import { useProcessingPoll } from '../hooks/useProcessingPoll';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
-import { Input } from '../components/ui/input';
-import { Label } from '../components/ui/label';
 import { Alert, AlertDescription } from '../components/ui/alert';
-import { Upload, Check, X, Loader2, AlertCircle, ChevronRight, FileText, RefreshCw } from 'lucide-react';
+import { X, Loader2, AlertCircle, ChevronRight, FileText } from 'lucide-react';
 
 export function Onboarding() {
   const navigate = useNavigate();
-  const { user, courses: allCourses, markOnboardingComplete, refreshCourses, refreshEvents } = useApp();
+  const { user, markOnboardingComplete } = useAuth();
+  const { courses: allCourses, refreshCourses, refreshEvents } = useData();
   const {
-    step, fileItems, detectedCourses, createdCourseIds, globalError,
-    addFiles, removeFile, analyze, updateDetectedCourse, confirm, retryProcessing,
+    step,
+    fileItems,
+    detectedCourses,
+    createdCourseIds,
+    allDone,
+    globalError,
+    addFiles,
+    removeFile,
+    analyze,
+    updateDetectedCourse,
+    confirm,
+    retryProcessing,
   } = useBulkUpload();
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const dropRef = useRef<HTMLDivElement>(null);
-  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const isDraggingRef = useRef(false);
-
-  // Poll for course status updates during processing
-  useEffect(() => {
-    if (step !== 'processing') return;
-    pollingRef.current = setInterval(() => { refreshCourses(); }, 3000);
-    return () => { if (pollingRef.current) clearInterval(pollingRef.current); };
-  }, [step, refreshCourses]);
+  // Poll for course status updates during processing; stop once all have settled
+  useProcessingPoll(step === 'processing' && !allDone, refreshCourses);
 
   // Auto-navigate when all courses finish
   useEffect(() => {
-    if (step !== 'processing' || createdCourseIds.length === 0) return;
-    const created = allCourses.filter(c => createdCourseIds.includes(c.id));
-    const allDone =
-      created.length === createdCourseIds.length &&
-      created.every(c => c.status === 'ready' || c.status === 'failed');
-    if (!allDone) return;
-    if (pollingRef.current) clearInterval(pollingRef.current);
+    if (step !== 'processing' || !allDone) return;
     const t = setTimeout(async () => {
       await Promise.all([markOnboardingComplete(), refreshEvents()]);
       navigate('/dashboard');
     }, 1500);
     return () => clearTimeout(t);
-  }, [step, allCourses, createdCourseIds, navigate, markOnboardingComplete, refreshEvents]);
-
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    isDraggingRef.current = false;
-    if (dropRef.current) dropRef.current.dataset.dragging = 'false';
-    const files = Array.from(e.dataTransfer.files).filter(f => f.type === 'application/pdf');
-    addFiles(files);
-  }, [addFiles]);
-
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    if (!isDraggingRef.current) {
-      isDraggingRef.current = true;
-      if (dropRef.current) dropRef.current.dataset.dragging = 'true';
-    }
-  }, []);
-
-  const handleDragLeave = useCallback(() => {
-    isDraggingRef.current = false;
-    if (dropRef.current) dropRef.current.dataset.dragging = 'false';
-  }, []);
-
-  const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) addFiles(Array.from(e.target.files));
-    e.target.value = '';
-  };
-
-  // Group detected courses by semesterName for the review step
-  const semesterGroups = detectedCourses.reduce<Record<string, typeof detectedCourses>>(
-    (acc, dc) => {
-      const key = dc.semesterName.trim() || '__unknown__';
-      if (!acc[key]) acc[key] = [];
-      acc[key].push(dc);
-      return acc;
-    },
-    {}
-  );
+  }, [step, allDone, navigate, markOnboardingComplete, refreshEvents]);
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-white to-indigo-50">
       <div className="max-w-2xl mx-auto px-4 py-12">
-
         {/* Wordmark */}
         <div className="text-center mb-10">
           <h1 className="text-3xl font-bold text-indigo-600 mb-4">Syllabi</h1>
@@ -133,26 +94,13 @@ export function Onboarding() {
         {/* ── Step 1: Upload ── */}
         {step === 'upload' && (
           <div className="space-y-4">
-            <div
-              ref={dropRef}
-              className="border-2 border-dashed rounded-2xl p-12 text-center cursor-pointer transition-colors border-gray-300 hover:border-indigo-400 bg-white data-[dragging=true]:border-indigo-500 data-[dragging=true]:bg-indigo-50"
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
-              onClick={() => fileInputRef.current?.click()}
-            >
-              <Upload className="w-10 h-10 text-gray-400 mx-auto mb-4" />
-              <p className="text-lg font-medium text-gray-700 mb-1">Drop your syllabi here</p>
-              <p className="text-sm text-gray-500">or click to browse — PDF files only, up to 50 MB each</p>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".pdf"
-                multiple
-                className="hidden"
-                onChange={handleFileInput}
-              />
-            </div>
+            <SyllabusDropzone
+              multiple
+              onFiles={addFiles}
+              title="Drop your syllabi here"
+              hint="or click to browse — PDF files only, up to 50 MB each"
+              variant="page"
+            />
 
             {fileItems.length > 0 && (
               <Card className="p-2 rounded-xl divide-y divide-gray-100">
@@ -169,7 +117,10 @@ export function Onboarding() {
                       variant="ghost"
                       size="sm"
                       className="h-7 w-7 p-0 text-gray-400 hover:text-red-500 shrink-0"
-                      onClick={(e) => { e.stopPropagation(); removeFile(fi.id); }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removeFile(fi.id);
+                      }}
                     >
                       <X className="w-4 h-4" />
                     </Button>
@@ -219,118 +170,12 @@ export function Onboarding() {
         {/* ── Step 3: Review ── */}
         {step === 'review' && (
           <div className="space-y-6">
-            {Object.entries(semesterGroups).map(([, groupCourses]) => {
-              const stableKey = groupCourses.map(dc => dc.id).sort().join('|');
-              return (
-              <Card key={stableKey} className="p-6 rounded-2xl space-y-4">
-                {/* Semester fields */}
-                <div>
-                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">
-                    Semester
-                  </p>
-                  <div className="space-y-3">
-                    <div>
-                      <Label>Semester Name</Label>
-                      <Input
-                        value={groupCourses[0].semesterName}
-                        onChange={(e) => {
-                          const name = e.target.value;
-                          groupCourses.forEach(dc =>
-                            updateDetectedCourse(dc.id, { semesterName: name })
-                          );
-                        }}
-                        placeholder="e.g. Spring 2026"
-                        className="mt-1 rounded-lg"
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <Label>Start Date</Label>
-                        <Input
-                          type="date"
-                          value={groupCourses[0].semesterStart}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            groupCourses.forEach(dc =>
-                              updateDetectedCourse(dc.id, { semesterStart: val })
-                            );
-                          }}
-                          className="mt-1 rounded-lg"
-                        />
-                      </div>
-                      <div>
-                        <Label>End Date</Label>
-                        <Input
-                          type="date"
-                          value={groupCourses[0].semesterEnd}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            groupCourses.forEach(dc =>
-                              updateDetectedCourse(dc.id, { semesterEnd: val })
-                            );
-                          }}
-                          className="mt-1 rounded-lg"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Course fields */}
-                <div className="border-t border-gray-100 pt-4">
-                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">
-                    Courses
-                  </p>
-                  <div className="space-y-4">
-                    {groupCourses.map((dc) => (
-                      <div key={dc.id} className="space-y-2">
-                        {dc.error && (
-                          <Alert className="py-2 bg-amber-50 border-amber-200">
-                            <AlertCircle className="h-3 w-3 text-amber-500" />
-                            <AlertDescription className="text-xs text-amber-800">
-                              Detection failed — please fill in the fields below manually.
-                            </AlertDescription>
-                          </Alert>
-                        )}
-                        <div className="flex items-center gap-2 text-xs text-gray-400">
-                          <FileText className="w-3 h-3" />
-                          <span className="truncate">{dc.fileItem.file.name}</span>
-                          {!dc.error && (
-                            <span className={`ml-auto shrink-0 ${
-                              dc.confidence === 'high' ? 'text-green-500' :
-                              dc.confidence === 'medium' ? 'text-amber-500' : 'text-gray-400'
-                            }`}>
-                              {dc.confidence} confidence
-                            </span>
-                          )}
-                        </div>
-                        <div className="grid grid-cols-2 gap-2">
-                          <div>
-                            <Label className="text-xs">Course Name</Label>
-                            <Input
-                              value={dc.courseName}
-                              onChange={(e) => updateDetectedCourse(dc.id, { courseName: e.target.value })}
-                              placeholder="e.g. Calculus II"
-                              className="mt-1 rounded-lg h-8 text-sm"
-                            />
-                          </div>
-                          <div>
-                            <Label className="text-xs">Course Code</Label>
-                            <Input
-                              value={dc.courseCode}
-                              onChange={(e) => updateDetectedCourse(dc.id, { courseCode: e.target.value })}
-                              placeholder="e.g. MATH 202"
-                              className="mt-1 rounded-lg h-8 text-sm"
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </Card>
-              );
-            })}
+            <BulkReviewForm
+              detectedCourses={detectedCourses}
+              updateDetectedCourse={updateDetectedCourse}
+              variant="page"
+              showConfidence
+            />
 
             <Button
               className="w-full bg-indigo-600 hover:bg-indigo-700 rounded-lg"
@@ -345,56 +190,18 @@ export function Onboarding() {
         {/* ── Step 4: Processing ── */}
         {step === 'processing' && (
           <div className="space-y-4">
-            {createdCourseIds.map((courseId) => {
-              const course = allCourses.find(c => c.id === courseId);
-              return (
-                <Card key={courseId} className="p-4 rounded-xl">
-                  <div className="flex items-center justify-between">
-                    <div className="min-w-0">
-                      <p className="font-medium text-gray-900">{course?.code || '—'}</p>
-                      <p className="text-sm text-gray-500 truncate">{course?.name}</p>
-                    </div>
-                    <div className="flex items-center gap-2 ml-4 shrink-0">
-                      {(!course || course.status === 'processing') && (
-                        <span className="flex items-center gap-1.5 text-sm text-indigo-600">
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          Processing
-                        </span>
-                      )}
-                      {course?.status === 'ready' && (
-                        <span className="flex items-center gap-1.5 text-sm text-green-600">
-                          <Check className="w-4 h-4" />
-                          Done
-                        </span>
-                      )}
-                      {course?.status === 'failed' && (
-                        <>
-                          <span className="flex items-center gap-1 text-sm text-red-600">
-                            <X className="w-4 h-4" />
-                            Failed
-                          </span>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="h-7 text-xs rounded-lg"
-                            onClick={() => retryProcessing(courseId)}
-                          >
-                            <RefreshCw className="w-3 h-3 mr-1" />
-                            Retry
-                          </Button>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                </Card>
-              );
-            })}
+            <ProcessingCourseList
+              courseIds={createdCourseIds}
+              courses={allCourses}
+              onRetry={retryProcessing}
+              variant="page"
+            />
 
             <Button
               variant="outline"
               className="w-full rounded-lg mt-2"
               onClick={async () => {
-                if (pollingRef.current) clearInterval(pollingRef.current);
+                // Navigating away unmounts this page, which stops the poll.
                 await Promise.all([markOnboardingComplete(), refreshEvents()]);
                 navigate('/dashboard');
               }}

@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
-import { useApp } from '../context/AppContext';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
@@ -17,24 +16,24 @@ export function AuthScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [emailConfirmationSent, setEmailConfirmationSent] = useState(false);
-  const { setUser } = useApp();
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
-    
+
     // Check if Supabase is configured
     if (!isSupabaseConfigured()) {
-      setError('Supabase is not configured. Please add your Supabase credentials to the .env file.');
+      setError(
+        'Supabase is not configured. Please add your Supabase credentials to the .env file.'
+      );
       setLoading(false);
       return;
     }
-    
+
     try {
       if (isSignUp) {
-        console.log('[signUp] calling supabase.auth.signUp with email:', email);
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
@@ -44,9 +43,6 @@ export function AuthScreen() {
             },
           },
         });
-
-        console.log('[signUp] response data:', data);
-        console.log('[signUp] response error:', error);
 
         if (error) {
           throw error;
@@ -66,7 +62,6 @@ export function AuthScreen() {
         });
 
         if (error) {
-          console.log('Sign-in error:', error);
           throw error;
         }
 
@@ -75,8 +70,8 @@ export function AuthScreen() {
           navigate('/dashboard');
         }
       }
-    } catch (err: any) {
-      setError(err.message || 'An error occurred during authentication');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'An error occurred during authentication');
     } finally {
       setLoading(false);
     }
@@ -85,14 +80,16 @@ export function AuthScreen() {
   const handleGoogleSignIn = async () => {
     setLoading(true);
     setError(null);
-    
+
     // Check if Supabase is configured
     if (!isSupabaseConfigured()) {
-      setError('Supabase is not configured. Please add your Supabase credentials to the .env file.');
+      setError(
+        'Supabase is not configured. Please add your Supabase credentials to the .env file.'
+      );
       setLoading(false);
       return;
     }
-    
+
     try {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
@@ -102,8 +99,8 @@ export function AuthScreen() {
       });
 
       if (error) throw error;
-    } catch (err: any) {
-      setError(err.message || 'An error occurred during Google sign-in');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'An error occurred during Google sign-in');
       setLoading(false);
     }
   };
@@ -120,7 +117,8 @@ export function AuthScreen() {
           <Alert className="mb-4 bg-amber-50 border-amber-200">
             <AlertCircle className="h-4 w-4 text-amber-600" />
             <AlertDescription className="text-amber-800">
-              <strong>Demo Mode:</strong> Supabase is not configured. Add your credentials to .env to enable authentication.
+              <strong>Demo Mode:</strong> Supabase is not configured. Add your credentials to .env
+              to enable authentication.
             </AlertDescription>
           </Alert>
         )}
@@ -179,11 +177,17 @@ export function AuthScreen() {
               placeholder="••••••••"
               className="mt-1 rounded-lg"
               required
+              minLength={isSignUp ? 8 : undefined}
             />
+            {isSignUp && <p className="mt-1 text-xs text-gray-500">At least 8 characters.</p>}
           </div>
 
-          <Button type="submit" disabled={loading} className="w-full bg-indigo-600 hover:bg-indigo-700 rounded-lg">
-            {loading ? 'Loading...' : (isSignUp ? 'Sign Up' : 'Sign In')}
+          <Button
+            type="submit"
+            disabled={loading}
+            className="w-full bg-indigo-600 hover:bg-indigo-700 rounded-lg"
+          >
+            {loading ? 'Loading...' : isSignUp ? 'Sign Up' : 'Sign In'}
           </Button>
         </form>
 

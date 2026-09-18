@@ -9,3 +9,13 @@ backend/supabase/.env.local
 backend/supabase/.temp/
 backend/supabase/.branches/
 backend/supabase/Outputs/
+/Claude outputs/
+
+# local-only notes (machine-specific testing guide; names machine paths and
+# the project ref, so it must never land in this public repo)
+LOCAL_TESTING.md
+
+# stray CLI temp/state dirs left behind by running `supabase` from the repo
+# root instead of `--workdir backend` (SYL-70) — the real project lives in
+# backend/supabase/, this is never legitimate content
+/supabase/

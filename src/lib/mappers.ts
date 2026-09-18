@@ -5,9 +5,10 @@ import type {
   CourseSchedule,
   Event,
   GradingRules,
+  Note,
   Policies,
   Semester,
-} from '@/app/context/AppContext';
+} from '@/lib/types';
 
 // ─── DB → App mappers ────────────────────────────────────────────────────────
 // These will be replaced by generated Supabase types once `supabase gen types` is run.
@@ -26,7 +27,7 @@ export function dbSemesterToApp(row: any): Semester {
     name: row.name,
     startDate: row.start_date,
     endDate: row.end_date,
-    isActive: row.is_active,
+    isActive: row.is_active === true, // column is nullable; treat null as inactive
   };
 }
 
@@ -36,10 +37,8 @@ export function dbCourseToApp(row: any): Course {
   const analysis = row.syllabus_analysis as Record<string, any> | null;
   const gradingRules: GradingRules | undefined =
     row.grading_rules ?? analysis?.grading_rules ?? undefined;
-  const policies: Policies | undefined =
-    row.policies ?? analysis?.policies ?? undefined;
-  const schedule: CourseSchedule | undefined =
-    row.schedule ?? undefined;
+  const policies: Policies | undefined = row.policies ?? analysis?.policies ?? undefined;
+  const schedule: CourseSchedule | undefined = row.schedule ?? undefined;
   return {
     id: row.id,
     semesterId: row.semester_id,
@@ -48,7 +47,8 @@ export function dbCourseToApp(row: any): Course {
     professor: row.professor ?? '',
     color: row.color ?? '#6366f1',
     status: mapAnalysisStatus(row.analysis_status),
-    syllabusUrl: row.syllabus_file_path ?? undefined,
+    analysisError: row.analysis_error ?? undefined,
+    syllabusPath: row.syllabus_file_path ?? undefined,
     extractionQuality: analysis?.extraction_quality ?? undefined,
     grading_rules: gradingRules,
     policies,
@@ -63,12 +63,16 @@ export function dbEventToApp(row: any): Event {
     courseId: row.course_id,
     title: row.title,
     date: row.date ?? null,
+    dateUnresolved: row.date_unresolved ?? null,
     time: row.time ?? null,
     type: row.type as Event['type'],
     category: row.category ?? null,
     confidence: row.confidence as Event['confidence'],
     canvasMetadata: row.canvas_metadata ?? null,
     canvasAssignmentId: row.canvas_assignment_id ?? null,
+    // Canvas sync columns (SYL-69): the DB defaults are 'syllabus' / false.
+    source: (row.source ?? 'syllabus') as Event['source'],
+    canvasOnly: row.canvas_only === true,
   };
 }
 
@@ -91,5 +95,15 @@ export function dbChatMessageToApp(row: any): ChatMessage {
     content: row.content,
     timestamp: row.created_at,
     sequence: row.sequence,
+  };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function dbNoteToApp(row: any): Note {
+  return {
+    id: row.id,
+    courseId: row.course_id,
+    text: row.body,
+    createdAt: row.created_at,
   };
 }

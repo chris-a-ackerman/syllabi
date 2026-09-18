@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate, useSearchParams, useLocation } from 'react-router';
-import { useApp } from '../context/AppContext';
+import { useData } from '../context/DataProvider';
 import { getEventTypeColor, getEventTypeLabel } from '@/lib/eventHelpers';
 import { toPercent } from '@/lib/gradeWeight';
 import { Button } from '../components/ui/button';
@@ -8,7 +8,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { Card } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Textarea } from '../components/ui/textarea';
-import { Alert, AlertDescription } from '../components/ui/alert';
 import {
   ArrowLeft,
   Calendar,
@@ -25,31 +24,27 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '../components/ui/alert-dialog';
-import { AddCourseModal } from '../components/AddCourseModal';
+import { toast } from 'sonner';
+import { downloadCalendar } from '@/lib/api/calendar';
+import { CourseFormModal } from '../components/CourseFormModal';
+import { ConfirmDeleteDialog } from '../components/ConfirmDeleteDialog';
 import { CourseQuickInfoCards } from '../components/CourseQuickInfoCards';
+import { UploadSyllabusModal } from '../components/UploadSyllabusModal';
 
 export function CourseDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const location = useLocation();
-  const { courses, events, notes, addNote, deleteNote, deleteCourse } = useApp();
+  const { courses, events, notes, addNote, deleteNote, deleteCourse } = useData();
 
   const from = searchParams.get('from');
   const backLabel =
-    from === 'dashboard' ? 'Back to Dashboard'
-    : from === 'agenda' ? 'Back to Agenda'
-    : 'Back to Courses';
+    from === 'dashboard'
+      ? 'Back to Dashboard'
+      : from === 'agenda'
+        ? 'Back to Agenda'
+        : 'Back to Courses';
   const handleBack = () => {
     if (from === 'dashboard') {
       navigate('/dashboard');
@@ -65,17 +60,24 @@ export function CourseDetail() {
   const [deleteNoteId, setDeleteNoteId] = useState<string | null>(null);
   const [showDeleteCourse, setShowDeleteCourse] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
+  const [showReupload, setShowReupload] = useState(false);
+  const [downloadingIcs, setDownloadingIcs] = useState(false);
   const [expandedEventId, setExpandedEventId] = useState<string | null>(null);
 
-  const course = courses.find(c => c.id === id);
-  const courseEvents = events.filter(e => e.courseId === id && e.date);
-  const courseNotes = notes.filter(n => n.courseId === id);
+  const course = courses.find((c) => c.id === id);
+  // Narrowed via a type predicate so the date-formatting call sites below
+  // typecheck without a redundant runtime guard.
+  const courseEvents = events.filter(
+    (e): e is typeof e & { date: string } => e.courseId === id && !!e.date
+  );
+  const undatedCourseEvents = events.filter((e) => e.courseId === id && !e.date);
+  const courseNotes = notes.filter((n) => n.courseId === id);
 
   useEffect(() => {
     const match = location.hash.match(/^#event-(.+)$/);
     if (!match) return;
     const targetId = match[1];
-    const target = courseEvents.find(e => e.id === targetId);
+    const target = [...courseEvents, ...undatedCourseEvents].find((e) => e.id === targetId);
     if (!target) return;
 
     if (target.canvasMetadata) {
@@ -87,7 +89,7 @@ export function CourseDetail() {
         .getElementById(`event-${targetId}`)
         ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     });
-  }, [location.hash, courseEvents]);
+  }, [location.hash, courseEvents, undatedCourseEvents]);
 
   if (!course) {
     return (
@@ -104,6 +106,17 @@ export function CourseDetail() {
 
   const hasSyllabus = course.status === 'ready';
 
+  const handleDownloadCalendar = async () => {
+    setDownloadingIcs(true);
+    try {
+      await downloadCalendar(course.semesterId, course.id, `${course.code || course.name}.ics`);
+    } catch {
+      toast.error('Could not generate the calendar file. Please try again.');
+    } finally {
+      setDownloadingIcs(false);
+    }
+  };
+
   // Empty state for courses without syllabus
   if (!hasSyllabus) {
     return (
@@ -113,11 +126,7 @@ export function CourseDetail() {
           className="border-b border-gray-200 px-6 py-6"
           style={{ borderLeftWidth: '4px', borderLeftColor: course.color }}
         >
-          <Button
-            variant="ghost"
-            onClick={handleBack}
-            className="mb-4 rounded-lg"
-          >
+          <Button variant="ghost" onClick={handleBack} className="mb-4 rounded-lg">
             <ArrowLeft className="mr-2 h-4 w-4" />
             {backLabel}
           </Button>
@@ -146,9 +155,7 @@ export function CourseDetail() {
               <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
                 <FileText className="w-8 h-8 text-gray-400" />
               </div>
-              <h2 className="text-xl font-semibold text-gray-900 mb-2">
-                No Syllabus Uploaded
-              </h2>
+              <h2 className="text-xl font-semibold text-gray-900 mb-2">No Syllabus Uploaded</h2>
               <p className="text-gray-600 mb-6">
                 Upload your syllabus to see course details, assignments, grading policies, and more.
               </p>
@@ -164,10 +171,9 @@ export function CourseDetail() {
         </div>
 
         {/* Edit Course Details */}
-        <AddCourseModal
+        <CourseFormModal
           open={editModalOpen}
           onClose={() => setEditModalOpen(false)}
-          editMode
           existingCourse={{
             id: course.id,
             name: course.name,
@@ -194,13 +200,22 @@ export function CourseDetail() {
     return types[0];
   };
 
-  // Group events by month
-  const eventsByMonth = courseEvents.reduce((acc, event) => {
-    const month = format(parseISO(event.date), 'MMMM yyyy');
-    if (!acc[month]) acc[month] = [];
-    acc[month].push(event);
-    return acc;
-  }, {} as Record<string, typeof courseEvents>);
+  // Group events by month. course_events.date is nullable — the parser stores
+  // the raw text in date_unresolved when it can't resolve a date — so those
+  // events get a trailing bucket instead of being dropped from the tab.
+  const UNDATED_GROUP = 'Date TBD';
+
+  const eventsByMonth = courseEvents.reduce(
+    (acc, event) => {
+      const month = format(parseISO(event.date), 'MMMM yyyy');
+      if (!acc[month]) acc[month] = [];
+      acc[month].push(event);
+      return acc;
+    },
+    {} as Record<string, typeof events>
+  );
+
+  if (undatedCourseEvents.length > 0) eventsByMonth[UNDATED_GROUP] = undatedCourseEvents;
 
   const handleAddNote = () => {
     if (!noteText.trim()) return;
@@ -226,11 +241,7 @@ export function CourseDetail() {
         className="border-b border-gray-200 px-6 py-6"
         style={{ borderLeftWidth: '4px', borderLeftColor: course.color }}
       >
-        <Button
-          variant="ghost"
-          onClick={handleBack}
-          className="mb-4 rounded-lg -ml-2"
-        >
+        <Button variant="ghost" onClick={handleBack} className="mb-4 rounded-lg -ml-2">
           <ArrowLeft className="mr-2 h-4 w-4" />
           {backLabel}
         </Button>
@@ -261,11 +272,20 @@ export function CourseDetail() {
             <MessageSquare className="mr-2 h-4 w-4" />
             Chat About This Course
           </Button>
-          <Button variant="outline" className="rounded-lg justify-start">
+          <Button
+            variant="outline"
+            className="rounded-lg justify-start"
+            onClick={handleDownloadCalendar}
+            disabled={downloadingIcs}
+          >
             <Download className="mr-2 h-4 w-4" />
-            Download Calendar
+            {downloadingIcs ? 'Preparing…' : 'Download Calendar'}
           </Button>
-          <Button variant="outline" className="rounded-lg justify-start">
+          <Button
+            variant="outline"
+            className="rounded-lg justify-start"
+            onClick={() => setShowReupload(true)}
+          >
             <Upload className="mr-2 h-4 w-4" />
             Re-upload Syllabus
           </Button>
@@ -289,11 +309,21 @@ export function CourseDetail() {
       <div className="px-4 pb-6 md:px-6 md:pb-8 max-w-7xl mx-auto">
         <Tabs defaultValue="events" className="w-full">
           <TabsList className="mb-6 rounded-lg w-full overflow-x-auto flex">
-            <TabsTrigger value="events" className="rounded-lg flex-1">Events</TabsTrigger>
-            <TabsTrigger value="grading" className="rounded-lg flex-1">Grading</TabsTrigger>
-            <TabsTrigger value="schedule" className="rounded-lg flex-1">Schedule</TabsTrigger>
-            <TabsTrigger value="policies" className="rounded-lg flex-1">Policies</TabsTrigger>
-            <TabsTrigger value="notes" className="rounded-lg flex-1">Notes</TabsTrigger>
+            <TabsTrigger value="events" className="rounded-lg flex-1">
+              Events
+            </TabsTrigger>
+            <TabsTrigger value="grading" className="rounded-lg flex-1">
+              Grading
+            </TabsTrigger>
+            <TabsTrigger value="schedule" className="rounded-lg flex-1">
+              Schedule
+            </TabsTrigger>
+            <TabsTrigger value="policies" className="rounded-lg flex-1">
+              Policies
+            </TabsTrigger>
+            <TabsTrigger value="notes" className="rounded-lg flex-1">
+              Notes
+            </TabsTrigger>
           </TabsList>
 
           {/* Events Tab */}
@@ -302,16 +332,20 @@ export function CourseDetail() {
               <div key={month}>
                 <h3 className="text-lg font-semibold text-gray-900 mb-3">{month}</h3>
                 <div className="space-y-2">
-                  {monthEvents.map(event => {
+                  {monthEvents.map((event) => {
                     const meta = event.canvasMetadata ?? null;
                     const isExpanded = expandedEventId === event.id;
                     return (
-                      <Card id={`event-${event.id}`} key={event.id} className="p-4 rounded-xl shadow-sm hover:shadow-md transition-shadow">
+                      <Card
+                        id={`event-${event.id}`}
+                        key={event.id}
+                        className="p-4 rounded-xl shadow-sm hover:shadow-md transition-shadow"
+                      >
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-3 mb-2">
                               <span className="font-medium text-gray-900">
-                                {format(parseISO(event.date), 'MMM d, yyyy')}
+                                {event.date ? format(parseISO(event.date), 'MMM d, yyyy') : '—'}
                               </span>
                               {event.time && (
                                 <>
@@ -324,7 +358,9 @@ export function CourseDetail() {
                               )}
                             </div>
                             <p className="text-gray-900 mb-2">{event.title}</p>
-                            <Badge className={`${getEventTypeColor(event.type)} rounded-full text-xs`}>
+                            <Badge
+                              className={`${getEventTypeColor(event.type)} rounded-full text-xs`}
+                            >
                               {getEventTypeLabel(event.type)}
                             </Badge>
                           </div>
@@ -334,7 +370,11 @@ export function CourseDetail() {
                               className="shrink-0 p-1 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
                               aria-label={isExpanded ? 'Collapse details' : 'Expand details'}
                             >
-                              {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                              {isExpanded ? (
+                                <ChevronUp className="w-4 h-4" />
+                              ) : (
+                                <ChevronDown className="w-4 h-4" />
+                              )}
                             </button>
                           )}
                         </div>
@@ -343,7 +383,9 @@ export function CourseDetail() {
                           <div className="border-t border-gray-100 mt-3 pt-3 space-y-2 text-sm text-gray-700">
                             {meta.description_summary && (
                               <div>
-                                <span className="font-medium text-gray-500 text-xs uppercase tracking-wide">What to submit</span>
+                                <span className="font-medium text-gray-500 text-xs uppercase tracking-wide">
+                                  What to submit
+                                </span>
                                 <p className="mt-0.5">{meta.description_summary}</p>
                               </div>
                             )}
@@ -384,7 +426,7 @@ export function CourseDetail() {
               </div>
             ))}
 
-            {courseEvents.length === 0 && (
+            {courseEvents.length === 0 && undatedCourseEvents.length === 0 && (
               <Card className="p-12 text-center rounded-2xl">
                 <Calendar className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                 <p className="text-gray-600">No events found for this course</p>
@@ -428,7 +470,8 @@ export function CourseDetail() {
 
                         {!!component.drop_lowest && component.drop_lowest > 0 && (
                           <div className="text-sm text-gray-600">
-                            <span className="font-medium">Drop Policy:</span> Drops lowest {component.drop_lowest}
+                            <span className="font-medium">Drop Policy:</span> Drops lowest{' '}
+                            {component.drop_lowest}
                           </div>
                         )}
                       </Card>
@@ -504,7 +547,9 @@ export function CourseDetail() {
                       {s.meeting_days && s.meeting_days.length > 0 && (
                         <div className="flex items-center gap-4">
                           <span className="text-gray-500 w-24 text-sm">Days</span>
-                          <span className="font-medium text-gray-900">{s.meeting_days.join(', ')}</span>
+                          <span className="font-medium text-gray-900">
+                            {s.meeting_days.join(', ')}
+                          </span>
                         </div>
                       )}
                       {meetingTimeStr && (
@@ -535,7 +580,8 @@ export function CourseDetail() {
                         )}
                         {s.instructor.office_hours && (
                           <p className="text-sm text-gray-600">
-                            <span className="font-medium">Office Hours:</span> {s.instructor.office_hours}
+                            <span className="font-medium">Office Hours:</span>{' '}
+                            {s.instructor.office_hours}
                           </p>
                         )}
                         {s.instructor.office && (
@@ -592,7 +638,8 @@ export function CourseDetail() {
                           <div key={i} className="flex items-center gap-4">
                             <span className="text-gray-500 w-32 text-sm shrink-0">{b.name}</span>
                             <span className="font-medium text-gray-900">
-                              {format(parseISO(b.start_date), 'MMM d')} – {format(parseISO(b.end_date), 'MMM d, yyyy')}
+                              {format(parseISO(b.start_date), 'MMM d')} –{' '}
+                              {format(parseISO(b.end_date), 'MMM d, yyyy')}
                             </span>
                           </div>
                         ))}
@@ -634,8 +681,7 @@ export function CourseDetail() {
               ];
 
               const hasAny =
-                namedPolicies.some(({ value }) => value) ||
-                (p.other && p.other.length > 0);
+                namedPolicies.some(({ value }) => value) || (p.other && p.other.length > 0);
 
               if (!hasAny) {
                 return (
@@ -687,9 +733,7 @@ export function CourseDetail() {
                   maxLength={1000}
                 />
                 <div className="flex items-center justify-between">
-                  <span className="text-xs text-gray-500">
-                    {noteText.length}/1000 characters
-                  </span>
+                  <span className="text-xs text-gray-500">{noteText.length}/1000 characters</span>
                   <div className="flex gap-2">
                     <Button
                       variant="outline"
@@ -724,7 +768,7 @@ export function CourseDetail() {
             )}
 
             <div className="space-y-3">
-              {courseNotes.map(note => (
+              {courseNotes.map((note) => (
                 <Card key={note.id} className="p-4 rounded-xl shadow-sm">
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1">
@@ -756,56 +800,46 @@ export function CourseDetail() {
       </div>
 
       {/* Delete Course Confirmation */}
-      <AlertDialog open={showDeleteCourse} onOpenChange={setShowDeleteCourse}>
-        <AlertDialogContent className="rounded-2xl">
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete {course.name}?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will permanently delete the course and all its extracted events. This cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel className="rounded-lg">Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-red-600 hover:bg-red-700 rounded-lg"
-              onClick={async () => {
-                const semesterId = course.semesterId;
-                await deleteCourse(course.id);
-                navigate('/courses', { state: { semesterId } });
-              }}
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ConfirmDeleteDialog
+        open={showDeleteCourse}
+        onOpenChange={setShowDeleteCourse}
+        title={`Delete ${course.name}?`}
+        description="This will permanently delete the course and all its extracted events. This cannot be undone."
+        onConfirm={async () => {
+          const semesterId = course.semesterId;
+          await deleteCourse(course.id);
+          navigate('/courses', { state: { semesterId } });
+        }}
+      />
 
       {/* Delete Note Confirmation */}
-      <AlertDialog open={!!deleteNoteId} onOpenChange={() => setDeleteNoteId(null)}>
-        <AlertDialogContent className="rounded-2xl">
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete this note?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This action cannot be undone. The note will be permanently deleted.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel className="rounded-lg">Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDeleteNote}
-              className="bg-red-600 hover:bg-red-700 rounded-lg"
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ConfirmDeleteDialog
+        open={!!deleteNoteId}
+        onOpenChange={(open) => {
+          if (!open) setDeleteNoteId(null);
+        }}
+        title="Delete this note?"
+        description="This action cannot be undone. The note will be permanently deleted."
+        onConfirm={handleDeleteNote}
+      />
 
       {/* Edit Course Details */}
-      <AddCourseModal
+      <CourseFormModal
         open={editModalOpen}
         onClose={() => setEditModalOpen(false)}
-        editMode
+        existingCourse={{
+          id: course.id,
+          name: course.name,
+          code: course.code,
+          professor: course.professor,
+          color: course.color,
+        }}
+      />
+
+      {/* Re-upload Syllabus (SYL-42) — targets this course, skipping the chooser */}
+      <UploadSyllabusModal
+        open={showReupload}
+        onClose={() => setShowReupload(false)}
         existingCourse={{
           id: course.id,
           name: course.name,

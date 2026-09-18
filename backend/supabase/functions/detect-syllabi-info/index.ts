@@ -1,22 +1,19 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import Anthropic from "https://esm.sh/@anthropic-ai/sdk@0.24.3";
 import { stripJsonFences } from "../_shared/strip-json-fences.ts";
+import { enforceAiQuota } from "../_shared/ai-quota.ts";
+import { MAX_SYLLABUS_BYTES } from "../_shared/ai-limits.ts";
+import {
+  claudeKeyRejectedResponse,
+  isAnthropicAuthError,
+  resolveAnthropicClient,
+} from "../_shared/anthropic-client.ts";
+import { CORS_HEADERS as corsHeaders } from "../_shared/cors.ts";
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
   Deno.env.get("SERVICE_ROLE_KEY")!
 );
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
-
-const anthropic = new Anthropic({
-  apiKey: Deno.env.get("ANTHROPIC_API_KEY")!,
-});
 
 const DETECT_SYSTEM_PROMPT = `Extract course and semester info from this syllabus. Output raw JSON only, no markdown fences.
 {
@@ -36,6 +33,9 @@ serve(async (req) => {
     return new Response(null, { status: 204, headers: corsHeaders });
   }
 
+  // Visible to the outer catch's error body (SYL-72), set once resolved below.
+  let source: "user" | "project" | undefined;
+
   try {
     // Verify JWT
     const authHeader = req.headers.get("Authorization");
@@ -53,6 +53,19 @@ serve(async (req) => {
         headers: { "Content-Type": "application/json", ...corsHeaders },
       });
     }
+
+    // Resolve which Anthropic key this request uses (SYL-72).
+    const encKey = Deno.env.get("SECRETS_ENCRYPTION_KEY");
+    if (!encKey) {
+      console.error("SECRETS_ENCRYPTION_KEY is not set");
+      return new Response(JSON.stringify({ error: "Server misconfiguration." }), {
+        status: 500,
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      });
+    }
+    const resolved = await resolveAnthropicClient(supabase, user.id, encKey);
+    const anthropic = resolved.client;
+    source = resolved.source;
 
     const { file_paths } = await req.json();
     if (!file_paths || !Array.isArray(file_paths) || file_paths.length === 0) {
@@ -85,6 +98,27 @@ serve(async (req) => {
       );
     }
 
+    // BYOK requests bypass the project's cost-control quota entirely; a
+    // separate, unenforced counter still records volume for the admin panel.
+    if (source === "user") {
+      const { error: byokError } = await supabase.rpc("record_byok_usage", {
+        p_user_id: user.id,
+        p_endpoint: "detect-syllabi-info",
+        p_amount: file_paths.length,
+      });
+      if (byokError) console.error("[detect-syllabi-info] record_byok_usage failed:", byokError.message);
+    } else {
+      // One quota unit per file — each path costs a Storage download and a Haiku call.
+      const quotaResponse = await enforceAiQuota(
+        supabase,
+        user.id,
+        "detect-syllabi-info",
+        corsHeaders,
+        file_paths.length,
+      );
+      if (quotaResponse) return quotaResponse;
+    }
+
     // Process all files in parallel; partial failures are OK
     const settled = await Promise.allSettled(
       // deno-lint-ignore no-explicit-any
@@ -100,6 +134,12 @@ serve(async (req) => {
 
         // Base64 encode — same chunked approach as process-syllabus to avoid stack overflow
         const fileBuffer = await fileData.arrayBuffer();
+
+        // Cost cap (SYL-29): skip oversized files before any base64 work or model call.
+        if (fileBuffer.byteLength > MAX_SYLLABUS_BYTES) {
+          return { file_path: filePath, error: "File is too large to analyze" };
+        }
+
         const uint8Array = new Uint8Array(fileBuffer);
         let base64File = "";
         const chunkSize = 8192;
@@ -162,9 +202,20 @@ serve(async (req) => {
       })
     );
 
+    // A rejected BYOK key fails every in-flight Claude call identically —
+    // surface it once as the distinct top-level error (SYL-72) instead of
+    // MAX_FILE_PATHS copies of a generic per-file message, and never fall
+    // back to the project key for the files that hadn't run yet.
+    if (source === "user" && settled.some((r) => r.status === "rejected" && isAnthropicAuthError(r.reason))) {
+      await supabase.rpc("record_key_test", { p_user_id: user.id, p_provider: "anthropic", p_ok: false });
+      return claudeKeyRejectedResponse(corsHeaders);
+    }
+
     const results = settled.map((result, idx) => {
       if (result.status === "fulfilled") return result.value;
-      return { file_path: file_paths[idx], error: result.reason?.message ?? "Unknown error" };
+      // Detail stays server-side (SYL-31); clients get a generic per-file error.
+      console.error(`detect-syllabi-info failed for a file:`, result.reason);
+      return { file_path: file_paths[idx], error: "Could not analyze file" };
     });
 
     return new Response(
@@ -172,8 +223,9 @@ serve(async (req) => {
       { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
     );
   } catch (err) {
+    // Detail stays server-side (SYL-31); clients get a generic message.
     console.error("detect-syllabi-info error:", err);
-    return new Response(JSON.stringify({ error: err.message }), {
+    return new Response(JSON.stringify({ error: "Internal server error", source }), {
       status: 500,
       headers: { "Content-Type": "application/json", ...corsHeaders },
     });

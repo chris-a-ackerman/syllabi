@@ -1,5 +1,6 @@
-import { parseISO, isAfter, isBefore, startOfDay, addDays, differenceInCalendarDays } from 'date-fns';
-import type { Event, Course } from '@/app/context/AppContext';
+import { parseISO, startOfDay, differenceInCalendarDays } from 'date-fns';
+import { getUpcomingEvents } from '@/lib/eventHelpers';
+import type { Event, Course } from '@/lib/types';
 
 export interface UrgentDeadline {
   event: Event;
@@ -33,22 +34,16 @@ export function getRelativeLabel(daysUntil: number): string {
 export function selectUrgentDeadlines(
   events: Event[],
   courses: Course[],
-  today: Date,
+  today: Date
 ): UrgentDeadline[] {
-  const windowEnd = addDays(today, 14);
-
-  // Only upcoming events (today or later), within 14 days, excluding no_class
-  const inWindow = events.filter(e => {
-    if (!e.date) return false;
-    if (e.type === 'no_class') return false;
-    const eventDate = startOfDay(parseISO(e.date));
-    // Must be >= today and <= 14 days from now
-    return !isBefore(eventDate, today) && !isAfter(eventDate, windowEnd);
-  });
+  // Only upcoming events (today or later), within 14 days, excluding no_class.
+  // getUpcomingEvents returns them date-sorted, so the cap below always keeps
+  // the soonest events of each pool.
+  const inWindow = getUpcomingEvents(events, { today, windowDays: 14 });
 
   // Selection rule: canvas-matched events first, fill remaining slots with syllabus-only
-  const canvasEvents = inWindow.filter(e => e.canvasAssignmentId != null);
-  const syllabusOnlyEvents = inWindow.filter(e => e.canvasAssignmentId == null);
+  const canvasEvents = inWindow.filter((e) => e.canvasAssignmentId != null);
+  const syllabusOnlyEvents = inWindow.filter((e) => e.canvasAssignmentId == null);
 
   // Take up to 3, canvas-first
   const chosen: typeof inWindow = [];
@@ -63,12 +58,12 @@ export function selectUrgentDeadlines(
 
   // Map to enriched shape, then sort by date ascending
   return chosen
-    .map(e => {
+    .map((e) => {
       const eventDate = startOfDay(parseISO(e.date!));
       const daysUntil = differenceInCalendarDays(eventDate, today);
       return {
         event: e,
-        course: courses.find(c => c.id === e.courseId),
+        course: courses.find((c) => c.id === e.courseId),
         daysUntil,
       };
     })

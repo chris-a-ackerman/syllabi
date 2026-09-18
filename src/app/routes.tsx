@@ -6,69 +6,33 @@ import { Courses } from './pages/Courses';
 import { CourseDetail } from './pages/CourseDetail';
 import { AdminPanel } from './pages/AdminPanel';
 import { Onboarding } from './pages/Onboarding';
-import { CanvasSettings } from './pages/CanvasSettings';
+import { Settings } from './pages/Settings';
 import { Agenda } from './pages/Agenda';
 import { ProtectedRoute } from './components/ProtectedRoute';
-import { useApp } from './context/AppContext';
+import { useAuth } from './context/AuthProvider';
 
 // Root layout: renders child routes
 function RootLayout() {
   return <Outlet />;
 }
 
-// Wrapper components for protected routes
-function ProtectedDashboard() {
+// Single guard for every signed-in route (SYL-42); the /admin subtree adds
+// the admin check on top.
+function ProtectedLayout({ adminOnly = false }: { adminOnly?: boolean }) {
   return (
-    <ProtectedRoute>
-      <Dashboard />
-    </ProtectedRoute>
-  );
-}
-
-function ProtectedCourses() {
-  return (
-    <ProtectedRoute>
-      <Courses />
-    </ProtectedRoute>
-  );
-}
-
-function ProtectedCourseDetail() {
-  return (
-    <ProtectedRoute>
-      <CourseDetail />
-    </ProtectedRoute>
-  );
-}
-
-function ProtectedAdminPanel() {
-  return (
-    <ProtectedRoute adminOnly>
-      <AdminPanel />
-    </ProtectedRoute>
-  );
-}
-
-function ProtectedCanvasSettings() {
-  return (
-    <ProtectedRoute>
-      <CanvasSettings />
-    </ProtectedRoute>
-  );
-}
-
-function ProtectedAgenda() {
-  return (
-    <ProtectedRoute>
-      <Agenda />
+    <ProtectedRoute adminOnly={adminOnly}>
+      <Outlet />
     </ProtectedRoute>
   );
 }
 
 function ProtectedOnboarding() {
-  const { user, loading } = useApp();
+  const { user, loading, profileLoaded } = useAuth();
   if (loading) return null;
   if (!user) return <Navigate to="/" replace />;
+  // onboardingCompleted is a placeholder until the profile fetch settles;
+  // don't render (or skip) onboarding off the placeholder (SYL-55).
+  if (!profileLoaded) return null;
   if (user.onboardingCompleted) return <Navigate to="/dashboard" replace />;
   return <Onboarding />;
 }
@@ -94,28 +58,19 @@ export const router = createBrowserRouter([
         Component: ProtectedOnboarding,
       },
       {
-        path: '/dashboard',
-        Component: ProtectedDashboard,
+        Component: ProtectedLayout,
+        children: [
+          { path: '/dashboard', Component: Dashboard },
+          { path: '/courses', Component: Courses },
+          { path: '/course/:id', Component: CourseDetail },
+          { path: '/settings', Component: Settings },
+          { path: '/settings/canvas', element: <Navigate to="/settings#canvas" replace /> },
+          { path: '/agenda', Component: Agenda },
+        ],
       },
       {
-        path: '/courses',
-        Component: ProtectedCourses,
-      },
-      {
-        path: '/course/:id',
-        Component: ProtectedCourseDetail,
-      },
-      {
-        path: '/admin',
-        Component: ProtectedAdminPanel,
-      },
-      {
-        path: '/settings/canvas',
-        Component: ProtectedCanvasSettings,
-      },
-      {
-        path: '/agenda',
-        Component: ProtectedAgenda,
+        element: <ProtectedLayout adminOnly />,
+        children: [{ path: '/admin', Component: AdminPanel }],
       },
       {
         path: '*',

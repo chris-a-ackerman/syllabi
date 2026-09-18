@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
-import { useApp, type Semester } from '../context/AppContext';
+import { toast } from 'sonner';
+import { useData } from '../context/DataProvider';
+import type { Semester } from '@/lib/types';
 import {
   Dialog,
   DialogContent,
@@ -18,7 +20,7 @@ interface EditSemesterModalProps {
 }
 
 export function EditSemesterModal({ open, onClose, semester }: EditSemesterModalProps) {
-  const { courses, updateSemester, deleteSemester } = useApp();
+  const { courses, updateSemester, deleteSemester } = useData();
   const [name, setName] = useState(semester.name);
   const [startDate, setStartDate] = useState(semester.startDate);
   const [endDate, setEndDate] = useState(semester.endDate);
@@ -32,17 +34,25 @@ export function EditSemesterModal({ open, onClose, semester }: EditSemesterModal
     setConfirmDelete(false);
   }, [semester.id]);
 
-  const courseCount = courses.filter(c => c.semesterId === semester.id).length;
+  const courseCount = courses.filter((c) => c.semesterId === semester.id).length;
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    await updateSemester(semester.id, { name, startDate, endDate });
-    onClose();
+    try {
+      await updateSemester(semester.id, { name, startDate, endDate, isActive: semester.isActive });
+      onClose();
+    } catch {
+      toast.error('Failed to update semester.', { description: 'Please try again in a moment.' });
+    }
   };
 
   const handleDelete = async () => {
-    await deleteSemester(semester.id);
-    onClose();
+    try {
+      await deleteSemester(semester.id);
+      onClose();
+    } catch {
+      toast.error('Failed to delete semester.', { description: 'Please try again in a moment.' });
+    }
   };
 
   const handleClose = () => {
@@ -55,9 +65,7 @@ export function EditSemesterModal({ open, onClose, semester }: EditSemesterModal
       <DialogContent className="rounded-2xl max-w-md">
         <DialogHeader>
           <DialogTitle>Edit Semester</DialogTitle>
-          <DialogDescription>
-            Update the semester name and dates.
-          </DialogDescription>
+          <DialogDescription>Update the semester name and dates.</DialogDescription>
         </DialogHeader>
 
         {!confirmDelete ? (
@@ -109,7 +117,12 @@ export function EditSemesterModal({ open, onClose, semester }: EditSemesterModal
                 Delete Semester
               </Button>
               <div className="flex gap-3">
-                <Button type="button" variant="outline" onClick={handleClose} className="rounded-lg">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleClose}
+                  className="rounded-lg"
+                >
                   Cancel
                 </Button>
                 <Button type="submit" className="bg-indigo-600 hover:bg-indigo-700 rounded-lg">
@@ -124,13 +137,15 @@ export function EditSemesterModal({ open, onClose, semester }: EditSemesterModal
               <p className="font-semibold mb-1">This cannot be undone.</p>
               {courseCount > 0 ? (
                 <p>
-                  This will permanently delete <span className="font-semibold">{semester.name}</span> along
-                  with {courseCount} {courseCount === 1 ? 'course' : 'courses'} and all their events,
-                  grading data, and notes.
+                  This will permanently delete{' '}
+                  <span className="font-semibold">{semester.name}</span> along with {courseCount}{' '}
+                  {courseCount === 1 ? 'course' : 'courses'} and all their events, grading data, and
+                  notes.
                 </p>
               ) : (
                 <p>
-                  This will permanently delete <span className="font-semibold">{semester.name}</span>.
+                  This will permanently delete{' '}
+                  <span className="font-semibold">{semester.name}</span>.
                 </p>
               )}
             </div>

@@ -1,14 +1,18 @@
-import { useState, useCallback } from 'react';
-import { useApp } from '../context/AppContext';
-import { supabase } from '../../lib/supabase';
+import { useState, useCallback, useMemo } from 'react';
+import { useData } from '../context/DataProvider';
+import * as canvasApi from '@/lib/api/canvas';
+import { COURSE_COLORS } from '@/lib/courseColors';
+import { isClaudeKeyRejected, toastClaudeKeyRejected } from '@/lib/claudeKeyRejection';
+import type { CanvasSyllabusSourceType } from '@/lib/types';
 
-export type CanvasStep = 'dates' | 'detecting' | 'review' | 'processing' | 'syllabi' | 'downloading';
+export type CanvasStep =
+  'dates' | 'detecting' | 'review' | 'processing' | 'syllabi' | 'downloading';
 export type SyllabusSearchStatus = 'searching' | 'found' | 'not_found' | 'error';
 export type SyllabusDownloadStatus = 'downloading' | 'started' | 'error' | 'skipped';
 
 export interface SyllabusFindResult {
   status: SyllabusSearchStatus;
-  source_type?: 'file' | 'html' | 'page';
+  source_type?: CanvasSyllabusSourceType;
   file_name?: string | null;
   file_url?: string | null;
   html_content?: string | null;
@@ -24,25 +28,39 @@ export interface CanvasDetectedCourse {
   needs_review: boolean;
   editedName: string;
   editedCode: string;
+  /** Whether this detected course is created on Confirm & Create (SYL-71). Defaults to true. */
+  selected: boolean;
 }
 
-const COURSE_COLORS = [
-  '#6366f1', '#8b5cf6', '#ec4899', '#f43f5e',
-  '#f97316', '#eab308', '#22c55e', '#14b8a6',
-  '#0ea5e9', '#64748b',
-];
+/**
+ * Pairs a created course to the detected Canvas course it came from, keyed by
+ * canvas_course_id rather than array index (SYL-71) — index pairing broke
+ * whenever an addCourse call failed partway through confirm(), since every
+ * subsequent syllabus search/download would then be matched to the wrong
+ * detected course.
+ */
+export interface CanvasCourseLink {
+  courseId: string;
+  canvasCourseId: string;
+  detected: CanvasDetectedCourse;
+}
 
 export function useCanvasFlow() {
-  const { addSemester, addCourse } = useApp();
+  const { addSemester, addCourse, deleteSemester } = useData();
   const [step, setStep] = useState<CanvasStep>('dates');
   const [semesterName, setSemesterName] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [detectedCourses, setDetectedCourses] = useState<CanvasDetectedCourse[]>([]);
-  const [createdCourseIds, setCreatedCourseIds] = useState<string[]>([]);
+  const [createdSemesterId, setCreatedSemesterId] = useState<string | null>(null);
+  const [courseLinks, setCourseLinks] = useState<CanvasCourseLink[]>([]);
   const [syllabiResults, setSyllabiResults] = useState<Record<string, SyllabusFindResult>>({});
-  const [downloadResults, setDownloadResults] = useState<Record<string, SyllabusDownloadStatus>>({});
+  const [downloadResults, setDownloadResults] = useState<Record<string, SyllabusDownloadStatus>>(
+    {}
+  );
   const [error, setError] = useState<string | null>(null);
+
+  const createdCourseIds = useMemo(() => courseLinks.map((l) => l.courseId), [courseLinks]);
 
   const reset = useCallback(() => {
     setStep('dates');
@@ -50,7 +68,8 @@ export function useCanvasFlow() {
     setStartDate('');
     setEndDate('');
     setDetectedCourses([]);
-    setCreatedCourseIds([]);
+    setCreatedSemesterId(null);
+    setCourseLinks([]);
     setSyllabiResults({});
     setDownloadResults({});
     setError(null);
@@ -61,12 +80,7 @@ export function useCanvasFlow() {
     setError(null);
     setStep('detecting');
 
-    console.log('[useCanvasFlow] invoking find-canvas-courses', { semester_start: startDate, semester_end: endDate });
-    const { data, error: fnError } = await supabase.functions.invoke(
-      'find-canvas-courses',
-      { body: { semester_start: startDate, semester_end: endDate } }
-    );
-    console.log('[useCanvasFlow] find-canvas-courses response', { data, error: fnError });
+    const { data, error: fnError } = await canvasApi.findCanvasCourses(startDate, endDate);
 
     if (fnError || !data?.courses) {
       setError('Failed to fetch Canvas courses. Please check your connection and try again.');
@@ -74,34 +88,39 @@ export function useCanvasFlow() {
       return;
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const courses: CanvasDetectedCourse[] = data.courses.map((c: any) => ({
+    const courses: CanvasDetectedCourse[] = data.courses.map((c) => ({
       canvas_course_id: c.canvas_course_id,
       name: c.name,
-      course_code: c.course_code,
+      course_code: c.course_code ?? '',
       instructor: c.instructor ?? '',
       term_name: c.term_name ?? '',
       needs_review: c.needs_review ?? false,
       editedName: c.name,
       editedCode: c.course_code ?? '',
+      selected: true,
     }));
 
     setDetectedCourses(courses);
     setStep('review');
   }, [startDate, endDate]);
 
-  const updateCourse = useCallback((
-    index: number,
-    field: 'editedName' | 'editedCode',
-    value: string,
-  ) => {
-    setDetectedCourses(prev =>
-      prev.map((c, i) => (i === index ? { ...c, [field]: value } : c))
-    );
-  }, []);
+  const updateCourse = useCallback(
+    (index: number, field: 'editedName' | 'editedCode', value: string) => {
+      setDetectedCourses((prev) =>
+        prev.map((c, i) => (i === index ? { ...c, [field]: value } : c))
+      );
+    },
+    []
+  );
 
   const removeCourse = useCallback((index: number) => {
-    setDetectedCourses(prev => prev.filter((_, i) => i !== index));
+    setDetectedCourses((prev) => prev.filter((_, i) => i !== index));
+  }, []);
+
+  const toggleCourse = useCallback((index: number) => {
+    setDetectedCourses((prev) =>
+      prev.map((c, i) => (i === index ? { ...c, selected: !c.selected } : c))
+    );
   }, []);
 
   const confirm = useCallback(async () => {
@@ -120,11 +139,13 @@ export function useCanvasFlow() {
       setStep('review');
       return;
     }
+    setCreatedSemesterId(semId);
 
-    const createdIds: string[] = [];
+    const selectedCourses = detectedCourses.filter((dc) => dc.selected);
+    const links: CanvasCourseLink[] = [];
 
-    for (let i = 0; i < detectedCourses.length; i++) {
-      const dc = detectedCourses[i];
+    for (let i = 0; i < selectedCourses.length; i++) {
+      const dc = selectedCourses[i];
       const color = COURSE_COLORS[i % COURSE_COLORS.length];
       const courseId = await addCourse({
         semesterId: semId,
@@ -136,33 +157,42 @@ export function useCanvasFlow() {
       });
       if (!courseId) continue;
 
-      createdIds.push(courseId);
+      // Pair by canvas_course_id, not the loop index — a failed addCourse
+      // above must not shift every later course's syllabus search/download
+      // onto the wrong detected course (SYL-71).
+      links.push({ courseId, canvasCourseId: dc.canvas_course_id, detected: dc });
 
       // Store canvas_course_id — not part of the Course interface so update directly
-      await supabase
-        .from('courses')
-        .update({ canvas_course_id: dc.canvas_course_id })
-        .eq('id', courseId);
+      await canvasApi.linkCanvasCourse(courseId, dc.canvas_course_id);
     }
 
-    setCreatedCourseIds(createdIds);
+    setCourseLinks(links);
     setStep('syllabi');
 
     // Kick off parallel syllabus searches for all created courses
     const initialResults: Record<string, SyllabusFindResult> = {};
-    createdIds.forEach(id => { initialResults[id] = { status: 'searching' }; });
+    links.forEach(({ courseId }) => {
+      initialResults[courseId] = { status: 'searching' };
+    });
     setSyllabiResults(initialResults);
 
-    createdIds.forEach((courseId, i) => {
-      const dc = detectedCourses[i];
-      if (!dc) return;
-      supabase.functions
-        .invoke('find-canvas-syllabus', {
-          body: { course_id: courseId, canvas_course_id: dc.canvas_course_id },
-        })
-        .then(({ data, error: fnError }) => {
+    // Set once, even though multiple courses can hit this in parallel — a
+    // rejected BYOK key fails every one of them identically, and the toast
+    // only needs to appear once per confirm() run.
+    let keyRejectedNotified = false;
+
+    links.forEach(({ courseId, canvasCourseId }) => {
+      canvasApi
+        .findCanvasSyllabus(courseId, canvasCourseId)
+        .then(async ({ data, error: fnError }) => {
           let result: SyllabusFindResult;
-          if (fnError) {
+          if (fnError && (await isClaudeKeyRejected(fnError))) {
+            if (!keyRejectedNotified) {
+              keyRejectedNotified = true;
+              toastClaudeKeyRejected();
+            }
+            result = { status: 'error' };
+          } else if (fnError) {
             result = { status: 'error' };
           } else if (data?.success === false || !data?.found) {
             result = { status: 'not_found' };
@@ -176,10 +206,10 @@ export function useCanvasFlow() {
               confidence: data.confidence,
             };
           }
-          setSyllabiResults(prev => ({ ...prev, [courseId]: result }));
+          setSyllabiResults((prev) => ({ ...prev, [courseId]: result }));
         })
         .catch(() => {
-          setSyllabiResults(prev => ({ ...prev, [courseId]: { status: 'error' } }));
+          setSyllabiResults((prev) => ({ ...prev, [courseId]: { status: 'error' } }));
         });
     });
   }, [semesterName, startDate, endDate, detectedCourses, addSemester, addCourse]);
@@ -189,36 +219,51 @@ export function useCanvasFlow() {
 
     // Initialize download statuses
     const initial: Record<string, SyllabusDownloadStatus> = {};
-    createdCourseIds.forEach(id => {
-      initial[id] = syllabiResults[id]?.status === 'found' ? 'downloading' : 'skipped';
+    courseLinks.forEach(({ courseId }) => {
+      initial[courseId] = syllabiResults[courseId]?.status === 'found' ? 'downloading' : 'skipped';
     });
     setDownloadResults(initial);
 
     // Fire download for each found course in parallel
-    createdCourseIds.forEach(courseId => {
+    courseLinks.forEach(({ courseId }) => {
       const result = syllabiResults[courseId];
       if (result?.status !== 'found') return;
 
-      supabase.functions
-        .invoke('download-canvas-syllabus', {
-          body: {
-            course_id: courseId,
-            source_type: result.source_type,
-            file_url: result.file_url ?? undefined,
-            file_name: result.file_name ?? undefined,
-            html_content: result.html_content ?? undefined,
-          },
+      canvasApi
+        .downloadCanvasSyllabus({
+          courseId,
+          // status === 'found' guarantees source_type was set when this result was recorded.
+          sourceType: result.source_type as CanvasSyllabusSourceType,
+          fileUrl: result.file_url,
+          fileName: result.file_name,
+          htmlContent: result.html_content,
         })
         .then(({ data, error: fnError }) => {
-          const status: SyllabusDownloadStatus =
-            fnError || !data?.success ? 'error' : 'started';
-          setDownloadResults(prev => ({ ...prev, [courseId]: status }));
+          const status: SyllabusDownloadStatus = fnError || !data?.success ? 'error' : 'started';
+          setDownloadResults((prev) => ({ ...prev, [courseId]: status }));
         })
         .catch(() => {
-          setDownloadResults(prev => ({ ...prev, [courseId]: 'error' }));
+          setDownloadResults((prev) => ({ ...prev, [courseId]: 'error' }));
         });
     });
-  }, [createdCourseIds, syllabiResults]);
+  }, [courseLinks, syllabiResults]);
+
+  /**
+   * Deletes everything confirm() created for this attempt (semester + every
+   * created course, via deleteSemester so the SYL-64 course_events pruning
+   * applies too). Only safe to call before any download-canvas-syllabus call
+   * has been kicked off — the modal enforces that by only calling this while
+   * step is 'processing' or 'syllabi' (SYL-71). A no-op if nothing was
+   * created yet.
+   */
+  const rollback = useCallback(async () => {
+    if (!createdSemesterId) return;
+    try {
+      await deleteSemester(createdSemesterId);
+    } catch (err) {
+      console.error('Error rolling back Canvas import:', err);
+    }
+  }, [createdSemesterId, deleteSemester]);
 
   return {
     step,
@@ -229,6 +274,7 @@ export function useCanvasFlow() {
     endDate,
     setEndDate,
     detectedCourses,
+    courseLinks,
     createdCourseIds,
     syllabiResults,
     downloadResults,
@@ -237,7 +283,9 @@ export function useCanvasFlow() {
     detect,
     updateCourse,
     removeCourse,
+    toggleCourse,
     confirm,
     downloadSyllabi,
+    rollback,
   };
 }

@@ -1,12 +1,7 @@
 // supabase/functions/delete-canvas-token/index.ts
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
-const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+import { CORS_HEADERS } from "../_shared/cors.ts";
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
@@ -50,7 +45,8 @@ serve(async (req) => {
     // 4. Return success
     return json({ success: true });
   } catch (err) {
+    // Detail stays server-side (SYL-31); clients get a generic message.
     console.error("delete-canvas-token unexpected error:", err);
-    return json({ error: err instanceof Error ? err.message : "Unexpected error." }, 500);
+    return json({ error: "Internal server error" }, 500);
   }
 });

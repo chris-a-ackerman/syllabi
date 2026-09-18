@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { startOfDay, parseISO } from 'date-fns';
 import { getRelativeLabel, getUrgencyColor, selectUrgentDeadlines } from './deadlineUrgency';
-import type { Event, Course } from '@/app/context/AppContext';
+import type { Event, Course } from '@/lib/types';
 
 // Fixed clock: Tuesday, Sep 1 2026.
 const TODAY = startOfDay(parseISO('2026-09-01'));
@@ -59,10 +59,10 @@ describe('selectUrgentDeadlines', () => {
         makeEvent({ id: 'day15', date: '2026-09-16' }),
       ],
       COURSES,
-      TODAY,
+      TODAY
     );
-    expect(result.map(r => r.event.id)).toEqual(['today', 'day14']);
-    expect(result.map(r => r.daysUntil)).toEqual([0, 14]);
+    expect(result.map((r) => r.event.id)).toEqual(['today', 'day14']);
+    expect(result.map((r) => r.daysUntil)).toEqual([0, 14]);
   });
 
   it('excludes no_class and dateless events', () => {
@@ -73,9 +73,9 @@ describe('selectUrgentDeadlines', () => {
         makeEvent({ id: 'real' }),
       ],
       COURSES,
-      TODAY,
+      TODAY
     );
-    expect(result.map(r => r.event.id)).toEqual(['real']);
+    expect(result.map((r) => r.event.id)).toEqual(['real']);
   });
 
   it('gives Canvas-matched events the slots first, capped at 3, then sorts by date', () => {
@@ -87,11 +87,29 @@ describe('selectUrgentDeadlines', () => {
         makeEvent({ id: 'canvas-c', date: '2026-09-12', canvasAssignmentId: '3' }),
       ],
       COURSES,
-      TODAY,
+      TODAY
     );
     // The syllabus-only event dated soonest is squeezed out by Canvas-matched ones,
     // and the final list is date-ascending.
-    expect(result.map(r => r.event.id)).toEqual(['canvas-a', 'canvas-b', 'canvas-c']);
+    expect(result.map((r) => r.event.id)).toEqual(['canvas-a', 'canvas-b', 'canvas-c']);
+  });
+
+  it('keeps the soonest three Canvas events, not the first three in input order (SYL-69)', () => {
+    // Four Canvas-matched events arrive out of date order, the way a DB read
+    // ordered by insertion would hand them over. A "first three wins" policy
+    // would keep the 09-12 event and drop 09-05; the soonest-three policy
+    // must drop 09-12 instead.
+    const result = selectUrgentDeadlines(
+      [
+        makeEvent({ id: 'canvas-12', date: '2026-09-12', canvasAssignmentId: '1' }),
+        makeEvent({ id: 'canvas-03', date: '2026-09-03', canvasAssignmentId: '2' }),
+        makeEvent({ id: 'canvas-10', date: '2026-09-10', canvasAssignmentId: '3' }),
+        makeEvent({ id: 'canvas-05', date: '2026-09-05', canvasAssignmentId: '4' }),
+      ],
+      COURSES,
+      TODAY
+    );
+    expect(result.map((r) => r.event.id)).toEqual(['canvas-03', 'canvas-05', 'canvas-10']);
   });
 
   it('fills remaining slots with syllabus-only events', () => {
@@ -101,9 +119,9 @@ describe('selectUrgentDeadlines', () => {
         makeEvent({ id: 'canvas', date: '2026-09-10', canvasAssignmentId: '1' }),
       ],
       COURSES,
-      TODAY,
+      TODAY
     );
-    expect(result.map(r => r.event.id)).toEqual(['syllabus', 'canvas']);
+    expect(result.map((r) => r.event.id)).toEqual(['syllabus', 'canvas']);
   });
 
   it('attaches the course and computes daysUntil', () => {

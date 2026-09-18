@@ -73,9 +73,6 @@ apply "$HERE/00_bootstrap.sql"
 echo "==> migrations"
 for f in "$MIGRATIONS"/*.sql; do apply "$f"; done
 
-echo "==> production drift not captured in migrations (local only)"
-apply "$HERE/90_prod_drift.sql"
-
 if [ "$RUN_VERIFY" -eq 1 ]; then
   echo "==> security assertions"
   apply "$HERE/99_verify.sql"

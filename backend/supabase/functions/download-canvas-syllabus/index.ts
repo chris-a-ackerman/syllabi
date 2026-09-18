@@ -1,15 +1,11 @@
 // supabase/functions/download-canvas-syllabus/index.ts
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { assertSafeCanvasUrl, UnsafeCanvasUrlError } from "../_shared/canvas-url.ts";
+import { assertSafeCanvasUrl, redactUrl, safeCanvasFetch, UnsafeCanvasUrlError } from "../_shared/canvas-url.ts";
+
+import { CORS_HEADERS } from "../_shared/cors.ts";
 
 declare const EdgeRuntime: { waitUntil: (p: Promise<unknown>) => void };
-
-const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
@@ -55,7 +51,8 @@ serve(async (req) => {
     }
 
     const { course_id, source_type, file_url, file_name, html_content } = body;
-    console.log(`[download] received: course_id=${course_id} source_type=${source_type} file_url=${file_url ?? "MISSING"} file_name=${file_name ?? "MISSING"} html_content_length=${html_content?.length ?? "MISSING"}`);
+    // file_url itself never goes to the logs (SYL-31) — only whether it was sent.
+    console.log(`[download] received: course_id=${course_id} source_type=${source_type} has_file_url=${!!file_url} file_name=${file_name ?? "MISSING"} html_content_length=${html_content?.length ?? "MISSING"}`);
     if (!course_id || !source_type) {
       return json({ error: "course_id and source_type are required." }, 400);
     }
@@ -103,17 +100,18 @@ serve(async (req) => {
     // the user's Canvas token, so pin it to the host of their connected Canvas
     // instance before any request leaves the function. Checked here rather than
     // at the fetch so a rejection cannot leave canvas_sync_status on "running".
+    let allowedHost: string | null = null;
     if (source_type === "file" && file_url) {
       const canvasBaseUrl: string | null = profileResult.data?.canvas_base_url ?? null;
       if (!canvasBaseUrl) {
         return json({ error: "No Canvas instance connected. Please connect Canvas first." }, 400);
       }
       try {
-        const allowedHost = (await assertSafeCanvasUrl(canvasBaseUrl)).hostname;
+        allowedHost = (await assertSafeCanvasUrl(canvasBaseUrl)).hostname;
         await assertSafeCanvasUrl(file_url, allowedHost);
       } catch (err) {
         if (err instanceof UnsafeCanvasUrlError) {
-          console.error(`[download] REJECTED file_url ${file_url}: ${err.message}`);
+          console.error(`[download] REJECTED file_url (host=${redactUrl(file_url)}): ${err.message}`);
           return json({ error: `file_url is not an allowed Canvas URL: ${err.message}` }, 400);
         }
         throw err;
@@ -138,10 +136,27 @@ serve(async (req) => {
     let resolvedFileName: string;
 
     if (source_type === "file" && file_url) {
-      console.log(`[download] fetching Canvas file: ${file_url}`);
-      const fileRes = await fetch(file_url, {
-        headers: { Authorization: `Bearer ${canvasToken}` },
-      });
+      console.log("[download] fetching Canvas file");
+      let fileRes: Response;
+      try {
+        fileRes = await safeCanvasFetch(file_url, {
+          headers: { Authorization: `Bearer ${canvasToken}` },
+        }, allowedHost);
+      } catch (err) {
+        if (err instanceof UnsafeCanvasUrlError) {
+          const errMsg = `Failed to download syllabus file: ${err.message}`;
+          console.error(`[download] ${errMsg}`);
+          await supabaseService
+            .from("courses")
+            .update({
+              canvas_sync_status: { ...currentStatus, process_syllabus: "failed" },
+              canvas_sync_error: { ...currentError, process_syllabus: errMsg },
+            })
+            .eq("id", course_id);
+          return json({ error: errMsg }, 502);
+        }
+        throw err;
+      }
       console.log(`[download] Canvas file fetch status: ${fileRes.status} content-type: ${fileRes.headers.get("content-type")} content-length: ${fileRes.headers.get("content-length")}`);
       if (!fileRes.ok) {
         const errMsg = `Failed to download syllabus file: ${fileRes.status}`;
@@ -181,8 +196,8 @@ serve(async (req) => {
       .upload(storagePath, uploadData, { contentType: uploadContentType, upsert: true });
 
     if (uploadError) {
-      const errMsg = `Storage upload failed: ${uploadError.message}`;
-      console.error(`[download] ${errMsg}`);
+      const errMsg = "Storage upload failed";
+      console.error(`[download] ${errMsg}: ${uploadError.message}`);
       await supabaseService
         .from("courses")
         .update({
@@ -259,7 +274,8 @@ serve(async (req) => {
       processing: true,
     });
   } catch (err) {
+    // Detail stays server-side (SYL-31); clients get a generic message.
     console.error("download-canvas-syllabus unexpected error:", err);
-    return json({ error: err instanceof Error ? err.message : "Unexpected error." }, 500);
+    return json({ error: "Internal server error" }, 500);
   }
 });
