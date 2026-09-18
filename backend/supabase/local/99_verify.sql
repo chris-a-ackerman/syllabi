@@ -533,3 +533,44 @@ BEGIN
   RAISE NOTICE 'SYL-72 BYOK assertions passed.';
 END;
 $$;
+
+-- ── SYL-74: the Canvas RPCs are reachable by service_role only ──────────────
+-- Same defect SYL-72 caught one migration earlier, but on functions that had
+-- already shipped: store/get/delete_canvas_token are SECURITY DEFINER, act on
+-- the p_user_id they are handed rather than auth.uid(), and were created with
+-- the anon/authenticated EXECUTE grants Supabase's ALTER DEFAULT PRIVILEGES
+-- hands out — so PostgREST exposed delete_canvas_token at /rest/v1/rpc/ to
+-- anyone holding the publishable anon key. 00_bootstrap.sql reproduces those
+-- default privileges, which is what gives this assertion teeth locally.
+DO $$
+DECLARE
+  v_fn    TEXT;
+  v_role  TEXT;
+BEGIN
+  FOREACH v_fn IN ARRAY ARRAY[
+    'public.store_canvas_token(UUID, TEXT, TEXT, TEXT)',
+    'public.get_canvas_token(UUID, TEXT)',
+    'public.delete_canvas_token(UUID)'
+  ] LOOP
+    FOREACH v_role IN ARRAY ARRAY['anon', 'authenticated'] LOOP
+      IF has_function_privilege(v_role, v_fn, 'EXECUTE') THEN
+        RAISE EXCEPTION 'SYL-74: % can execute %', v_role, v_fn;
+      END IF;
+    END LOOP;
+    IF NOT has_function_privilege('service_role', v_fn, 'EXECUTE') THEN
+      RAISE EXCEPTION 'SYL-74: service_role cannot execute % (the edge functions need it)', v_fn;
+    END IF;
+  END LOOP;
+
+  -- handle_new_user gets no service_role grant: it is only ever reached as a
+  -- trigger, and Postgres checks EXECUTE on a trigger function at CREATE
+  -- TRIGGER time rather than when it fires.
+  FOREACH v_role IN ARRAY ARRAY['anon', 'authenticated'] LOOP
+    IF has_function_privilege(v_role, 'public.handle_new_user()', 'EXECUTE') THEN
+      RAISE EXCEPTION 'SYL-74: % can execute public.handle_new_user()', v_role;
+    END IF;
+  END LOOP;
+
+  RAISE NOTICE 'SYL-74 Canvas RPC grant assertions passed.';
+END;
+$$;
