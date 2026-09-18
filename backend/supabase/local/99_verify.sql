@@ -379,6 +379,8 @@ DECLARE
   v_last4    TEXT;
   v_ok       BOOLEAN;
   v_tested_at TIMESTAMPTZ;
+  v_fn       TEXT;
+  v_role     TEXT;
 BEGIN
   SELECT id INTO v_b FROM auth.users WHERE email = 'b@test.local';
 
@@ -501,6 +503,32 @@ BEGIN
   IF NOT v_blocked THEN
     RAISE EXCEPTION 'SYL-72: authenticated can SELECT from ai_usage_byok';
   END IF;
+
+  -- ── the four key RPCs are reachable by service_role only ────────────────
+  -- REVOKE ... FROM PUBLIC alone does not do this. Supabase ships ALTER
+  -- DEFAULT PRIVILEGES IN SCHEMA public GRANT EXECUTE ON FUNCTIONS TO anon,
+  -- authenticated, service_role, so each new function carries an *explicit*
+  -- anon/authenticated EXECUTE grant that revoking the PUBLIC pseudo-role
+  -- leaves untouched, and PostgREST then serves it at /rest/v1/rpc/<name>.
+  -- All four are SECURITY DEFINER and act on the p_user_id they are handed
+  -- rather than auth.uid(), so a client-reachable grant is an IDOR on every
+  -- other user's row. 00_bootstrap.sql reproduces those default privileges,
+  -- which is what makes this assertion meaningful locally.
+  FOREACH v_fn IN ARRAY ARRAY[
+    'public.store_anthropic_key(UUID, TEXT, TEXT)',
+    'public.get_anthropic_key(UUID, TEXT)',
+    'public.delete_anthropic_key(UUID)',
+    'public.record_key_test(UUID, TEXT, BOOLEAN)'
+  ] LOOP
+    FOREACH v_role IN ARRAY ARRAY['anon', 'authenticated'] LOOP
+      IF has_function_privilege(v_role, v_fn, 'EXECUTE') THEN
+        RAISE EXCEPTION 'SYL-72: % can execute %', v_role, v_fn;
+      END IF;
+    END LOOP;
+    IF NOT has_function_privilege('service_role', v_fn, 'EXECUTE') THEN
+      RAISE EXCEPTION 'SYL-72: service_role cannot execute % (the edge functions need it)', v_fn;
+    END IF;
+  END LOOP;
 
   RAISE NOTICE 'SYL-72 BYOK assertions passed.';
 END;

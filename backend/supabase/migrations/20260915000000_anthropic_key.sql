@@ -23,6 +23,17 @@ ALTER TABLE public.profiles
 
 -- ── Storage functions (SYL-30: search_path pinned, fully-qualified names) ──
 
+-- Locking these down takes more than REVOKE ... FROM PUBLIC. Supabase ships
+-- ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT EXECUTE ON FUNCTIONS TO
+-- anon, authenticated, service_role, so a newly created function carries
+-- *explicit* anon=X/authenticated=X ACL entries that a revoke of the PUBLIC
+-- pseudo-role leaves untouched — and PostgREST then exposes it at
+-- /rest/v1/rpc/<name>. These four are SECURITY DEFINER and take p_user_id as
+-- a parameter rather than reading auth.uid(), so a client-reachable EXECUTE
+-- grant would let any caller act on any user's row. Name anon and
+-- authenticated explicitly and hand EXECUTE only to service_role (the Edge
+-- Functions), matching consume_ai_quota and record_byok_usage.
+
 -- Stores (encrypts) a user's Anthropic key. Computes last4 itself so this
 -- function is the only place in the system that ever sees the plaintext
 -- outside the edge function that validated it. Resets the "last tested"
@@ -51,7 +62,8 @@ BEGIN
   WHERE id = p_user_id;
 END;
 $$;
-REVOKE ALL ON FUNCTION public.store_anthropic_key(UUID, TEXT, TEXT) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.store_anthropic_key(UUID, TEXT, TEXT) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.store_anthropic_key(UUID, TEXT, TEXT) TO service_role;
 
 -- Retrieves (decrypts) a user's Anthropic key, or NULL if none is stored.
 CREATE OR REPLACE FUNCTION public.get_anthropic_key(p_user_id UUID, p_enc_key TEXT)
@@ -69,7 +81,8 @@ BEGIN
   );
 END;
 $$;
-REVOKE ALL ON FUNCTION public.get_anthropic_key(UUID, TEXT) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.get_anthropic_key(UUID, TEXT) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.get_anthropic_key(UUID, TEXT) TO service_role;
 
 -- Deletes (removes) a user's stored Anthropic key and its metadata.
 CREATE OR REPLACE FUNCTION public.delete_anthropic_key(p_user_id UUID)
@@ -90,7 +103,8 @@ BEGIN
   WHERE id = p_user_id;
 END;
 $$;
-REVOKE ALL ON FUNCTION public.delete_anthropic_key(UUID) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.delete_anthropic_key(UUID) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.delete_anthropic_key(UUID) TO service_role;
 
 -- Records the outcome of a key/token test-connection check ('anthropic' or
 -- 'canvas') so the Settings UI can show "Last tested {relative} — ok/rejected"
@@ -119,7 +133,8 @@ BEGIN
   END IF;
 END;
 $$;
-REVOKE ALL ON FUNCTION public.record_key_test(UUID, TEXT, BOOLEAN) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.record_key_test(UUID, TEXT, BOOLEAN) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.record_key_test(UUID, TEXT, BOOLEAN) TO service_role;
 
 -- ── profiles_safe: never the ciphertext ─────────────────────────────────────
 
