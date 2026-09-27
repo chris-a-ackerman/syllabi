@@ -92,7 +92,7 @@ psql "$DB_URL" -c "UPDATE public.profiles SET is_admin = true WHERE id = '<id fr
 ## 6. Run Edge Functions locally
 
 ```bash
-supabase functions serve --env-file supabase/.env.local                   # all fifteen, hot reload
+supabase functions serve --env-file supabase/.env.local                   # all sixteen, hot reload
 supabase functions serve process-syllabus --env-file supabase/.env.local  # or just one
 ```
 
@@ -119,7 +119,7 @@ supabase migration list        # what the hosted DB is missing
 supabase db push --dry-run
 supabase db push               # migrations only
 
-supabase functions deploy      # all fifteen; or name one: supabase functions deploy chat
+supabase functions deploy      # all sixteen; or name one: supabase functions deploy chat
 
 supabase secrets set ANTHROPIC_API_KEY=sk-ant-... CANVAS_ENCRYPTION_KEY=... SECRETS_ENCRYPTION_KEY=... SERVICE_ROLE_KEY=...   # only when introducing a secret
 ```
@@ -459,6 +459,7 @@ File size limit: 50 MiB. RLS policies enforce that users can only access files w
 | `test-anthropic-key`       | JWT required     | —                                | Re-validate the stored key; update `anthropic_key_last_tested_at`/`last_test_ok`                                  |
 | `delete-anthropic-key`     | JWT required     | —                                | Remove the stored Claude API key; no outbound call, not rate-limited                                              |
 | `test-canvas-token`        | JWT required     | —                                | "Test connection": re-run the same Canvas `/users/self` check `save-canvas-token` uses                            |
+| `agent-upcoming`           | JWT required     | —                                | GET `?days=N` (default 3, max 14): active-semester courses, class sessions expanded from `schedule`, and events   |
 
 ### Claude Prompt Contract (`process-syllabus`)
 

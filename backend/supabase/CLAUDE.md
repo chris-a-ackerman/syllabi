@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is the Supabase backend for a syllabus parsing application. It uses Supabase Edge Functions powered by Claude AI to extract structured course data (events, grading, schedule) from uploaded syllabus PDFs, support a chat assistant over that data, export iCalendar files, integrate with Canvas LMS, and let a user bring their own Claude API key. There are **15 Edge Functions** in total — see [`README.md`](README.md) for the full table.
+This is the Supabase backend for a syllabus parsing application. It uses Supabase Edge Functions powered by Claude AI to extract structured course data (events, grading, schedule) from uploaded syllabus PDFs, support a chat assistant over that data, export iCalendar files, integrate with Canvas LMS, and let a user bring their own Claude API key. There are **16 Edge Functions** in total — see [`README.md`](README.md) for the full table.
 
 ## Common Commands
 
@@ -16,7 +16,7 @@ supabase stop --workdir backend                   # Stop local stack
 # Edge Functions
 supabase functions serve process-syllabus --env-file supabase/.env.local  # Run function locally with hot reload (from backend/)
 supabase functions deploy process-syllabus        # Deploy one function to production
-supabase functions deploy                         # Deploy all 15
+supabase functions deploy                         # Deploy all 16
 
 # Database
 supabase db push                                  # Apply migrations
@@ -92,7 +92,7 @@ import_map = "./functions/process-syllabus/deno.json"
 platform. JWT verification is instead done inside the function: it requires an
 `Authorization` header, resolves it with `supabase.auth.getUser(token)`, and
 returns 401 if that fails. The course is then looked up scoped to that user.
-Every one of the 15 functions follows this same pattern — see
+Every one of the 16 functions follows this same pattern — see
 `tests/unit/config-drift.test.ts`.
 
 ### Environment Variables (required)

@@ -61,8 +61,8 @@ Deno.test('no function relies on platform JWT verification', () => {
   assertEquals(verified, []);
 });
 
-Deno.test('sanity: fifteen functions are configured', () => {
+Deno.test('sanity: sixteen functions are configured', () => {
   // SYL-72 added save-anthropic-key, test-anthropic-key, delete-anthropic-key
-  // and test-canvas-token (11 + 4).
-  assert(Object.keys(fnConfigs).length === 15, `expected 15, got ${Object.keys(fnConfigs).length}`);
+  // and test-canvas-token (11 + 4); SYL-92 added agent-upcoming (16).
+  assert(Object.keys(fnConfigs).length === 16, `expected 16, got ${Object.keys(fnConfigs).length}`);
 });
