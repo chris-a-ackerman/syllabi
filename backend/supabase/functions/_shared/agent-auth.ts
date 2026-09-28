@@ -2,8 +2,9 @@
 //
 // Agent tokens are `syl_agent_<43 base64url chars>`, minted by
 // create-agent-token and stored only as a sha256 hex digest in
-// public.agent_tokens. They are read-only and carry explicit scopes; the
-// agent never holds the user's password or a session JWT.
+// public.agent_tokens. They are read-only, carry explicit scopes, and expire
+// (expires_at, fixed at creation); the agent never holds the user's password
+// or a session JWT.
 //
 // SECURITY: a caller resolved via "agent_token" is served with the
 // service-role client, where RLS does not apply. Every query a function makes
@@ -26,12 +27,18 @@ interface QueryResult<T> {
   data: T | null;
   error: { message: string } | null;
 }
+export interface AgentTokenRow {
+  id: string;
+  user_id: string;
+  scopes: string[];
+  expires_at: string;
+}
 export interface TokenLookupClient {
   from(table: "agent_tokens"): {
     select(cols: string): {
       eq(col: string, val: string): {
         is(col: string, val: null): {
-          maybeSingle(): PromiseLike<QueryResult<{ id: string; user_id: string; scopes: string[] }>>;
+          maybeSingle(): PromiseLike<QueryResult<AgentTokenRow>>;
         };
       };
     };
@@ -51,6 +58,8 @@ export interface ResolveDeps {
   service: TokenLookupClient;
   /** Builds an anon-key client carrying the caller's Authorization header. */
   jwtClient: (authHeader: string) => JwtClient;
+  /** Clock override for tests; defaults to the real time. */
+  now?: () => Date;
 }
 
 function toHex(buf: ArrayBuffer): string {
@@ -81,12 +90,13 @@ export function bearerToken(authHeader: string | null): string | null {
 /**
  * Resolve the caller for a function that accepts agent tokens.
  *
- * 1. `Bearer syl_agent_…` → sha256 → service-role lookup of a live
- *    (revoked_at IS NULL) row whose scopes include `requiredScope` → bump
- *    last_used_at → `{ via: "agent_token" }`.
+ * 1. `Bearer syl_agent_…` → sha256 → service-role lookup of a live row
+ *    (revoked_at IS NULL, expires_at in the future) whose scopes include
+ *    `requiredScope` → bump last_used_at → `{ via: "agent_token" }`.
  * 2. Any other bearer → the usual `auth.getUser()` JWT check → `{ via: "jwt" }`.
- * 3. Anything else — missing header, malformed/unknown/revoked token, wrong
- *    scope, lookup error — is `{ ok: false }` (the handler answers 401).
+ * 3. Anything else — missing header, malformed/unknown/revoked/expired
+ *    token, wrong scope, lookup error — is `{ ok: false }` (the handler
+ *    answers 401).
  */
 export async function resolveCaller(
   authHeader: string | null,
@@ -103,17 +113,20 @@ export async function resolveCaller(
     const hash = await hashAgentToken(token);
     const { data, error } = await deps.service
       .from("agent_tokens")
-      .select("id, user_id, scopes")
+      .select("id, user_id, scopes, expires_at")
       .eq("token_hash", hash)
       .is("revoked_at", null)
       .maybeSingle();
     if (error || !data) return { ok: false };
     if (!Array.isArray(data.scopes) || !data.scopes.includes(requiredScope)) return { ok: false };
+    // Expired — or an unparseable timestamp, which fails closed (NaN > x is false).
+    const now = (deps.now ?? (() => new Date()))();
+    if (!(Date.parse(data.expires_at) > now.getTime())) return { ok: false };
 
     // Best effort: a failed timestamp write shouldn't fail the read.
     const { error: touchError } = await deps.service
       .from("agent_tokens")
-      .update({ last_used_at: new Date().toISOString() })
+      .update({ last_used_at: now.toISOString() })
       .eq("id", data.id);
     if (touchError) console.error("agent-auth: last_used_at update failed:", touchError.message);
 

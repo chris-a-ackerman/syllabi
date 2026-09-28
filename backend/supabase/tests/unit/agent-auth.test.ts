@@ -18,6 +18,7 @@ interface Row {
   scopes: string[];
   revoked_at: string | null;
   last_used_at: string | null;
+  expires_at: string;
 }
 
 /** In-memory stand-in for the service-role client's agent_tokens calls. */
@@ -46,7 +47,14 @@ function fakeService(rows: Row[], opts: { lookupError?: boolean } = {}) {
                           r[col2 as 'revoked_at'] === null
                       );
                       return Promise.resolve({
-                        data: row ? { id: row.id, user_id: row.user_id, scopes: row.scopes } : null,
+                        data: row
+                          ? {
+                              id: row.id,
+                              user_id: row.user_id,
+                              scopes: row.scopes,
+                              expires_at: row.expires_at,
+                            }
+                          : null,
                         error: null,
                       });
                     },
@@ -95,6 +103,8 @@ async function rowFor(token: string, extra: Partial<Row> = {}): Promise<Row> {
     token_hash: await hashAgentToken(token),
     scopes: ['read:upcoming'],
     revoked_at: null,
+    // Relative to the real clock so tests without an injected `now` never age out.
+    expires_at: new Date(Date.now() + 30 * 86_400_000).toISOString(),
     last_used_at: null,
     ...extra,
   };
@@ -187,6 +197,43 @@ Deno.test('resolveCaller: a malformed syl_agent_ token is rejected without a loo
   assertEquals(caller, { ok: false });
   assertEquals(svc.calls.lookups, 0);
   assertEquals(jwt.seen, []);
+});
+
+// ── resolveCaller: expiry ───────────────────────────────────────────────────
+
+const NOW = new Date('2026-09-28T12:00:00Z');
+
+async function resolveAt(expires_at: string) {
+  const token = generateAgentToken();
+  const svc = fakeService([await rowFor(token, { expires_at })]);
+  const caller = await resolveCaller(`Bearer ${token}`, 'read:upcoming', {
+    service: svc.client,
+    jwtClient: fakeJwt('user-a').factory,
+    now: () => NOW,
+  });
+  return { caller, svc };
+}
+
+Deno.test('resolveCaller: a token before its expires_at is accepted', async () => {
+  const { caller, svc } = await resolveAt('2026-09-28T12:00:01Z');
+  assertEquals(caller.ok, true);
+  assertEquals(svc.calls.updates[0].values.last_used_at, NOW.toISOString());
+});
+
+Deno.test('resolveCaller: an expired token is rejected and not touched', async () => {
+  const { caller, svc } = await resolveAt('2026-09-27T12:00:00Z');
+  assertEquals(caller, { ok: false });
+  assertEquals(svc.calls.updates, []);
+});
+
+Deno.test('resolveCaller: a token is already expired at exactly expires_at', async () => {
+  const { caller } = await resolveAt(NOW.toISOString());
+  assertEquals(caller, { ok: false });
+});
+
+Deno.test('resolveCaller: an unparseable expires_at fails closed', async () => {
+  const { caller } = await resolveAt('not-a-date');
+  assertEquals(caller, { ok: false });
 });
 
 Deno.test('resolveCaller: a lookup error fails closed', async () => {

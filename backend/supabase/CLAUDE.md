@@ -55,7 +55,7 @@ Every function in `config.toml` is `verify_jwt = false` at the platform level (s
 | `profiles`      | Holds both the pgcrypto-encrypted Canvas token (`canvas_token_encrypted`) and the pgcrypto-encrypted BYOK Anthropic key (`anthropic_key_encrypted`), plus non-secret metadata for each (`*_last4`, `*_added_at`, `*_last_tested_at`, `*_last_test_ok`). Never read these columns directly for client-facing data — use the `profiles_safe` view. |
 | `ai_usage`      | Per-user daily quota counters against the **project's** Claude key (SYL-29/SYL-67); service-role write only                                                                                                                                                                                                                                      |
 | `ai_usage_byok` | Per-user daily counters for requests made under a user's **own** Claude key (SYL-72); never checked against a limit, purely for admin visibility                                                                                                                                                                                                 |
-| `agent_tokens`  | Scoped, revocable agent tokens (SYL-92): `token_hash` (sha256, never client-readable), `label`, `scopes`, `last_used_at`, `revoked_at`. Clients read `agent_tokens_safe`; the edge functions look tokens up by hash under service_role                                                                                                           |
+| `agent_tokens`  | Scoped, revocable agent tokens (SYL-92): `token_hash` (sha256, never client-readable), `label`, `scopes`, `expires_at`, `last_used_at`, `revoked_at`. Clients read `agent_tokens_safe`; the edge functions look tokens up by hash under service_role                                                                                             |
 
 **`course_events.type` is NOT NULL** with `CHECK (type IN ('deadline', 'exam', 'quiz', 'presentation', 'project_due', 'no_class', 'other'))` — defaults to `"other"` in the function if Claude omits it.
 
@@ -102,7 +102,10 @@ through `_shared/agent-auth.ts#resolveCaller`, which the drift test accepts.
 An external agent authenticates with a `syl_agent_…` token, never the user's
 password or session. `create-agent-token` (JWT only) mints one, returns the raw
 token once and stores only its sha256 in `agent_tokens`; `revoke-agent-token`
-(JWT only) sets `revoked_at`, which a trigger makes permanent. Clients read
+(JWT only) sets `revoked_at`, which a trigger makes permanent. Every token
+expires: `expires_at` defaults to 30 days, is capped at 180 (a DB CHECK), is
+fixed at creation (the same trigger forbids extending it), and
+`resolveCaller` rejects a token once it passes. Clients read
 their tokens through `agent_tokens_safe` (no hash column).
 
 `resolveCaller(authHeader, scope, deps)` resolves an agent token under the

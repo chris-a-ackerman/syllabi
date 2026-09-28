@@ -4,6 +4,15 @@
 // another user, and stops working the moment its owner revokes it.
 import { assert, assertEquals, assertMatch } from '@std/assert';
 import { admin, callFn, getFixtures } from './helpers.ts';
+import { generateAgentToken, hashAgentToken } from '../../functions/_shared/agent-auth.ts';
+
+const DAY_MS = 86_400_000;
+
+/** |actual − expected| within a minute — the function and the test share a clock. */
+function assertAbout(actualIso: string, expectedMs: number, what: string) {
+  const diff = Math.abs(Date.parse(actualIso) - expectedMs);
+  assert(diff < 60_000, `${what}: ${actualIso} is ${diff}ms from expected`);
+}
 
 const courseIds = (json: { courses: Array<{ id: string }> }) => json.courses.map((c) => c.id);
 
@@ -63,6 +72,7 @@ Deno.test('agent token lifecycle: create → read own data only → revoke → 4
       assertMatch(res.json.token, /^syl_agent_[A-Za-z0-9_-]{43}$/);
       assertEquals(res.json.scopes, ['read:upcoming']);
       assertEquals(res.json.label, 'contract');
+      assertAbout(res.json.expires_at, Date.now() + 30 * DAY_MS, 'default expires_at');
       token = res.json.token;
       tokenId = res.json.id;
 
@@ -140,4 +150,89 @@ Deno.test('agent token lifecycle: create → read own data only → revoke → 4
     });
     assertEquals(res.status, 400, `expected 400, got ${res.status}`);
   });
+});
+
+Deno.test('agent token expiry: chosen lifetime, bounds, and expired → 401', async (t) => {
+  const { userA, courseA } = await getFixtures();
+  const { error: wipeError } = await admin.from('agent_tokens').delete().eq('user_id', userA.id);
+  if (wipeError) throw new Error(`agent_tokens wipe failed: ${wipeError.message}`);
+
+  await t.step('expires_in_days sets expires_at', async () => {
+    const res = await callFn('create-agent-token', {
+      token: userA.token,
+      body: { label: 'week', expires_in_days: 7 },
+    });
+    assertEquals(res.status, 201, `expected 201, got ${res.status}: ${res.text.slice(0, 200)}`);
+    assertAbout(res.json.expires_at, Date.now() + 7 * DAY_MS, 'expires_in_days=7');
+
+    const max = await callFn('create-agent-token', {
+      token: userA.token,
+      body: { expires_in_days: 180 },
+    });
+    assertEquals(
+      max.status,
+      201,
+      `180 days should be allowed, got ${max.status}: ${max.text.slice(0, 200)}`
+    );
+  });
+
+  await t.step('out-of-range or fractional expires_in_days → 400', async () => {
+    for (const bad of [0, 181, 1.5, '7', -3]) {
+      const res = await callFn('create-agent-token', {
+        token: userA.token,
+        body: { expires_in_days: bad },
+      });
+      assertEquals(
+        res.status,
+        400,
+        `expires_in_days=${JSON.stringify(bad)} returned ${res.status}`
+      );
+    }
+  });
+
+  await t.step('a token past its expires_at is rejected; a live one still works', async () => {
+    // Seed an already-expired token directly (the API won't mint one).
+    const expired = generateAgentToken();
+    const { error } = await admin.from('agent_tokens').insert({
+      user_id: userA.id,
+      token_hash: await hashAgentToken(expired),
+      label: 'expired',
+      created_at: new Date(Date.now() - 2 * DAY_MS).toISOString(),
+      expires_at: new Date(Date.now() - DAY_MS).toISOString(),
+    });
+    if (error) throw new Error(`seeding expired token failed: ${error.message}`);
+
+    const res = await callFn('agent-upcoming', { token: expired, method: 'GET' });
+    assertEquals(res.status, 401, `expired token accepted (${res.status})`);
+
+    const live = await callFn('create-agent-token', {
+      token: userA.token,
+      body: { expires_in_days: 1 },
+    });
+    assertEquals(live.status, 201);
+    const ok = await callFn('agent-upcoming', {
+      token: live.json.token,
+      method: 'GET',
+      query: '?days=14',
+    });
+    assertEquals(ok.status, 200, `live token rejected (${ok.status})`);
+    assert(courseIds(ok.json).includes(courseA));
+  });
+
+  await t.step('expired tokens do not count toward the active-token cap', async () => {
+    // 3 live tokens exist from the steps above (7d, 180d, 1d) plus 1 expired;
+    // 7 more live ones reach the cap of 10 exactly, the next is refused.
+    for (let i = 0; i < 7; i++) {
+      const res = await callFn('create-agent-token', { token: userA.token, body: {} });
+      assertEquals(
+        res.status,
+        201,
+        `token ${i + 4} of 10 refused (${res.status}): ${res.text.slice(0, 200)}`
+      );
+    }
+    const over = await callFn('create-agent-token', { token: userA.token, body: {} });
+    assertEquals(over.status, 409, `11th live token not refused (${over.status})`);
+  });
+
+  await admin.from('agent_tokens').delete().eq('user_id', userA.id);
 });

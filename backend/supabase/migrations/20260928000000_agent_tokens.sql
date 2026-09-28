@@ -6,6 +6,10 @@
 -- Lookups by hash happen in the edge functions under service_role
 -- (_shared/agent-auth.ts#resolveCaller). Clients can list their own tokens
 -- (never the hash), create them, and revoke them — nothing else.
+--
+-- Every token expires: expires_at defaults to 30 days after creation and can
+-- be at most 180 days out (a full semester). It is fixed at creation — no
+-- role can extend it — so "grant access for N days" needs no follow-up.
 
 CREATE TABLE IF NOT EXISTS public.agent_tokens (
   id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -17,8 +21,16 @@ CREATE TABLE IF NOT EXISTS public.agent_tokens (
   scopes       TEXT[] NOT NULL DEFAULT '{read:upcoming}'
                CHECK (cardinality(scopes) > 0 AND scopes <@ ARRAY['read:upcoming']::TEXT[]),
   created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+  expires_at   TIMESTAMPTZ NOT NULL DEFAULT now() + interval '30 days',
   last_used_at TIMESTAMPTZ,
-  revoked_at   TIMESTAMPTZ
+  revoked_at   TIMESTAMPTZ,
+  -- create-agent-token computes expires_at on the edge runtime's clock while
+  -- created_at comes from the database's; the 5-minute allowance absorbs any
+  -- skew between them for a full 180-day token without widening the limit
+  -- in any meaningful way.
+  CONSTRAINT agent_tokens_expiry_window
+    CHECK (expires_at > created_at
+           AND expires_at <= created_at + interval '180 days' + interval '5 minutes')
 );
 
 CREATE INDEX IF NOT EXISTS idx_agent_tokens_user ON public.agent_tokens(user_id);
@@ -51,16 +63,18 @@ CREATE POLICY "Users can revoke own agent tokens"
 -- is revoked_at.
 REVOKE ALL ON public.agent_tokens FROM anon, authenticated;
 
-GRANT SELECT (id, user_id, label, scopes, created_at, last_used_at, revoked_at)
+GRANT SELECT (id, user_id, label, scopes, created_at, expires_at, last_used_at, revoked_at)
   ON public.agent_tokens TO authenticated;
-GRANT INSERT (id, user_id, token_hash, label, scopes)
+GRANT INSERT (id, user_id, token_hash, label, scopes, expires_at)
   ON public.agent_tokens TO authenticated;
 GRANT UPDATE (revoked_at)
   ON public.agent_tokens TO authenticated;
 
--- ── Revocation is one-way ───────────────────────────────────────────────────
+-- ── Revocation is one-way; expiry and creation time are fixed ───────────────
 -- Applies to every role, service_role included: once revoked_at is set it can
--- never be cleared or moved, so a revoked token can't be brought back.
+-- never be cleared or moved, so a revoked token can't be brought back; and
+-- expires_at/created_at never change, so a token's lifetime can't be extended
+-- (nor its 180-day window re-anchored).
 CREATE OR REPLACE FUNCTION public.agent_tokens_revoke_once()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -69,6 +83,11 @@ AS $$
 BEGIN
   IF OLD.revoked_at IS NOT NULL AND NEW.revoked_at IS DISTINCT FROM OLD.revoked_at THEN
     RAISE EXCEPTION 'agent token % is already revoked', OLD.id
+      USING ERRCODE = 'check_violation';
+  END IF;
+  IF NEW.expires_at IS DISTINCT FROM OLD.expires_at
+     OR NEW.created_at IS DISTINCT FROM OLD.created_at THEN
+    RAISE EXCEPTION 'agent token % lifetime is fixed at creation', OLD.id
       USING ERRCODE = 'check_violation';
   END IF;
   RETURN NEW;
@@ -86,7 +105,7 @@ CREATE TRIGGER agent_tokens_revoke_once
 -- Mirrors profiles_safe: runs with the owner's privileges, filtered to the
 -- caller, and simply has no token_hash column.
 CREATE OR REPLACE VIEW public.agent_tokens_safe AS
-  SELECT id, label, scopes, created_at, last_used_at, revoked_at
+  SELECT id, label, scopes, created_at, expires_at, last_used_at, revoked_at
   FROM public.agent_tokens
   WHERE user_id = auth.uid();
 

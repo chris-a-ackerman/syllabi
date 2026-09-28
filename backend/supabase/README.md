@@ -436,11 +436,12 @@ Scoped, revocable, read-only tokens for an external agent (SYL-92), so the agent
 | `token_hash`   | TEXT UNIQUE | sha256 hex of the raw token; **never client-readable**               |
 | `label`        | TEXT        | optional, ≤100 chars                                                 |
 | `scopes`       | TEXT[]      | default `{read:upcoming}`; CHECK allows only scopes a function knows |
-| `created_at`   | TIMESTAMPTZ |                                                                      |
+| `created_at`   | TIMESTAMPTZ | fixed at creation                                                    |
+| `expires_at`   | TIMESTAMPTZ | default +30 days, at most +180; fixed at creation; checked per call  |
 | `last_used_at` | TIMESTAMPTZ | bumped on each successful agent call                                 |
 | `revoked_at`   | TIMESTAMPTZ | set by `revoke-agent-token`; a trigger makes it permanent            |
 
-RLS on. `authenticated` may SELECT every column except `token_hash`, INSERT its own live rows, and UPDATE only `revoked_at` on its own rows; no DELETE. Clients read through the `agent_tokens_safe` view (own rows, no hash). **Requests resolved via an agent token run under the service-role client, so every query must filter on the resolved `user_id` explicitly.**
+RLS on. `authenticated` may SELECT every column except `token_hash`, INSERT its own live rows (choosing `expires_at` within the window), and UPDATE only `revoked_at` on its own rows; no DELETE. Clients read through the `agent_tokens_safe` view (own rows, no hash). **Requests resolved via an agent token run under the service-role client, so every query must filter on the resolved `user_id` explicitly.**
 
 ---
 
@@ -477,7 +478,7 @@ File size limit: 50 MiB. RLS policies enforce that users can only access files w
 | `delete-anthropic-key`     | JWT required     | —                                | Remove the stored Claude API key; no outbound call, not rate-limited                                              |
 | `test-canvas-token`        | JWT required     | —                                | "Test connection": re-run the same Canvas `/users/self` check `save-canvas-token` uses                            |
 | `agent-upcoming`           | Agent token/JWT  | —                                | GET `?days=N` (default 3, max 14): active-semester courses, class sessions expanded from `schedule`, and events   |
-| `create-agent-token`       | JWT required     | —                                | Mint a `read:upcoming` agent token; raw token returned once, sha256 stored; max 10 active per user                |
+| `create-agent-token`       | JWT required     | —                                | Mint a `read:upcoming` agent token (`expires_in_days` 1–180, default 30); returned once; max 10 active per user   |
 | `revoke-agent-token`       | JWT required     | —                                | Permanently revoke one of the caller's agent tokens (`{ id }`); another user's id is a 404                        |
 
 ### Claude Prompt Contract (`process-syllabus`)

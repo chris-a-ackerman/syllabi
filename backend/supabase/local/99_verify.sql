@@ -762,6 +762,110 @@ BEGIN
     RAISE EXCEPTION 'SYL-92: service_role un-revoked an agent token';
   END IF;
 
+  -- ── Expiry: defaulted, bounded, visible, and fixed at creation ────────────
+  IF (SELECT expires_at - created_at FROM public.agent_tokens WHERE id = v_tok_b)
+       <> interval '30 days' THEN
+    RAISE EXCEPTION 'SYL-92: expires_at did not default to created_at + 30 days';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'agent_tokens_safe' AND column_name = 'expires_at'
+  ) THEN
+    RAISE EXCEPTION 'SYL-92: agent_tokens_safe does not expose expires_at';
+  END IF;
+
+  -- A client can choose a lifetime within the window...
+  BEGIN
+    SET LOCAL ROLE authenticated;
+    PERFORM set_config('request.jwt.claims', json_build_object('sub', v_b)::text, true);
+    INSERT INTO public.agent_tokens (user_id, token_hash, expires_at)
+      VALUES (v_b, encode(sha256('syl_agent_7d'::bytea), 'hex'), now() + interval '7 days');
+    GET DIAGNOSTICS v_rows = ROW_COUNT;
+  END;
+  RESET ROLE;
+  IF v_rows <> 1 THEN
+    RAISE EXCEPTION 'SYL-92: owner could not create a 7-day agent token';
+  END IF;
+
+  -- ...but not beyond 180 days...
+  v_blocked := false;
+  BEGIN
+    SET LOCAL ROLE authenticated;
+    PERFORM set_config('request.jwt.claims', json_build_object('sub', v_b)::text, true);
+    INSERT INTO public.agent_tokens (user_id, token_hash, expires_at)
+      VALUES (v_b, encode(sha256('syl_agent_181d'::bytea), 'hex'), now() + interval '181 days');
+  EXCEPTION WHEN check_violation THEN
+    v_blocked := true;
+  END;
+  RESET ROLE;
+  IF NOT v_blocked THEN
+    RAISE EXCEPTION 'SYL-92: an agent token was created with a lifetime over 180 days';
+  END IF;
+
+  -- ...nor already expired.
+  v_blocked := false;
+  BEGIN
+    SET LOCAL ROLE authenticated;
+    PERFORM set_config('request.jwt.claims', json_build_object('sub', v_b)::text, true);
+    INSERT INTO public.agent_tokens (user_id, token_hash, expires_at)
+      VALUES (v_b, encode(sha256('syl_agent_past'::bytea), 'hex'), now() - interval '1 day');
+  EXCEPTION WHEN check_violation THEN
+    v_blocked := true;
+  END;
+  RESET ROLE;
+  IF NOT v_blocked THEN
+    RAISE EXCEPTION 'SYL-92: an agent token was created already expired';
+  END IF;
+
+  -- The owner cannot extend a live token (no UPDATE grant on expires_at)...
+  v_blocked := false;
+  BEGIN
+    SET LOCAL ROLE authenticated;
+    PERFORM set_config('request.jwt.claims', json_build_object('sub', v_b)::text, true);
+    UPDATE public.agent_tokens SET expires_at = expires_at + interval '1 day' WHERE id = v_tok_b;
+  EXCEPTION WHEN insufficient_privilege THEN
+    v_blocked := true;
+  END;
+  RESET ROLE;
+  IF NOT v_blocked THEN
+    RAISE EXCEPTION 'SYL-92: authenticated can UPDATE agent_tokens.expires_at';
+  END IF;
+
+  -- ...and neither can service_role, nor re-anchor created_at to widen the window.
+  v_blocked := false;
+  BEGIN
+    SET LOCAL ROLE service_role;
+    UPDATE public.agent_tokens SET expires_at = expires_at + interval '1 day' WHERE id = v_tok_b;
+  EXCEPTION WHEN check_violation THEN
+    v_blocked := true;
+  END;
+  RESET ROLE;
+  IF NOT v_blocked THEN
+    RAISE EXCEPTION 'SYL-92: service_role extended an agent token''s expires_at';
+  END IF;
+
+  v_blocked := false;
+  BEGIN
+    SET LOCAL ROLE service_role;
+    UPDATE public.agent_tokens SET created_at = created_at + interval '1 day' WHERE id = v_tok_b;
+  EXCEPTION WHEN check_violation THEN
+    v_blocked := true;
+  END;
+  RESET ROLE;
+  IF NOT v_blocked THEN
+    RAISE EXCEPTION 'SYL-92: service_role moved an agent token''s created_at';
+  END IF;
+
+  -- last_used_at (what the edge function writes) is still updatable.
+  SET LOCAL ROLE service_role;
+  UPDATE public.agent_tokens SET last_used_at = now() WHERE id = v_tok_b;
+  GET DIAGNOSTICS v_rows = ROW_COUNT;
+  RESET ROLE;
+  IF v_rows <> 1 THEN
+    RAISE EXCEPTION 'SYL-92: service_role can no longer bump last_used_at';
+  END IF;
+
   RAISE NOTICE 'SYL-92 agent_tokens assertions passed.';
 END;
 $$;

@@ -309,7 +309,7 @@ Feature components (`src/app/components/`): `AppHeader` (nav + mobile drawer), `
 | `delete-anthropic-key`     | —                       | — (not rate-limited; no outbound call) | Remove the stored Claude API key                                                                         |
 | `test-canvas-token`        | —                       | 20 (shared)                            | "Test connection" for the stored Canvas token                                                            |
 | `agent-upcoming`           | —                       | —                                      | GET snapshot for an external agent (agent token `read:upcoming`, or JWT): courses, sessions, events ≤14d |
-| `create-agent-token`       | —                       | 10 active tokens / user                | Mint a scoped, read-only `syl_agent_…` token (JWT only); raw token shown once, sha256 stored             |
+| `create-agent-token`       | —                       | 10 active tokens / user                | Mint a scoped, read-only `syl_agent_…` token (JWT only; `expires_in_days` 1–180, default 30); shown once |
 | `revoke-agent-token`       | —                       | —                                      | Permanently revoke one of the caller's agent tokens (JWT only)                                           |
 
 `AI_DAILY_LIMIT_GLOBAL` (default 2000/day, SYL-67) additionally caps every AI endpoint call combined, across every user, enforced atomically alongside the per-user unit — a request over either limit is rejected without incrementing the counter. BYOK requests (a user's own Claude key) skip both caps and are logged separately in `ai_usage_byok` (see [Conventions](#conventions)).
