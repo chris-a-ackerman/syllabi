@@ -7,6 +7,7 @@ import { Settings } from './Settings';
 
 vi.mock('react-router', () => ({
   useNavigate: () => vi.fn(),
+  useLocation: () => ({ hash: '' }),
 }));
 
 const fetchApiKeyStatus = vi.fn();
@@ -28,6 +29,17 @@ const deleteCanvasToken = vi.fn();
 vi.mock('@/lib/api/canvas', () => ({
   saveCanvasToken: (...args: unknown[]) => saveCanvasToken(...args),
   deleteCanvasToken: (...args: unknown[]) => deleteCanvasToken(...args),
+}));
+
+// SYL-104: the Agent access card loads its own list on mount.
+const listAgentTokens = vi.fn();
+const createAgentToken = vi.fn();
+const revokeAgentToken = vi.fn();
+listAgentTokens.mockResolvedValue({ data: [], error: null });
+vi.mock('@/lib/api/agentTokens', () => ({
+  listAgentTokens: (...args: unknown[]) => listAgentTokens(...args),
+  createAgentToken: (...args: unknown[]) => createAgentToken(...args),
+  revokeAgentToken: (...args: unknown[]) => revokeAgentToken(...args),
 }));
 
 const NOT_SET_STATUS = {
@@ -126,5 +138,55 @@ describe('Settings', () => {
 
     await waitFor(() => expect(screen.getByLabelText('API Key')).toBeTruthy());
     expect(screen.queryByText('sk-ant-…1234')).toBeNull();
+  });
+  it('shows a generated agent token once and drops it when the dialog closes (SYL-104)', async () => {
+    fetchApiKeyStatus.mockResolvedValue({ data: NOT_SET_STATUS, error: null });
+    const rawToken = 'syl_agent_super-secret-value-should-vanish';
+    createAgentToken.mockResolvedValue({
+      data: {
+        id: '00000000-0000-0000-0000-000000000001',
+        token: rawToken,
+        label: null,
+        scopes: ['read:upcoming'],
+        created_at: '2026-09-27T00:00:00.000Z',
+        expires_at: '2026-10-27T00:00:00.000Z',
+      },
+      error: null,
+    });
+    render(<Settings />);
+
+    await waitFor(() => expect(screen.getByText('No agent tokens yet.')).toBeTruthy());
+    fireEvent.click(screen.getByText('Generate token'));
+    fireEvent.click(await screen.findByRole('button', { name: 'Generate' }));
+
+    await waitFor(() => expect(screen.getByDisplayValue(rawToken)).toBeTruthy());
+    expect(createAgentToken).toHaveBeenCalledWith({ label: '', expiresInDays: 30 });
+    expect(screen.getByText(/You won't be able to see this again/)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    await waitFor(() => expect(screen.queryByDisplayValue(rawToken)).toBeNull());
+    expect(document.body.innerHTML.includes(rawToken)).toBe(false);
+
+    // Reopening starts a fresh form rather than re-showing the old token.
+    fireEvent.click(screen.getByText('Generate token'));
+    expect(await screen.findByRole('button', { name: 'Generate' })).toBeTruthy();
+    expect(document.body.innerHTML.includes(rawToken)).toBe(false);
+  });
+
+  it('shows the 409 cap message from create-agent-token inline (SYL-104)', async () => {
+    fetchApiKeyStatus.mockResolvedValue({ data: NOT_SET_STATUS, error: null });
+    createAgentToken.mockResolvedValue({
+      data: null,
+      error: { message: 'At most 10 active agent tokens; revoke one first.' },
+    });
+    render(<Settings />);
+
+    await waitFor(() => expect(screen.getByText('Generate token')).toBeTruthy());
+    fireEvent.click(screen.getByText('Generate token'));
+    fireEvent.click(await screen.findByRole('button', { name: 'Generate' }));
+
+    await waitFor(() =>
+      expect(screen.getByText('At most 10 active agent tokens; revoke one first.')).toBeTruthy()
+    );
   });
 });

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate, useLocation } from 'react-router';
 import { formatDistanceToNow, format } from 'date-fns';
 import {
   fetchApiKeyStatus,
@@ -15,6 +15,7 @@ import { Card } from '../components/ui/card';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Badge } from '../components/ui/badge';
+import { AgentAccessCard } from '../components/AgentAccessCard';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -35,6 +36,7 @@ function relativeTime(iso: string | null): string | null {
 
 export function Settings() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [status, setStatus] = useState<ApiKeyStatus | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -47,6 +49,13 @@ export function Settings() {
   useEffect(() => {
     loadStatus();
   }, []);
+
+  // The cards mount only after the status fetch, too late for the browser's
+  // own jump to /settings#canvas or #agent-access — scroll once they exist.
+  useEffect(() => {
+    if (loading || !location.hash) return;
+    document.getElementById(location.hash.slice(1))?.scrollIntoView();
+  }, [loading, location.hash]);
 
   return (
     <div className="min-h-screen bg-white">
@@ -74,6 +83,7 @@ export function Settings() {
           <>
             <ClaudeKeyCard status={status} onChange={setStatus} />
             <CanvasCard status={status} onChange={setStatus} />
+            <AgentAccessCard />
           </>
         )}
       </main>

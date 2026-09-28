@@ -26,9 +26,10 @@ export async function fetchApiKeyStatus() {
  * directly (rather than through supabase.functions.invoke) so the caller can
  * read the `{ error }` body Supabase sends back on a non-2xx response —
  * invoke() discards it. Mirrors lib/api/canvas.ts's postCanvasFunction. Never
- * throws: failures come back as `{ data: null, error }`.
+ * throws: failures come back as `{ data: null, error }`. Also used by
+ * lib/api/agentTokens.ts (SYL-104).
  */
-async function postFunction<T>(path: string, body?: unknown) {
+export async function postFunction<T>(path: string, body?: unknown) {
   const {
     data: { session },
   } = await supabase.auth.getSession();

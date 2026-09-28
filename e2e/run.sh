@@ -161,5 +161,14 @@ if [ "$KEY_CLEARED" != "t" ]; then
   exit 1
 fi
 echo "PASS  removing the Claude key through the UI cleared anthropic_key_encrypted (SYL-72)"
+
+echo ""
+echo "Checking the agent token generated and revoked through the Settings UI (SYL-104)..."
+AGENT_TOKENS="$(psql "$DB_URL" -At -c "SELECT count(*) || ':' || count(*) FILTER (WHERE revoked_at IS NOT NULL AND token_hash ~ '^[0-9a-f]{64}$') FROM agent_tokens WHERE user_id='$UID1'")"
+if [ "$AGENT_TOKENS" != "1:1" ]; then
+  echo "FAIL  expected exactly one hashed, revoked agent token for the seeded user (total:revoked), found $AGENT_TOKENS"
+  exit 1
+fi
+echo "PASS  the UI-generated agent token is stored hashed and was revoked (SYL-104)"
 echo ""
 echo "Authenticated E2E pass succeeded."

@@ -281,7 +281,7 @@ Components never call Supabase directly — everything goes through `src/lib/api
 | `/courses`         | `Courses`                      | signed in                                                                    |
 | `/course/:id`      | `CourseDetail`                 | signed in                                                                    |
 | `/agenda`          | `Agenda`                       | signed in                                                                    |
-| `/settings`        | `Settings`                     | signed in — Canvas card + Claude API key card (SYL-72)                       |
+| `/settings`        | `Settings`                     | signed in — Canvas, Claude API key (SYL-72) and Agent access (SYL-104) cards |
 | `/settings/canvas` | redirect to `/settings#canvas` | signed in — kept so old links don't break                                    |
 | `/admin`           | `AdminPanel`                   | signed in + `is_admin`; waits for the profile fetch before deciding (SYL-55) |
 
@@ -331,7 +331,7 @@ Tables: `profiles` (now also carrying the BYOK Anthropic key columns and Canvas/
 - **Course detail** — tabs for Events, Grading, Schedule, Policies, Notes; quick actions: chat about this course, download calendar, re-upload syllabus, delete.
 - **Agenda** — one timeline of deadlines across courses, with undated events in a "Date TBD" group and an urgency banner.
 - **Chat** — markdown answers with course/semester context, chat history with rename/delete, thumbs-down feedback stored in `chat_feedback`, honours the admin kill switch.
-- **Settings** — Canvas card (connect / disconnect / **Test connection**) and Claude API key card (add / replace / remove / test your own key, bypassing the app's daily limits).
+- **Settings** — Canvas card (connect / disconnect / **Test connection**), Claude API key card (add / replace / remove / test your own key, bypassing the app's daily limits), and Agent access card (`#agent-access`: generate a read-only agent token with a 7–180 day expiry, copy it once, see last-used / expiry, revoke).
 - **Admin** — toggle AI globally; paginated, searchable user list, including who's on their own Claude key.
 - **Canvas** — connect an instance, import courses, fetch syllabi from modules, match assignments to extracted events.
 
