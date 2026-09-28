@@ -496,7 +496,17 @@ const canvasRedirect = await evaluate(`(() => JSON.stringify({
 // Settings renders with a Claude key already set (seeded, SYL-72) — masked
 // key, added date, and the Test/Replace/Remove actions.
 await check('Settings renders with a Claude key set', '/settings', {
-  expectText: ['sk-ant-…0000', 'Test', 'Replace', 'Remove', 'Canvas Integration'],
+  expectText: [
+    'sk-ant-…0000',
+    'Test',
+    'Replace',
+    'Remove',
+    'Canvas Integration',
+    // SYL-104: the Agent access card, in its empty state (no seeded tokens).
+    'Agent access',
+    'Generate token',
+    'No agent tokens yet.',
+  ],
 });
 
 // Remove it through the real UI flow (delete-anthropic-key makes no outbound
@@ -553,6 +563,73 @@ if (removedKey === 'ok' && problems().length === 0) {
     `(document.getElementById('root')?.innerText || '').slice(0, 300)`
   );
   console.log(`        #root text at failure: ${JSON.stringify(rootText)}`);
+  problems().forEach((e) => console.log(`        ${e.slice(0, 220)}`));
+  failures++;
+}
+
+// ── Agent access: generate, show once, revoke (SYL-104) ─────────────────────
+// create-agent-token / revoke-agent-token make no outbound calls, so this runs
+// the real functions. The raw token must appear once in the dialog and be gone
+// from the page once it closes; revoking moves the row to the Inactive group.
+async function attemptAgentTokenLifecycle() {
+  events = [];
+  const rootText = `(document.getElementById('root')?.innerText || '')`;
+  const clickExact = (scope, text) => `(() => {
+    const el = [...${scope}.querySelectorAll('button')].find(
+      (b) => (b.innerText || '').trim() === ${JSON.stringify(text)}
+    );
+    if (!el) return 'no ' + ${JSON.stringify(text)} + ' button';
+    el.click();
+    return 'ok';
+  })()`;
+
+  let r = await evaluate(clickExact('document', 'Generate token'));
+  if (r !== 'ok') return r;
+  if (!(await pollFor(`document.querySelector('[role="dialog"]')`, 5000)))
+    return 'generate dialog never opened';
+
+  r = await evaluate(clickExact(`document.querySelector('[role="dialog"]')`, 'Generate'));
+  if (r !== 'ok') return r;
+  if (
+    !(await pollFor(
+      `document.querySelector('[role="dialog"] input[readonly]')?.value.startsWith('syl_agent_')`,
+      10000
+    ))
+  )
+    return 'raw syl_agent_ token was not shown after generating';
+  if (!(await evaluate(`document.body.innerText.includes("You won't be able to see this again")`)))
+    return 'one-time warning missing';
+
+  r = await evaluate(clickExact(`document.querySelector('[role="dialog"]')`, 'Done'));
+  if (r !== 'ok') return r;
+  if (!(await pollFor(`!document.querySelector('[role="dialog"]')`, 5000)))
+    return 'dialog did not close';
+  if (await evaluate(`document.documentElement.outerHTML.includes('syl_agent_')`))
+    return 'raw token still in the DOM after closing the dialog';
+  if (
+    !(await pollFor(
+      `${rootText}.includes('Unlabeled token') && ${rootText}.includes('Never used')`,
+      5000
+    ))
+  )
+    return 'new token not listed';
+
+  r = await evaluate(clickExact(`document.getElementById('agent-access')`, 'Revoke'));
+  if (r !== 'ok') return r;
+  if (!(await pollFor(`document.querySelector('[role="alertdialog"]')`, 5000)))
+    return 'revoke confirmation never opened';
+  r = await evaluate(clickExact(`document.querySelector('[role="alertdialog"]')`, 'Revoke'));
+  if (r !== 'ok') return r;
+  if (!(await pollFor(`${rootText}.includes('Inactive (1)')`, 10000)))
+    return 'revoked token did not move to the Inactive group';
+  return 'ok';
+}
+
+const agentTokenLifecycle = await attemptAgentTokenLifecycle();
+if (agentTokenLifecycle === 'ok' && problems().length === 0) {
+  console.log('PASS  Agent access: generate shows the token once, revoke moves it to Inactive');
+} else {
+  console.log(`FAIL  Agent access token lifecycle: ${agentTokenLifecycle}`);
   problems().forEach((e) => console.log(`        ${e.slice(0, 220)}`));
   failures++;
 }

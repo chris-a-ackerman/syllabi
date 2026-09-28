@@ -227,3 +227,24 @@ export interface Chat {
   courseIds: string[];
   createdAt: string;
 }
+
+/** A row of the agent_tokens_safe view (SYL-104) — never carries the token or its hash. */
+export interface AgentToken {
+  id: string;
+  label: string | null;
+  scopes: string[];
+  created_at: string;
+  expires_at: string;
+  last_used_at: string | null;
+  revoked_at: string | null;
+}
+
+/** create-agent-token's 201 body: the raw `token` is returned this once only. */
+export interface CreateAgentTokenResult {
+  id: string;
+  token: string;
+  label: string | null;
+  scopes: string[];
+  created_at: string;
+  expires_at: string;
+}
