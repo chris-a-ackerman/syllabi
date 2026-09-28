@@ -501,3 +501,25 @@ entrypoint = "./functions/delete-anthropic-key/index.ts"
 enabled = true
 verify_jwt = false
 entrypoint = "./functions/test-canvas-token/index.ts"
+
+[functions.agent-upcoming]
+enabled = true
+# SYL-92: read-only snapshot for an external agent. Auth is a scoped agent
+# token or the user's JWT, resolved in-handler by _shared/agent-auth.ts.
+verify_jwt = false
+import_map = "./functions/agent-upcoming/deno.json"
+entrypoint = "./functions/agent-upcoming/index.ts"
+
+[functions.create-agent-token]
+enabled = true
+# SYL-92: mint a scoped agent token. Session JWT only, checked in-handler.
+verify_jwt = false
+import_map = "./functions/create-agent-token/deno.json"
+entrypoint = "./functions/create-agent-token/index.ts"
+
+[functions.revoke-agent-token]
+enabled = true
+# SYL-92: revoke an agent token. Session JWT only, checked in-handler.
+verify_jwt = false
+import_map = "./functions/revoke-agent-token/deno.json"
+entrypoint = "./functions/revoke-agent-token/index.ts"

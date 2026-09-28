@@ -92,7 +92,7 @@ psql "$DB_URL" -c "UPDATE public.profiles SET is_admin = true WHERE id = '<id fr
 ## 6. Run Edge Functions locally
 
 ```bash
-supabase functions serve --env-file supabase/.env.local                   # all fifteen, hot reload
+supabase functions serve --env-file supabase/.env.local                   # all eighteen, hot reload
 supabase functions serve process-syllabus --env-file supabase/.env.local  # or just one
 ```
 
@@ -119,7 +119,7 @@ supabase migration list        # what the hosted DB is missing
 supabase db push --dry-run
 supabase db push               # migrations only
 
-supabase functions deploy      # all fifteen; or name one: supabase functions deploy chat
+supabase functions deploy      # all eighteen; or name one: supabase functions deploy chat
 
 supabase secrets set ANTHROPIC_API_KEY=sk-ant-... CANVAS_ENCRYPTION_KEY=... SECRETS_ENCRYPTION_KEY=... SERVICE_ROLE_KEY=...   # only when introducing a secret
 ```
@@ -425,6 +425,24 @@ Per-user daily counters for requests made with a user's **own** Claude key (SYL-
 
 RLS on; `anon`/`authenticated` have no grants.
 
+### `agent_tokens`
+
+Scoped, revocable, read-only tokens for an external agent (SYL-92), so the agent never holds the user's password or session. The raw `syl_agent_…` token is returned once by `create-agent-token`; only its sha256 is stored. `_shared/agent-auth.ts#resolveCaller` looks it up by hash under `service_role`.
+
+| Column         | Type        | Notes                                                                |
+| -------------- | ----------- | -------------------------------------------------------------------- |
+| `id`           | UUID PK     |                                                                      |
+| `user_id`      | UUID FK     | → `auth.users(id)` ON DELETE CASCADE                                 |
+| `token_hash`   | TEXT UNIQUE | sha256 hex of the raw token; **never client-readable**               |
+| `label`        | TEXT        | optional, ≤100 chars                                                 |
+| `scopes`       | TEXT[]      | default `{read:upcoming}`; CHECK allows only scopes a function knows |
+| `created_at`   | TIMESTAMPTZ | fixed at creation                                                    |
+| `expires_at`   | TIMESTAMPTZ | default +30 days, at most +180; fixed at creation; checked per call  |
+| `last_used_at` | TIMESTAMPTZ | bumped on each successful agent call                                 |
+| `revoked_at`   | TIMESTAMPTZ | set by `revoke-agent-token`; a trigger makes it permanent            |
+
+RLS on. `authenticated` may SELECT every column except `token_hash`, INSERT its own live rows (choosing `expires_at` within the window), and UPDATE only `revoked_at` on its own rows; no DELETE. Clients read through the `agent_tokens_safe` view (own rows, no hash). **Requests resolved via an agent token run under the service-role client, so every query must filter on the resolved `user_id` explicitly.**
+
 ---
 
 ## Storage
@@ -459,6 +477,9 @@ File size limit: 50 MiB. RLS policies enforce that users can only access files w
 | `test-anthropic-key`       | JWT required     | —                                | Re-validate the stored key; update `anthropic_key_last_tested_at`/`last_test_ok`                                  |
 | `delete-anthropic-key`     | JWT required     | —                                | Remove the stored Claude API key; no outbound call, not rate-limited                                              |
 | `test-canvas-token`        | JWT required     | —                                | "Test connection": re-run the same Canvas `/users/self` check `save-canvas-token` uses                            |
+| `agent-upcoming`           | Agent token/JWT  | —                                | GET `?days=N` (default 3, max 14): active-semester courses, class sessions expanded from `schedule`, and events   |
+| `create-agent-token`       | JWT required     | —                                | Mint a `read:upcoming` agent token (`expires_in_days` 1–180, default 30); returned once; max 10 active per user   |
+| `revoke-agent-token`       | JWT required     | —                                | Permanently revoke one of the caller's agent tokens (`{ id }`); another user's id is a 404                        |
 
 ### Claude Prompt Contract (`process-syllabus`)
 

@@ -574,3 +574,298 @@ BEGIN
   RAISE NOTICE 'SYL-74 Canvas RPC grant assertions passed.';
 END;
 $$;
+
+-- ── SYL-92: agent_tokens — own rows only, hash never client-readable ────────
+DO $$
+DECLARE
+  v_a        UUID;
+  v_b        UUID;
+  v_tok_a    UUID;
+  v_tok_b    UUID;
+  v_blocked  BOOLEAN;
+  v_rows     INTEGER;
+BEGIN
+  SELECT id INTO v_a FROM auth.users WHERE email = 'a@test.local';
+  SELECT id INTO v_b FROM auth.users WHERE email = 'b@test.local';
+
+  IF NOT (SELECT relrowsecurity FROM pg_class WHERE oid = 'public.agent_tokens'::regclass) THEN
+    RAISE EXCEPTION 'SYL-92: RLS is not enabled on agent_tokens';
+  END IF;
+
+  -- Seed one token per user the way create-agent-token does (hash only).
+  INSERT INTO public.agent_tokens (user_id, token_hash, label)
+    VALUES (v_a, encode(sha256('syl_agent_verify_a'::bytea), 'hex'), 'A') RETURNING id INTO v_tok_a;
+  INSERT INTO public.agent_tokens (user_id, token_hash, label)
+    VALUES (v_b, encode(sha256('syl_agent_verify_b'::bytea), 'hex'), 'B') RETURNING id INTO v_tok_b;
+
+  -- Cross-user SELECT returns nothing, on the table and through the view.
+  BEGIN
+    SET LOCAL ROLE authenticated;
+    PERFORM set_config('request.jwt.claims', json_build_object('sub', v_b)::text, true);
+    SELECT count(*) INTO v_rows FROM public.agent_tokens WHERE user_id = v_a;
+  END;
+  RESET ROLE;
+  IF v_rows <> 0 THEN
+    RAISE EXCEPTION 'SYL-92: user B can see % of user A''s agent_tokens rows', v_rows;
+  END IF;
+
+  BEGIN
+    SET LOCAL ROLE authenticated;
+    PERFORM set_config('request.jwt.claims', json_build_object('sub', v_b)::text, true);
+    SELECT count(*) INTO v_rows FROM public.agent_tokens_safe;
+  END;
+  RESET ROLE;
+  IF v_rows <> 1 THEN
+    RAISE EXCEPTION 'SYL-92: agent_tokens_safe returned % rows for user B, expected exactly their 1', v_rows;
+  END IF;
+
+  -- token_hash is not readable through the safe view...
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'agent_tokens_safe' AND column_name = 'token_hash'
+  ) THEN
+    RAISE EXCEPTION 'SYL-92: agent_tokens_safe exposes token_hash';
+  END IF;
+
+  -- ...nor from the base table, even on the caller's own row.
+  v_blocked := false;
+  BEGIN
+    SET LOCAL ROLE authenticated;
+    PERFORM set_config('request.jwt.claims', json_build_object('sub', v_b)::text, true);
+    PERFORM token_hash FROM public.agent_tokens WHERE id = v_tok_b;
+  EXCEPTION WHEN insufficient_privilege THEN
+    v_blocked := true;
+  END;
+  RESET ROLE;
+  IF NOT v_blocked THEN
+    RAISE EXCEPTION 'SYL-92: authenticated can SELECT agent_tokens.token_hash';
+  END IF;
+
+  -- anon gets nothing at all.
+  v_blocked := false;
+  BEGIN
+    SET LOCAL ROLE anon;
+    PERFORM count(*) FROM public.agent_tokens_safe;
+  EXCEPTION WHEN insufficient_privilege THEN
+    v_blocked := true;
+  END;
+  RESET ROLE;
+  IF NOT v_blocked THEN
+    RAISE EXCEPTION 'SYL-92: anon can SELECT agent_tokens_safe';
+  END IF;
+
+  -- A user cannot create a token for someone else...
+  v_blocked := false;
+  BEGIN
+    SET LOCAL ROLE authenticated;
+    PERFORM set_config('request.jwt.claims', json_build_object('sub', v_a)::text, true);
+    INSERT INTO public.agent_tokens (user_id, token_hash)
+      VALUES (v_b, encode(sha256('syl_agent_forged'::bytea), 'hex'));
+  EXCEPTION WHEN insufficient_privilege OR check_violation THEN
+    v_blocked := true;
+  END;
+  RESET ROLE;
+  IF NOT v_blocked THEN
+    RAISE EXCEPTION 'SYL-92: user A inserted an agent token owned by user B';
+  END IF;
+
+  -- ...or mint a scope that doesn't exist...
+  v_blocked := false;
+  BEGIN
+    SET LOCAL ROLE authenticated;
+    PERFORM set_config('request.jwt.claims', json_build_object('sub', v_a)::text, true);
+    INSERT INTO public.agent_tokens (user_id, token_hash, scopes)
+      VALUES (v_a, encode(sha256('syl_agent_scoped'::bytea), 'hex'), '{write:everything}');
+  EXCEPTION WHEN check_violation THEN
+    v_blocked := true;
+  END;
+  RESET ROLE;
+  IF NOT v_blocked THEN
+    RAISE EXCEPTION 'SYL-92: an agent token was stored with an unknown scope';
+  END IF;
+
+  -- ...or revoke someone else's token (RLS hides it: 0 rows)...
+  BEGIN
+    SET LOCAL ROLE authenticated;
+    PERFORM set_config('request.jwt.claims', json_build_object('sub', v_b)::text, true);
+    UPDATE public.agent_tokens SET revoked_at = now() WHERE id = v_tok_a;
+    GET DIAGNOSTICS v_rows = ROW_COUNT;
+  END;
+  RESET ROLE;
+  IF v_rows <> 0 OR (SELECT revoked_at FROM public.agent_tokens WHERE id = v_tok_a) IS NOT NULL THEN
+    RAISE EXCEPTION 'SYL-92: user B revoked user A''s agent token';
+  END IF;
+
+  -- ...or change anything but revoked_at on their own token...
+  v_blocked := false;
+  BEGIN
+    SET LOCAL ROLE authenticated;
+    PERFORM set_config('request.jwt.claims', json_build_object('sub', v_a)::text, true);
+    UPDATE public.agent_tokens SET scopes = '{read:upcoming}', user_id = v_b WHERE id = v_tok_a;
+  EXCEPTION WHEN insufficient_privilege THEN
+    v_blocked := true;
+  END;
+  RESET ROLE;
+  IF NOT v_blocked THEN
+    RAISE EXCEPTION 'SYL-92: authenticated can UPDATE agent_tokens columns other than revoked_at';
+  END IF;
+
+  -- ...or delete it.
+  v_blocked := false;
+  BEGIN
+    SET LOCAL ROLE authenticated;
+    PERFORM set_config('request.jwt.claims', json_build_object('sub', v_a)::text, true);
+    DELETE FROM public.agent_tokens WHERE id = v_tok_a;
+  EXCEPTION WHEN insufficient_privilege THEN
+    v_blocked := true;
+  END;
+  RESET ROLE;
+  IF NOT v_blocked THEN
+    RAISE EXCEPTION 'SYL-92: authenticated can DELETE agent_tokens rows';
+  END IF;
+
+  -- The owner can revoke...
+  BEGIN
+    SET LOCAL ROLE authenticated;
+    PERFORM set_config('request.jwt.claims', json_build_object('sub', v_a)::text, true);
+    UPDATE public.agent_tokens SET revoked_at = now() WHERE id = v_tok_a;
+    GET DIAGNOSTICS v_rows = ROW_COUNT;
+  END;
+  RESET ROLE;
+  IF v_rows <> 1 THEN
+    RAISE EXCEPTION 'SYL-92: owner could not revoke their own agent token';
+  END IF;
+
+  -- ...but never un-revoke, not even as service_role.
+  v_blocked := false;
+  BEGIN
+    SET LOCAL ROLE authenticated;
+    PERFORM set_config('request.jwt.claims', json_build_object('sub', v_a)::text, true);
+    UPDATE public.agent_tokens SET revoked_at = NULL WHERE id = v_tok_a;
+  EXCEPTION WHEN check_violation THEN
+    v_blocked := true;
+  END;
+  RESET ROLE;
+  IF NOT v_blocked THEN
+    RAISE EXCEPTION 'SYL-92: owner un-revoked an agent token';
+  END IF;
+
+  v_blocked := false;
+  BEGIN
+    SET LOCAL ROLE service_role;
+    UPDATE public.agent_tokens SET revoked_at = NULL WHERE id = v_tok_a;
+  EXCEPTION WHEN check_violation THEN
+    v_blocked := true;
+  END;
+  RESET ROLE;
+  IF NOT v_blocked THEN
+    RAISE EXCEPTION 'SYL-92: service_role un-revoked an agent token';
+  END IF;
+
+  -- ── Expiry: defaulted, bounded, visible, and fixed at creation ────────────
+  IF (SELECT expires_at - created_at FROM public.agent_tokens WHERE id = v_tok_b)
+       <> interval '30 days' THEN
+    RAISE EXCEPTION 'SYL-92: expires_at did not default to created_at + 30 days';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'agent_tokens_safe' AND column_name = 'expires_at'
+  ) THEN
+    RAISE EXCEPTION 'SYL-92: agent_tokens_safe does not expose expires_at';
+  END IF;
+
+  -- A client can choose a lifetime within the window...
+  BEGIN
+    SET LOCAL ROLE authenticated;
+    PERFORM set_config('request.jwt.claims', json_build_object('sub', v_b)::text, true);
+    INSERT INTO public.agent_tokens (user_id, token_hash, expires_at)
+      VALUES (v_b, encode(sha256('syl_agent_7d'::bytea), 'hex'), now() + interval '7 days');
+    GET DIAGNOSTICS v_rows = ROW_COUNT;
+  END;
+  RESET ROLE;
+  IF v_rows <> 1 THEN
+    RAISE EXCEPTION 'SYL-92: owner could not create a 7-day agent token';
+  END IF;
+
+  -- ...but not beyond 180 days...
+  v_blocked := false;
+  BEGIN
+    SET LOCAL ROLE authenticated;
+    PERFORM set_config('request.jwt.claims', json_build_object('sub', v_b)::text, true);
+    INSERT INTO public.agent_tokens (user_id, token_hash, expires_at)
+      VALUES (v_b, encode(sha256('syl_agent_181d'::bytea), 'hex'), now() + interval '181 days');
+  EXCEPTION WHEN check_violation THEN
+    v_blocked := true;
+  END;
+  RESET ROLE;
+  IF NOT v_blocked THEN
+    RAISE EXCEPTION 'SYL-92: an agent token was created with a lifetime over 180 days';
+  END IF;
+
+  -- ...nor already expired.
+  v_blocked := false;
+  BEGIN
+    SET LOCAL ROLE authenticated;
+    PERFORM set_config('request.jwt.claims', json_build_object('sub', v_b)::text, true);
+    INSERT INTO public.agent_tokens (user_id, token_hash, expires_at)
+      VALUES (v_b, encode(sha256('syl_agent_past'::bytea), 'hex'), now() - interval '1 day');
+  EXCEPTION WHEN check_violation THEN
+    v_blocked := true;
+  END;
+  RESET ROLE;
+  IF NOT v_blocked THEN
+    RAISE EXCEPTION 'SYL-92: an agent token was created already expired';
+  END IF;
+
+  -- The owner cannot extend a live token (no UPDATE grant on expires_at)...
+  v_blocked := false;
+  BEGIN
+    SET LOCAL ROLE authenticated;
+    PERFORM set_config('request.jwt.claims', json_build_object('sub', v_b)::text, true);
+    UPDATE public.agent_tokens SET expires_at = expires_at + interval '1 day' WHERE id = v_tok_b;
+  EXCEPTION WHEN insufficient_privilege THEN
+    v_blocked := true;
+  END;
+  RESET ROLE;
+  IF NOT v_blocked THEN
+    RAISE EXCEPTION 'SYL-92: authenticated can UPDATE agent_tokens.expires_at';
+  END IF;
+
+  -- ...and neither can service_role, nor re-anchor created_at to widen the window.
+  v_blocked := false;
+  BEGIN
+    SET LOCAL ROLE service_role;
+    UPDATE public.agent_tokens SET expires_at = expires_at + interval '1 day' WHERE id = v_tok_b;
+  EXCEPTION WHEN check_violation THEN
+    v_blocked := true;
+  END;
+  RESET ROLE;
+  IF NOT v_blocked THEN
+    RAISE EXCEPTION 'SYL-92: service_role extended an agent token''s expires_at';
+  END IF;
+
+  v_blocked := false;
+  BEGIN
+    SET LOCAL ROLE service_role;
+    UPDATE public.agent_tokens SET created_at = created_at + interval '1 day' WHERE id = v_tok_b;
+  EXCEPTION WHEN check_violation THEN
+    v_blocked := true;
+  END;
+  RESET ROLE;
+  IF NOT v_blocked THEN
+    RAISE EXCEPTION 'SYL-92: service_role moved an agent token''s created_at';
+  END IF;
+
+  -- last_used_at (what the edge function writes) is still updatable.
+  SET LOCAL ROLE service_role;
+  UPDATE public.agent_tokens SET last_used_at = now() WHERE id = v_tok_b;
+  GET DIAGNOSTICS v_rows = ROW_COUNT;
+  RESET ROLE;
+  IF v_rows <> 1 THEN
+    RAISE EXCEPTION 'SYL-92: service_role can no longer bump last_used_at';
+  END IF;
+
+  RAISE NOTICE 'SYL-92 agent_tokens assertions passed.';
+END;
+$$;

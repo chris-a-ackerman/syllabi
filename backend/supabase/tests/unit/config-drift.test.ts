@@ -32,13 +32,24 @@ Deno.test('every config.toml function block has a matching directory', () => {
   assertEquals(orphaned, [], `config.toml blocks without a directory: ${orphaned.join(', ')}`);
 });
 
+// SYL-92: a function may delegate to _shared/agent-auth.ts#resolveCaller
+// instead of calling auth.getUser inline — it accepts scoped agent tokens as
+// well as JWTs. It still has to read the Authorization header itself, import
+// the helper and call resolveCaller; the helper's own JWT branch is pinned by
+// the next test and its behaviour by tests/unit/agent-auth.test.ts.
+function delegatesToAgentAuth(source: string): boolean {
+  return (
+    /from ["']\.\.\/_shared\/agent-auth\.ts["']/.test(source) && /resolveCaller\(/.test(source)
+  );
+}
+
 Deno.test('every verify_jwt=false function enforces auth in its handler source', async () => {
   const offenders: string[] = [];
   for (const [name, fn] of Object.entries(fnConfigs)) {
     if (fn.verify_jwt !== false) continue;
     const source = await Deno.readTextFile(new URL(`${name}/index.ts`, FUNCTIONS_DIR));
     const checksAuthHeader = /Authorization/.test(source);
-    const resolvesUser = /auth\.getUser\(/.test(source);
+    const resolvesUser = /auth\.getUser\(/.test(source) || delegatesToAgentAuth(source);
     if (!(checksAuthHeader && resolvesUser)) offenders.push(name);
   }
   assertEquals(
@@ -46,6 +57,11 @@ Deno.test('every verify_jwt=false function enforces auth in its handler source',
     [],
     `verify_jwt=false functions without an in-handler Authorization + auth.getUser check: ${offenders.join(', ')}`
   );
+});
+
+Deno.test('the shared agent-auth helper still resolves JWTs with auth.getUser', async () => {
+  const helper = await Deno.readTextFile(new URL('_shared/agent-auth.ts', FUNCTIONS_DIR));
+  assert(/auth\.getUser\(/.test(helper), '_shared/agent-auth.ts no longer calls auth.getUser(');
 });
 
 Deno.test('no function relies on platform JWT verification', () => {
@@ -61,8 +77,9 @@ Deno.test('no function relies on platform JWT verification', () => {
   assertEquals(verified, []);
 });
 
-Deno.test('sanity: fifteen functions are configured', () => {
+Deno.test('sanity: eighteen functions are configured', () => {
   // SYL-72 added save-anthropic-key, test-anthropic-key, delete-anthropic-key
-  // and test-canvas-token (11 + 4).
-  assert(Object.keys(fnConfigs).length === 15, `expected 15, got ${Object.keys(fnConfigs).length}`);
+  // and test-canvas-token (11 + 4); SYL-92 added agent-upcoming,
+  // create-agent-token and revoke-agent-token (18).
+  assert(Object.keys(fnConfigs).length === 18, `expected 18, got ${Object.keys(fnConfigs).length}`);
 });
