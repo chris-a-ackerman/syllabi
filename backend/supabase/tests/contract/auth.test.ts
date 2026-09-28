@@ -15,6 +15,14 @@ const POST_FUNCTIONS = [
   'find-canvas-syllabus',
   'download-canvas-syllabus',
   'match-canvas-assignments',
+  'create-agent-token',
+  'revoke-agent-token',
+];
+
+// GET functions, with the query string each one needs to get past routing.
+const GET_FUNCTIONS: Array<[string, string]> = [
+  ['generate-ics', '?semester_id=x'],
+  ['agent-upcoming', '?days=3'],
 ];
 
 Deno.test('all functions: no Authorization header → 401', async (t) => {
@@ -24,10 +32,12 @@ Deno.test('all functions: no Authorization header → 401', async (t) => {
       assertEquals(res.status, 401, `${name} returned ${res.status}: ${res.text.slice(0, 200)}`);
     });
   }
-  await t.step('generate-ics', async () => {
-    const res = await callFn('generate-ics', { method: 'GET', query: '?semester_id=x' });
-    assertEquals(res.status, 401, `generate-ics returned ${res.status}`);
-  });
+  for (const [name, query] of GET_FUNCTIONS) {
+    await t.step(name, async () => {
+      const res = await callFn(name, { method: 'GET', query });
+      assertEquals(res.status, 401, `${name} returned ${res.status}`);
+    });
+  }
 });
 
 // SYL-54 moved save-canvas-token's auth check ahead of body validation and the
@@ -41,12 +51,10 @@ Deno.test('all functions: garbage bearer token → 401', async (t) => {
       assertEquals(res.status, 401, `${name} returned ${res.status}: ${res.text.slice(0, 200)}`);
     });
   }
-  await t.step('generate-ics', async () => {
-    const res = await callFn('generate-ics', {
-      token: 'garbage-token',
-      method: 'GET',
-      query: '?semester_id=x',
+  for (const [name, query] of GET_FUNCTIONS) {
+    await t.step(name, async () => {
+      const res = await callFn(name, { token: 'garbage-token', method: 'GET', query });
+      assertEquals(res.status, 401, `${name} returned ${res.status}`);
     });
-    assertEquals(res.status, 401, `generate-ics returned ${res.status}`);
-  });
+  }
 });

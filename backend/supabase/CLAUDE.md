@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is the Supabase backend for a syllabus parsing application. It uses Supabase Edge Functions powered by Claude AI to extract structured course data (events, grading, schedule) from uploaded syllabus PDFs, support a chat assistant over that data, export iCalendar files, integrate with Canvas LMS, and let a user bring their own Claude API key. There are **16 Edge Functions** in total — see [`README.md`](README.md) for the full table.
+This is the Supabase backend for a syllabus parsing application. It uses Supabase Edge Functions powered by Claude AI to extract structured course data (events, grading, schedule) from uploaded syllabus PDFs, support a chat assistant over that data, export iCalendar files, integrate with Canvas LMS, and let a user bring their own Claude API key. There are **18 Edge Functions** in total — see [`README.md`](README.md) for the full table.
 
 ## Common Commands
 
@@ -16,7 +16,7 @@ supabase stop --workdir backend                   # Stop local stack
 # Edge Functions
 supabase functions serve process-syllabus --env-file supabase/.env.local  # Run function locally with hot reload (from backend/)
 supabase functions deploy process-syllabus        # Deploy one function to production
-supabase functions deploy                         # Deploy all 16
+supabase functions deploy                         # Deploy all 18
 
 # Database
 supabase db push                                  # Apply migrations
@@ -55,6 +55,7 @@ Every function in `config.toml` is `verify_jwt = false` at the platform level (s
 | `profiles`      | Holds both the pgcrypto-encrypted Canvas token (`canvas_token_encrypted`) and the pgcrypto-encrypted BYOK Anthropic key (`anthropic_key_encrypted`), plus non-secret metadata for each (`*_last4`, `*_added_at`, `*_last_tested_at`, `*_last_test_ok`). Never read these columns directly for client-facing data — use the `profiles_safe` view. |
 | `ai_usage`      | Per-user daily quota counters against the **project's** Claude key (SYL-29/SYL-67); service-role write only                                                                                                                                                                                                                                      |
 | `ai_usage_byok` | Per-user daily counters for requests made under a user's **own** Claude key (SYL-72); never checked against a limit, purely for admin visibility                                                                                                                                                                                                 |
+| `agent_tokens`  | Scoped, revocable agent tokens (SYL-92): `token_hash` (sha256, never client-readable), `label`, `scopes`, `last_used_at`, `revoked_at`. Clients read `agent_tokens_safe`; the edge functions look tokens up by hash under service_role                                                                                                           |
 
 **`course_events.type` is NOT NULL** with `CHECK (type IN ('deadline', 'exam', 'quiz', 'presentation', 'project_due', 'no_class', 'other'))` — defaults to `"other"` in the function if Claude omits it.
 
@@ -92,8 +93,24 @@ import_map = "./functions/process-syllabus/deno.json"
 platform. JWT verification is instead done inside the function: it requires an
 `Authorization` header, resolves it with `supabase.auth.getUser(token)`, and
 returns 401 if that fails. The course is then looked up scoped to that user.
-Every one of the 16 functions follows this same pattern — see
-`tests/unit/config-drift.test.ts`.
+Every one of the 18 functions follows this same pattern — see
+`tests/unit/config-drift.test.ts`. `agent-upcoming` reaches the same check
+through `_shared/agent-auth.ts#resolveCaller`, which the drift test accepts.
+
+### Agent tokens (SYL-92)
+
+An external agent authenticates with a `syl_agent_…` token, never the user's
+password or session. `create-agent-token` (JWT only) mints one, returns the raw
+token once and stores only its sha256 in `agent_tokens`; `revoke-agent-token`
+(JWT only) sets `revoked_at`, which a trigger makes permanent. Clients read
+their tokens through `agent_tokens_safe` (no hash column).
+
+`resolveCaller(authHeader, scope, deps)` resolves an agent token under the
+**service-role** client, so RLS does not apply to those requests: every query
+in a function that accepts agent tokens must filter on the resolved `userId`
+explicitly (`.eq("user_id", userId)` on every table). Scopes are enforced twice
+— by the lookup and by a CHECK constraint that only allows scopes some
+function checks for (today just `read:upcoming`).
 
 ### Environment Variables (required)
 

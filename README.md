@@ -30,7 +30,7 @@ This directory is the git root — the backend lives **inside** it.
 ├── backend/supabase/
 │   ├── config.toml         local stack + per-function config
 │   ├── migrations/         schema, applied with `supabase db push`
-│   ├── functions/          sixteen Deno edge functions + _shared/
+│   ├── functions/          eighteen Deno edge functions + _shared/
 │   ├── tests/unit/         Deno unit tests (pure modules, config tripwires)
 │   ├── tests/contract/     HTTP contract tests against a live local stack
 │   └── local/              db-test.sh + SQL: rebuild the schema on plain Postgres, assert RLS/security invariants
@@ -95,7 +95,7 @@ supabase stop --workdir backend                                       # keeps a 
 
 Ports: API `54321`, DB `54322`, Studio `54323`, Mailpit (local email, `[local_smtp]` in `config.toml`) `54324`. Migrations run automatically on `start`.
 
-**Edge functions.** `supabase start` serves all sixteen functions with only the platform-injected `SUPABASE_*` variables. To give them an Anthropic key and the other secrets, serve them with an env file:
+**Edge functions.** `supabase start` serves all eighteen functions with only the platform-injected `SUPABASE_*` variables. To give them an Anthropic key and the other secrets, serve them with an env file:
 
 ```bash
 # backend/supabase/.env.local (gitignored)
@@ -175,7 +175,7 @@ It signs in through the real form, visits every screen (including both states of
 
 - Tests pin **behaviour of pure modules, HTTP contracts and DB invariants** — never component structure — so they survive refactors.
 - A known bug is pinned by a characterization test marked `// BUG (characterization): see SYL-xx` and paired with a Linear issue. The fixing PR flips the test; never "fix" the test alone.
-- `backend/supabase/tests/unit/config-drift.test.ts` is the auth tripwire: all sixteen functions run with `verify_jwt = false` (so browsers can preflight), so each handler must parse `Authorization` and call `auth.getUser` before doing anything. A new function needs a `[functions.<name>]` block in `config.toml` or this test fails.
+- `backend/supabase/tests/unit/config-drift.test.ts` is the auth tripwire: all eighteen functions run with `verify_jwt = false` (so browsers can preflight), so each handler must parse `Authorization` and call `auth.getUser` before doing anything — or delegate to `_shared/agent-auth.ts#resolveCaller`, which also accepts scoped agent tokens (SYL-92). A new function needs a `[functions.<name>]` block in `config.toml` or this test fails.
 - Contract tests assert status codes and coarse body shape, never exact error prose.
 - `backend/supabase/local/99_verify.sql` holds the SQL-level assertions (SYL-25/28/29/30/31 + RLS isolation). Extend it whenever a migration touches a policy or grant.
 - **ESLint** (SYL-70 decision): `react-hooks/set-state-in-effect`, `react-hooks/purity` and `react-refresh/only-export-components` stay demoted to `warn` in `eslint.config.js` — 21 warnings remain as of this pass. They're pre-existing patterns (`set-state-in-effect` needs a behavioral refactor across several pages; the `only-export-components` warnings in `routes.tsx` are an intentional route-table export) tracked as cross-cutting cleanup, not fixed warning-by-warning here. Re-promote the rules to `error` once burned down; `npm run lint` does not fail CI on warnings today.
@@ -212,7 +212,7 @@ cd backend
 supabase migration list                # 2. which migrations the hosted DB is missing
 supabase db push --dry-run             # 3. review
 supabase db push                       # 4. apply migrations — schema only, functions are separate
-supabase functions deploy              # 5. deploy ALL 16 functions (or one: supabase functions deploy chat)
+supabase functions deploy              # 5. deploy ALL 18 functions (or one: supabase functions deploy chat)
 supabase secrets set NAME=value        # 6. only when a new secret is introduced
 ```
 
@@ -227,7 +227,7 @@ Two caveats. The hosted schema was partly built by hand in the SQL editor, so mi
 Worked once the `refactor → main` PR is open and its own CI is green — see that PR's description for the live version of this list; drafted here so it isn't lost between passes:
 
 - [ ] `supabase db push` — apply every migration the hosted DB is missing (see "Pending" below for the list as of this PR; re-run `supabase migration list --workdir backend` on the day of the push, since more may land before then).
-- [ ] `supabase functions deploy` — all 16 functions (or name each one that changed since the last hosted deploy).
+- [ ] `supabase functions deploy` — all 18 functions (or name each one that changed since the last hosted deploy).
 - [ ] `supabase secrets set SECRETS_ENCRYPTION_KEY=...` — new secret introduced by SYL-72; `supabase secrets list --workdir backend` confirmed it absent from the hosted project on 2026-09-14.
 - [ ] Supabase dashboard (SYL-32): confirm email **on**, minimum password length **8**, Site URL `https://syllabi-one.vercel.app`, redirect allow-list including `/auth/callback`. Then verify a real signup confirmation and a Google sign-in against production.
 - [ ] Spot-check `/settings` in production after deploy: Canvas card unchanged for existing connected users, Claude API key card starts in the not-set state for everyone (no backfill needed — the column is new).
@@ -241,6 +241,7 @@ Migrations the hosted DB is missing, oldest first — verified with `supabase mi
 - [ ] `20260910000000_ai_quota_conditional_and_global`
 - [ ] `20260910010000_courses_canvas_sync_columns`
 - [ ] `20260915000000_anthropic_key`
+- [ ] `20260928000000_agent_tokens`
 - [ ] Open and merge the `refactor → main` PR — all six Wave 6 passes are merged into `refactor`.
 - [ ] `supabase functions deploy` for all 15 functions.
 - [ ] Supabase dashboard (SYL-32) settings above, plus setting the new `SECRETS_ENCRYPTION_KEY` secret.
@@ -307,7 +308,9 @@ Feature components (`src/app/components/`): `AppHeader` (nav + mobile drawer), `
 | `test-anthropic-key`       | —                       | 20 (shared)                            | Re-validate the stored key, record the result                                                            |
 | `delete-anthropic-key`     | —                       | — (not rate-limited; no outbound call) | Remove the stored Claude API key                                                                         |
 | `test-canvas-token`        | —                       | 20 (shared)                            | "Test connection" for the stored Canvas token                                                            |
-| `agent-upcoming`           | —                       | —                                      | GET snapshot for an external agent: courses, expanded class sessions and events in the next `days` (≤14) |
+| `agent-upcoming`           | —                       | —                                      | GET snapshot for an external agent (agent token `read:upcoming`, or JWT): courses, sessions, events ≤14d |
+| `create-agent-token`       | —                       | 10 active tokens / user                | Mint a scoped, read-only `syl_agent_…` token (JWT only); raw token shown once, sha256 stored             |
+| `revoke-agent-token`       | —                       | —                                      | Permanently revoke one of the caller's agent tokens (JWT only)                                           |
 
 `AI_DAILY_LIMIT_GLOBAL` (default 2000/day, SYL-67) additionally caps every AI endpoint call combined, across every user, enforced atomically alongside the per-user unit — a request over either limit is rejected without incrementing the counter. BYOK requests (a user's own Claude key) skip both caps and are logged separately in `ai_usage_byok` (see [Conventions](#conventions)).
 
