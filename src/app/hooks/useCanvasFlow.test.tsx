@@ -24,6 +24,9 @@ const { findCanvasCourses, findCanvasSyllabus, downloadCanvasSyllabus, linkCanva
     linkCanvasCourse: vi.fn(),
   }));
 
+const { toastError } = vi.hoisted(() => ({ toastError: vi.fn() }));
+vi.mock('sonner', () => ({ toast: { error: toastError } }));
+
 vi.mock('../context/DataProvider', () => ({
   useData: () => ({ addSemester, addCourse, deleteSemester }),
 }));
@@ -115,6 +118,50 @@ describe('useCanvasFlow', () => {
     expect(addCourse).toHaveBeenCalledTimes(2);
     expect(result.current.createdCourseIds).toEqual(['course-Alpha', 'course-Gamma']);
     expect(result.current.courseLinks.map((l) => l.canvasCourseId)).toEqual(['c1', 'c3']);
+  });
+
+  it('confirm() reports a course whose Canvas link was rejected instead of dropping the error', async () => {
+    // e.g. the old per-user unique index on canvas_course_id rejecting a
+    // re-imported semester: the course exists but has no canvas_course_id.
+    linkCanvasCourse.mockImplementation(async (courseId: string) =>
+      courseId === 'course-Beta'
+        ? { error: { code: '23505', message: 'duplicate key value violates unique constraint' } }
+        : { error: null }
+    );
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { result } = renderHook(() => useCanvasFlow());
+    await detectThree(result);
+
+    await act(async () => {
+      await result.current.confirm();
+    });
+
+    expect(linkCanvasCourse.mock.calls).toEqual([
+      ['course-Alpha', 'c1'],
+      ['course-Beta', 'c2'],
+      ['course-Gamma', 'c3'],
+    ]);
+    expect(toastError).toHaveBeenCalledTimes(1);
+    expect(toastError.mock.calls[0][0]).toContain('Beta');
+    expect(consoleError).toHaveBeenCalled();
+    // The rest of the import carries on.
+    expect(result.current.step).toBe('syllabi');
+    expect(result.current.createdCourseIds).toEqual([
+      'course-Alpha',
+      'course-Beta',
+      'course-Gamma',
+    ]);
+    consoleError.mockRestore();
+  });
+
+  it('confirm() raises no toast when every course links', async () => {
+    const { result } = renderHook(() => useCanvasFlow());
+    await detectThree(result);
+    await act(async () => {
+      await result.current.confirm();
+    });
+    expect(linkCanvasCourse).toHaveBeenCalledTimes(3);
+    expect(toastError).not.toHaveBeenCalled();
   });
 
   it('pairs syllabus searches by canvas_course_id, so a failed addCourse never misattributes a later course', async () => {

@@ -869,3 +869,73 @@ BEGIN
   RAISE NOTICE 'SYL-92 agent_tokens assertions passed.';
 END;
 $$;
+
+-- ── SYL-92/104 follow-up: canvas_course_id is unique per semester, not per user
+-- A re-imported semester links the same Canvas course again. The old
+-- (user_id, canvas_course_id) index rejected that UPDATE, and the client
+-- dropped the error, so the new course kept a NULL id.
+DO $$
+DECLARE
+  v_a        UUID;
+  v_sem_old  UUID;
+  v_sem_new  UUID;
+  v_old      UUID;
+  v_new      UUID;
+  v_dup      UUID;
+  v_rows     INTEGER;
+  v_blocked  BOOLEAN;
+BEGIN
+  SELECT id INTO v_a FROM auth.users WHERE email = 'a@test.local';
+
+  INSERT INTO public.semesters (user_id, name, start_date, end_date, is_active)
+    VALUES (v_a, 'Canvas id — old import', '2026-09-08', '2026-12-18', false)
+    RETURNING id INTO v_sem_old;
+  INSERT INTO public.semesters (user_id, name, start_date, end_date, is_active)
+    VALUES (v_a, 'Canvas id — re-import', '2026-09-08', '2026-12-18', true)
+    RETURNING id INTO v_sem_new;
+  INSERT INTO public.courses (user_id, semester_id, name, code, canvas_course_id)
+    VALUES (v_a, v_sem_old, 'Innovating for Impact', '15.385', '38610')
+    RETURNING id INTO v_old;
+  INSERT INTO public.courses (user_id, semester_id, name, code)
+    VALUES (v_a, v_sem_new, 'Innovating for Impact', '15.385')
+    RETURNING id INTO v_new;
+  INSERT INTO public.courses (user_id, semester_id, name, code)
+    VALUES (v_a, v_sem_new, 'Duplicate', 'DUP')
+    RETURNING id INTO v_dup;
+
+  -- The exact write useCanvasFlow makes (canvas.ts#linkCanvasCourse), as the owner.
+  SET LOCAL ROLE authenticated;
+  PERFORM set_config('request.jwt.claims', json_build_object('sub', v_a)::text, true);
+  UPDATE public.courses SET canvas_course_id = '38610' WHERE id = v_new;
+  GET DIAGNOSTICS v_rows = ROW_COUNT;
+  RESET ROLE;
+  IF v_rows <> 1 OR (SELECT canvas_course_id FROM public.courses WHERE id = v_new) IS DISTINCT FROM '38610' THEN
+    RAISE EXCEPTION 'canvas_course_id: re-imported semester could not link a Canvas course the old semester holds';
+  END IF;
+
+  -- Still one row per Canvas course within a semester.
+  v_blocked := false;
+  BEGIN
+    UPDATE public.courses SET canvas_course_id = '38610' WHERE id = v_dup;
+  EXCEPTION WHEN unique_violation THEN
+    v_blocked := true;
+  END;
+  IF NOT v_blocked THEN
+    RAISE EXCEPTION 'canvas_course_id: the same Canvas course was linked twice in one semester';
+  END IF;
+
+  -- Digits only: a URL would reach the agent as null.
+  v_blocked := false;
+  BEGIN
+    UPDATE public.courses SET canvas_course_id = 'https://canvas.mit.edu/courses/38612' WHERE id = v_dup;
+  EXCEPTION WHEN check_violation THEN
+    v_blocked := true;
+  END;
+  IF NOT v_blocked THEN
+    RAISE EXCEPTION 'canvas_course_id: a non-numeric value was accepted';
+  END IF;
+
+  DELETE FROM public.semesters WHERE id IN (v_sem_old, v_sem_new);
+  RAISE NOTICE 'canvas_course_id per-semester assertions passed.';
+END;
+$$;

@@ -236,3 +236,59 @@ Deno.test('agent token expiry: chosen lifetime, bounds, and expired → 401', as
 
   await admin.from('agent_tokens').delete().eq('user_id', userA.id);
 });
+
+// The class-prep agent finds readings in Canvas by courses[].canvas_course_id
+// and only accepts a JSON integer or a digit string (syllabi.py `_canvas_id`).
+// The column is TEXT. The response must carry it as an integer, or as null
+// when the course isn't linked.
+Deno.test(
+  'agent-upcoming: courses[].canvas_course_id is an integer, or null when unlinked',
+  async () => {
+    const { userA, courseA } = await getFixtures();
+    const find = (json: { courses: Array<{ id: string; canvas_course_id: unknown }> }) =>
+      json.courses.find((c) => c.id === courseA);
+
+    const setId = async (value: string | null) => {
+      const { error } = await admin
+        .from('courses')
+        .update({ canvas_course_id: value })
+        .eq('id', courseA);
+      if (error) throw new Error(`setting canvas_course_id failed: ${error.message}`);
+    };
+
+    try {
+      await setId('38610');
+      const linked = await callFn('agent-upcoming', {
+        token: userA.token,
+        method: 'GET',
+        query: '?days=3',
+      });
+      assertEquals(
+        linked.status,
+        200,
+        `expected 200, got ${linked.status}: ${linked.text.slice(0, 200)}`
+      );
+      const course = find(linked.json);
+      assert(course, 'courseA missing from the response');
+      assertEquals(course.canvas_course_id, 38610);
+      assertEquals(typeof course.canvas_course_id, 'number');
+      assert(linked.text.includes('"canvas_course_id":38610'), 'canvas_course_id went out quoted');
+
+      await setId(null);
+      const unlinked = await callFn('agent-upcoming', {
+        token: userA.token,
+        method: 'GET',
+        query: '?days=3',
+      });
+      assertEquals(unlinked.status, 200);
+      const bare = find(unlinked.json);
+      assert(
+        bare && 'canvas_course_id' in bare,
+        'canvas_course_id key missing on an unlinked course'
+      );
+      assertEquals(bare.canvas_course_id, null);
+    } finally {
+      await setId(null);
+    }
+  }
+);
