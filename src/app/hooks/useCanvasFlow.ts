@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo } from 'react';
+import { toast } from 'sonner';
 import { useData } from '../context/DataProvider';
 import * as canvasApi from '@/lib/api/canvas';
 import { COURSE_COLORS } from '@/lib/courseColors';
@@ -143,6 +144,7 @@ export function useCanvasFlow() {
 
     const selectedCourses = detectedCourses.filter((dc) => dc.selected);
     const links: CanvasCourseLink[] = [];
+    const unlinked: string[] = [];
 
     for (let i = 0; i < selectedCourses.length; i++) {
       const dc = selectedCourses[i];
@@ -162,8 +164,30 @@ export function useCanvasFlow() {
       // onto the wrong detected course (SYL-71).
       links.push({ courseId, canvasCourseId: dc.canvas_course_id, detected: dc });
 
-      // Store canvas_course_id — not part of the Course interface so update directly
-      await canvasApi.linkCanvasCourse(courseId, dc.canvas_course_id);
+      // Store canvas_course_id — not part of the Course interface so update directly.
+      // A failure here used to go unnoticed. The course was created but never
+      // linked, so Canvas assignment matching and the class-prep agent's
+      // Canvas readings (agent-upcoming) found nothing for it.
+      const { error: linkError } = await canvasApi.linkCanvasCourse(courseId, dc.canvas_course_id);
+      if (linkError) {
+        console.error(
+          `Linking course ${courseId} to Canvas course ${dc.canvas_course_id} failed:`,
+          linkError
+        );
+        unlinked.push(dc.editedName || dc.name);
+      }
+    }
+
+    if (unlinked.length > 0) {
+      toast.error(
+        unlinked.length === 1
+          ? `Couldn't link ${unlinked[0]} to its Canvas course.`
+          : `Couldn't link ${unlinked.length} courses to their Canvas courses.`,
+        {
+          description:
+            'They were created, but Canvas assignments won’t sync for them. Please report this.',
+        }
+      );
     }
 
     setCourseLinks(links);

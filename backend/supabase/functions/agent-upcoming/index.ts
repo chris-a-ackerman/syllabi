@@ -7,6 +7,9 @@
 //   Authorization: Bearer syl_agent_…   (scope read:upcoming)  — or a user JWT
 //   → { timezone, courses: [...], sessions: [...], events: [...] }
 //
+// courses[].canvas_course_id is an integer, or null when the course isn't
+// linked to Canvas. It's stored as TEXT and normalised by shape.ts.
+//
 // Agent auth: the agent holds a scoped, revocable agent token minted by
 // create-agent-token — never the user's password or session. Revoke it with
 // revoke-agent-token and the next call is a 401.
@@ -23,6 +26,7 @@ import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supa
 import { CORS_HEADERS } from "../_shared/cors.ts";
 import { resolveCaller, type JwtClient, type TokenLookupClient } from "../_shared/agent-auth.ts";
 import { addDays, expandSessions, localDate, parseDays, sortSessions, type Session } from "./expand.ts";
+import { shapeCourse } from "./shape.ts";
 
 const JSON_HEADERS = { ...CORS_HEADERS, "Content-Type": "application/json" };
 const DEFAULT_TIMEZONE = "America/New_York";
@@ -164,15 +168,7 @@ serve(async (req) => {
 
     return json({
       timezone,
-      courses: courses.map((c) => ({
-        id: c.id,
-        name: c.name,
-        code: c.code,
-        canvas_course_id: c.canvas_course_id,
-        schedule: c.schedule,
-        grading_rules: c.grading_rules,
-        policies: c.policies,
-      })),
+      courses: courses.map(shapeCourse),
       sessions: sortSessions(sessions),
       events,
     });
